@@ -1,3 +1,7 @@
+# Vim turds
+.*.sw?
+.sw?
+
 # Logs
 logs
 *.log
