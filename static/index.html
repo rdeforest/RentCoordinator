@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Coordinator - Work Timer</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tenant Coordinator</h1>
+            <p>Work tracking for Robert & Lyndzie</p>
+        </header>
+
+        <main>
+            <!-- Worker Selection -->
+            <section class="worker-selection">
+                <h2>Select Worker</h2>
+                <div class="worker-buttons">
+                    <button class="worker-btn" data-worker="robert">Robert</button>
+                    <button class="worker-btn" data-worker="lyndzie">Lyndzie</button>
+                </div>
+                <div class="current-worker" style="display: none;">
+                    Working as: <strong id="current-worker-name"></strong>
+                </div>
+            </section>
+
+            <!-- Timer Section -->
+            <section class="timer-section" style="display: none;">
+                <div class="timer-display">
+                    <div class="timer-status">
+                        <span id="timer-status">Stopped</span>
+                    </div>
+                    <div class="timer-elapsed">
+                        <span id="timer-elapsed">0:00:00</span>
+                    </div>
+                </div>
+
+                <div class="timer-controls">
+                    <button id="start-timer" class="btn btn-primary">Start Timer</button>
+                    <button id="stop-timer" class="btn btn-danger" style="display: none;">Stop Timer</button>
+                </div>
+
+                <!-- Stop Timer Form -->
+                <div id="stop-form" style="display: none;">
+                    <h3>What did you work on?</h3>
+                    <textarea
+                        id="work-description"
+                        placeholder="Describe the work completed..."
+                        rows="4"
+                        required
+                    ></textarea>
+                    <div class="form-actions">
+                        <button id="submit-work" class="btn btn-primary">Log Work</button>
+                        <button id="cancel-stop" class="btn btn-secondary">Keep Timer Running</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Work Logs -->
+            <section class="work-logs" style="display: none;">
+                <h2>Recent Work</h2>
+                <div id="work-logs-list">
+                    <p>Loading work logs...</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/js/timer.js"></script>
+</body>
+</html>

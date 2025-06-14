@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-read --allow-write --allow-env --watch main.coffee",
+    "start": "deno run --allow-net --allow-read --allow-write --allow-env main.coffee"
+  },
+  "imports": {
+    "express": "npm:express@4",
+    "cors": "npm:cors@2",
+    "uuid": "https://deno.land/std@0.224.0/uuid/mod.ts"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "strict": false
+  }
+}
