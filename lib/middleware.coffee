@@ -20,7 +20,7 @@ export setup = (app) ->
   app.use '/coffee', express.static('static/coffee',
     setHeaders: (res, path) ->
       if path.endsWith('.coffee')
-        res.set('Content-Type', 'text/coffeescript')
+        res.set('Content-Type', 'text/coffeescript'))
 
   # Request logging in development
   if config.NODE_ENV is 'development'
