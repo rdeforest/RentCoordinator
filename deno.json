@@ -13,5 +13,6 @@
   "compilerOptions": {
     "allowJs": true,
     "strict":  false
-  }
+  },
+  "nodeModulesDir": "auto"
 }
