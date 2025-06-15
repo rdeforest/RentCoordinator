@@ -13,6 +13,12 @@ export setup = (app) ->
   app.use express.json()
   app.use express.urlencoded(extended: true)
 
+  # Serve CoffeeScript browser compiler from node_modules
+  app.get '/vendor/coffeescript.js', (req, res) ->
+    res.type('application/javascript')
+    res.sendFile 'coffeescript.js',
+      root: './node_modules/coffeescript/lib/coffeescript-browser-compiler-legacy/'
+
   # Static files
   app.use express.static('static')
 
