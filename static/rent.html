@@ -6,84 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rent Dashboard - Tenant Coordinator</title>
     <link rel="stylesheet" href="/css/app.css">
-    <style>
-        .rent-summary {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .summary-card {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .summary-card h3 {
-            margin: 0 0 10px 0;
-            color: #7f8c8d;
-            font-size: 14px;
-            text-transform: uppercase;
-        }
-
-        .summary-card .amount {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        .rent-periods {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #ecf0f1;
-        }
-
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        .paid {
-            color: #27ae60;
-            font-weight: 600;
-        }
-
-        .unpaid {
-            color: #e74c3c;
-            font-weight: 600;
-        }
-
-        .partial {
-            color: #f39c12;
-            font-weight: 600;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-            margin-bottom: 20px;
-        }
-
-        .month-navigation {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-    </style>
+    <link rel="stylesheet" href="/css/rent.css">
 </head>
 <body>
     <div class="container">
@@ -196,6 +119,9 @@
                         <label for="payment-amount">Amount:</label>
                         <input type="number" id="payment-amount" step="0.01" required>
 
+                        <label for="payment-date">Payment Date:</label>
+                        <input type="date" id="payment-date" required>
+
                         <label for="payment-method">Payment Method:</label>
                         <select id="payment-method">
                             <option value="cash">Cash</option>
@@ -217,6 +143,7 @@
         </main>
     </div>
 
-    <script src="/js/rent.js"></script>
+    <script src="https://coffeescript.org/browser-compiler-modern/coffeescript.js"></script>
+    <script type="text/coffeescript" src="/coffee/rent.coffee"></script>
 </body>
 </html>

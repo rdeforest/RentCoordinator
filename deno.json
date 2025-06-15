@@ -1,7 +1,7 @@
 {
   "tasks": {
-    "build": "deno run --allow-read --allow-write --allow-env                                     scripts/build.ts",
-    "dev":   "deno run --allow-read --allow-write --allow-env --allow-net --allow-run --unstable-kv scripts/build.ts --watch",
+    "build": "deno run --allow-read --allow-write --allow-env                                     scripts/build.coffee",
+    "dev":   "deno run --allow-read --allow-write --allow-env --allow-net --allow-run --unstable-kv scripts/build.coffee --watch",
     "start": "deno run --allow-read --allow-write --allow-env --allow-net             --unstable-kv dist/main.js"
   },
   "imports": {
