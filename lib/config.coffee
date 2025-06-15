@@ -15,3 +15,8 @@ export WORKERS = ['robert', 'lyndzie']
 
 # Report recipients (can be overridden per project)
 export DEFAULT_STAKEHOLDERS = ['robert', 'lyndzie']
+
+# Rent configuration
+export BASE_RENT         = 1600  # Base monthly rent
+export HOURLY_CREDIT     = 50    # Dollar credit per hour worked
+export MAX_MONTHLY_HOURS = 8     # Maximum hours creditable per month (excess rolls over)

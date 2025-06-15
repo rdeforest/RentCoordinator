@@ -1,0 +1,222 @@
+<!-- static/rent.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rent Dashboard - Tenant Coordinator</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        .rent-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .summary-card h3 {
+            margin: 0 0 10px 0;
+            color: #7f8c8d;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .summary-card .amount {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .rent-periods {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .paid {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        .unpaid {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        .partial {
+            color: #f39c12;
+            font-weight: 600;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .month-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Rent Dashboard</h1>
+            <p>Track rent, work credits, and payments</p>
+            <nav style="margin-top: 20px;">
+                <a href="/" class="btn btn-secondary">Back to Timer</a>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Summary Cards -->
+            <section class="rent-summary">
+                <div class="summary-card">
+                    <h3>Outstanding Balance</h3>
+                    <div class="amount" id="outstanding-balance">$0</div>
+                </div>
+                <div class="summary-card">
+                    <h3>Total Credits Applied</h3>
+                    <div class="amount" id="total-credits">$0</div>
+                </div>
+                <div class="summary-card">
+                    <h3>Total Paid</h3>
+                    <div class="amount" id="total-paid">$0</div>
+                </div>
+                <div class="summary-card">
+                    <h3>Months Tracked</h3>
+                    <div class="amount" id="months-tracked">0</div>
+                </div>
+            </section>
+
+            <!-- Current Month Detail -->
+            <section class="current-month" style="display: none;">
+                <div class="month-navigation">
+                    <h2 id="current-month-title">Loading...</h2>
+                    <div>
+                        <button id="recalculate-btn" class="btn btn-secondary">Recalculate All</button>
+                    </div>
+                </div>
+
+                <div class="current-month-details">
+                    <table>
+                        <tr>
+                            <td>Base Rent:</td>
+                            <td id="base-rent">$1,600</td>
+                        </tr>
+                        <tr>
+                            <td>Hours Worked This Month:</td>
+                            <td id="hours-worked">0</td>
+                        </tr>
+                        <tr>
+                            <td>Hours From Previous:</td>
+                            <td id="hours-previous">0</td>
+                        </tr>
+                        <tr>
+                            <td>Hours Applied (max 8):</td>
+                            <td id="hours-applied">0</td>
+                        </tr>
+                        <tr>
+                            <td>Work Credit Applied:</td>
+                            <td id="credit-applied">$0</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Amount Due:</strong></td>
+                            <td><strong id="amount-due">$1,600</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Amount Paid:</td>
+                            <td id="amount-paid">$0</td>
+                        </tr>
+                    </table>
+
+                    <div style="margin-top: 20px;">
+                        <button id="record-payment-btn" class="btn btn-primary">Record Payment</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- All Periods Table -->
+            <section class="rent-periods">
+                <h2>All Rent Periods</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Hours Worked</th>
+                            <th>Credit Applied</th>
+                            <th>Amount Due</th>
+                            <th>Amount Paid</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="periods-table">
+                        <tr>
+                            <td colspan="6" style="text-align: center;">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Payment Modal (hidden by default) -->
+            <div id="payment-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3>Record Payment</h3>
+                    <form id="payment-form">
+                        <input type="hidden" id="payment-year">
+                        <input type="hidden" id="payment-month">
+
+                        <label for="payment-amount">Amount:</label>
+                        <input type="number" id="payment-amount" step="0.01" required>
+
+                        <label for="payment-method">Payment Method:</label>
+                        <select id="payment-method">
+                            <option value="cash">Cash</option>
+                            <option value="check">Check</option>
+                            <option value="venmo">Venmo</option>
+                            <option value="other">Other</option>
+                        </select>
+
+                        <label for="payment-notes">Notes (optional):</label>
+                        <textarea id="payment-notes" rows="3"></textarea>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Record Payment</button>
+                            <button type="button" id="cancel-payment" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/rent.js"></script>
+</body>
+</html>
