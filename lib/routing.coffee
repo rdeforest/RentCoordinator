@@ -28,21 +28,60 @@ export setup = (app) ->
       return res.status(400).json error: 'Worker required'
 
     try
-      session = await timerService.startTimer worker, project_id, task_id
+      result = await timerService.startTimer worker, project_id, task_id
+      res.json result
+    catch err
+      res.status(400).json error: err.message
+
+
+  app.post '/timer/pause', (req, res) ->
+    { worker } = req.body
+
+    if not worker
+      return res.status(400).json error: 'Worker required'
+
+    try
+      session = await timerService.pauseTimer worker
       res.json session
     catch err
       res.status(400).json error: err.message
 
 
-  app.post '/timer/stop', (req, res) ->
-    { worker, description } = req.body
+  app.post '/timer/resume', (req, res) ->
+    { worker, session_id } = req.body
 
-    if not worker or not description
-      return res.status(400).json error: 'Worker and description required'
+    if not worker
+      return res.status(400).json error: 'Worker required'
 
     try
-      workLog = await timerService.stopTimer worker, description
-      res.json workLog
+      result = await timerService.resumeTimer worker, session_id
+      res.json result
+    catch err
+      res.status(400).json error: err.message
+
+
+  app.post '/timer/stop', (req, res) ->
+    { worker, completed } = req.body
+
+    if not worker
+      return res.status(400).json error: 'Worker required'
+
+    try
+      result = await timerService.stopTimer worker, completed ? true
+      res.json result
+    catch err
+      res.status(400).json error: err.message
+
+
+  app.put '/timer/description', (req, res) ->
+    { worker, description } = req.body
+
+    if not worker
+      return res.status(400).json error: 'Worker required'
+
+    try
+      session = await timerService.updateDescription worker, description
+      res.json session
     catch err
       res.status(400).json error: err.message
 
@@ -56,6 +95,19 @@ export setup = (app) ->
     try
       status = await timerService.getStatus worker
       res.json status
+    catch err
+      res.status(400).json error: err.message
+
+
+  app.get '/timer/sessions', (req, res) ->
+    { worker } = req.query
+
+    if not worker
+      return res.status(400).json error: 'Worker required'
+
+    try
+      sessions = await timerService.getAllSessions worker
+      res.json sessions
     catch err
       res.status(400).json error: err.message
 

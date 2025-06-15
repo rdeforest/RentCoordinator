@@ -1,10 +1,59 @@
 # lib/routes/work.coffee
 
 workLogModel = await import('../models/work_log.coffee')
+workSessionModel = await import('../models/work_session.coffee')
 rentService  = await import('../services/rent.coffee')
+config = await import('../config.coffee')
 
 
 export setup = (app) ->
+
+  # Get work logs (converts sessions to logs for backwards compatibility)
+  app.get '/work-logs', (req, res) ->
+    { worker, project_id, limit } = req.query
+
+    try
+      # If we have a specific worker, get their sessions
+      if worker
+        sessions = await workSessionModel.getAllSessions(worker)
+      else
+        # Get sessions for all workers
+        allSessions = []
+        for w in config.WORKERS
+          workerSessions = await workSessionModel.getAllSessions(w)
+          allSessions = allSessions.concat(workerSessions)
+        sessions = allSessions
+
+      # Convert completed/cancelled sessions to work log format
+      logs = []
+      for session in sessions
+        if session.status in ['completed', 'cancelled']
+          log = await workSessionModel.sessionToWorkLog(session)
+          logs.push log
+
+      # Also get any traditional work logs
+      traditionalLogs = await workLogModel.getWorkLogs({ worker, limit: 1000 })
+
+      # Combine and deduplicate by ID
+      allLogs = logs.concat(traditionalLogs)
+      uniqueLogs = []
+      seen = new Set()
+
+      for log in allLogs
+        if not seen.has(log.id)
+          seen.add(log.id)
+          uniqueLogs.push(log)
+
+      # Sort by start time descending
+      uniqueLogs.sort (a, b) -> new Date(b.start_time) - new Date(a.start_time)
+
+      # Apply limit
+      if limit
+        uniqueLogs = uniqueLogs.slice(0, parseInt(limit))
+
+      res.json uniqueLogs
+    catch err
+      res.status(500).json error: err.message
 
   # Create manual work entry
   app.post '/work-logs', (req, res) ->

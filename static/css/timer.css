@@ -1,0 +1,167 @@
+/* static/css/timer.css */
+
+.active-session {
+    margin-bottom: 30px;
+}
+
+.session-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.session-timer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.timer-display {
+    font-size: 36px;
+    font-weight: bold;
+    color: #2c3e50;
+    font-variant-numeric: tabular-nums;
+}
+
+.session-status {
+    display: inline-block;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.session-status.active {
+    background: #27ae60;
+    color: white;
+}
+
+.session-status.paused {
+    background: #f39c12;
+    color: white;
+}
+
+.session-description {
+    margin-bottom: 20px;
+}
+
+.session-description textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.session-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.start-work {
+    text-align: center;
+    margin: 40px 0;
+}
+
+.btn-large {
+    padding: 20px 40px;
+    font-size: 20px;
+}
+
+/* Sessions Table */
+.sessions-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sessions-table th,
+.sessions-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.sessions-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.sessions-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sessions-table th.sortable:hover {
+    background: #e9ecef;
+}
+
+.sessions-table th.sortable::after {
+    content: ' ↕';
+    opacity: 0.3;
+}
+
+.sessions-table th.sortable.asc::after {
+    content: ' ↑';
+    opacity: 1;
+}
+
+.sessions-table th.sortable.desc::after {
+    content: ' ↓';
+    opacity: 1;
+}
+
+.session-row {
+    transition: background-color 0.2s;
+}
+
+.session-row:hover {
+    background: #f8f9fa;
+}
+
+.session-row.current {
+    background: #e3f2fd;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-badge.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.paused {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-badge.completed {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.status-badge.cancelled {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.session-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.session-actions button {
+    padding: 5px 10px;
+    font-size: 12px;
+}

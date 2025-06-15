@@ -67,12 +67,40 @@ async function compileCoffeeScript() {
     await Deno.copyFile("static/css/app.css", "dist/static/css/app.css");
     await Deno.copyFile("static/css/rent.css", "dist/static/css/rent.css");
     await Deno.copyFile("static/css/work.css", "dist/static/css/work.css");
+    await Deno.copyFile("static/css/timer.css", "dist/static/css/timer.css");
 
     // Copy CoffeeScript files (no compilation - browser will handle it)
     await ensureDir("dist/static/coffee");
+    await Deno.copyFile("static/coffee/shared-utils.coffee", "dist/static/coffee/shared-utils.coffee");
     await Deno.copyFile("static/coffee/timer.coffee", "dist/static/coffee/timer.coffee");
     await Deno.copyFile("static/coffee/rent.coffee", "dist/static/coffee/rent.coffee");
     await Deno.copyFile("static/coffee/work.coffee", "dist/static/coffee/work.coffee");
+
+    // Copy CoffeeScript browser compiler
+    await ensureDir("dist/static/vendor");
+    const possiblePaths = [
+      "./node_modules/coffeescript/lib/coffeescript-browser-compiler-modern/coffeescript.js",
+      "./node_modules/coffeescript/extras/coffeescript.js",
+      "./node_modules/coffeescript/lib/browser-compiler-modern/coffeescript.js",
+      "./node_modules/coffeescript/browser-compiler/coffeescript.js"
+    ];
+
+    let found = false;
+    for (const path of possiblePaths) {
+      try {
+        await Deno.stat(path);
+        await Deno.copyFile(path, "dist/static/vendor/coffeescript.js");
+        console.log(`✓ Copied CoffeeScript browser compiler from ${path}`);
+        found = true;
+        break;
+      } catch {
+        // Try next path
+      }
+    }
+
+    if (!found) {
+      console.error("✗ Could not find CoffeeScript browser compiler in node_modules");
+    }
 
     console.log("✓ Static files copied");
   } catch (error) {
