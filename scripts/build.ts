@@ -27,22 +27,23 @@ async function compileCoffeeScript() {
       const coffeeCode = await Deno.readTextFile(inputPath);
 
       // Compile to JavaScript
-      const jsCode = CoffeeScript.compile(coffeeCode, {
+      let jsCode = CoffeeScript.compile(coffeeCode, {
         bare: true,
         filename: inputPath
       });
 
-      // Fix import paths to use .js extensions
-      const fixedJsCode = jsCode.replace(
-        /from\s+['"](\.\.?\/[^'"]+)\.coffee['"]/g,
-        "from '$1.js'"
-      );
+      // Fix import paths - handle both static and dynamic imports
+      jsCode = jsCode
+        // Static imports: import ... from './file.coffee'
+        .replace(/from\s+['"](\.\.?\/[^'"]+)\.coffee['"]/g, "from '$1.js'")
+        // Dynamic imports: await import('./file.coffee')
+        .replace(/import\s*\(\s*['"](\.\.?\/[^'"]+)\.coffee['"]\s*\)/g, "import('$1.js')");
 
       // Ensure output directory exists
       await ensureDir(dirname(outputPath));
 
       // Write JavaScript file
-      await Deno.writeTextFile(outputPath, fixedJsCode);
+      await Deno.writeTextFile(outputPath, jsCode);
 
       console.log(`✓ ${relativePath} → ${outputPath}`);
     } catch (error) {

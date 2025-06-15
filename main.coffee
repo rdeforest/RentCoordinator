@@ -1,5 +1,3 @@
-#!/usr/bin/env -S deno run --allow-net --allow-read --allow-write --allow-env
-
 express    = (await import('express')).default
 cors       = (await import('cors')).default
 
