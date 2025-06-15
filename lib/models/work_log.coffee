@@ -41,7 +41,7 @@ export getWorkLogs = (filters = {}) ->
     prefix = ['work_logs_by_worker', filters.worker]
     entries = db.list({ prefix })
 
-    for await (entry from entries)
+    for await entry from entries
       logId = entry.value
       logKey = ['work_logs', logId]
       log = await db.get(logKey)
@@ -52,7 +52,7 @@ export getWorkLogs = (filters = {}) ->
     prefix = ['work_logs']
     entries = db.list({ prefix })
 
-    for await (entry from entries)
+    for await entry from entries
       if entry.value?.worker  # Make sure it's a log entry, not an index
         logs.push entry.value
 

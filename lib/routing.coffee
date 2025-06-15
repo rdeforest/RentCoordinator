@@ -1,5 +1,5 @@
-timerService = await import('../services/timer.coffee')
-workLogModel = await import('../models/work_log.coffee')
+timerService = await import('./services/timer.coffee')
+workLogModel = await import('./models/work_log.coffee')
 
 
 export setup = (app) ->
