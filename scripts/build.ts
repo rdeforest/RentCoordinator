@@ -70,7 +70,7 @@ async function compileCoffeeScript() {
 async function runServer() {
   console.log("\nStarting server...");
   const cmd = new Deno.Command("deno", {
-    args: ["run", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "dist/main.js"],
+    args: ["run", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "--unstable-kv", "dist/main.js"],
     stdout: "inherit",
     stderr: "inherit",
   });
