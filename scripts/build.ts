@@ -59,6 +59,7 @@ async function compileCoffeeScript() {
   try {
     await Deno.copyFile("static/index.html", "dist/static/index.html");
     await Deno.copyFile("static/rent.html", "dist/static/rent.html");
+    await Deno.copyFile("static/work.html", "dist/static/work.html");
     await ensureDir("dist/static/css");
     await Deno.copyFile("static/css/app.css", "dist/static/css/app.css");
     await ensureDir("dist/static/js");
@@ -74,8 +75,9 @@ async function compileCoffeeScript() {
       await Deno.copyFile("static/js/timer.js", "dist/static/js/timer.js");
     }
 
-    // Copy rent.js
+    // Copy rent.js and work.js
     await Deno.copyFile("static/js/rent.js", "dist/static/js/rent.js");
+    await Deno.copyFile("static/js/work.js", "dist/static/js/work.js");
 
     console.log("✓ Static files copied");
   } catch (error) {

@@ -3,6 +3,7 @@
 timerService = await import('./services/timer.coffee')
 workLogModel = await import('./models/work_log.coffee')
 rentRoutes   = await import('./routes/rent.coffee')
+workRoutes   = await import('./routes/work.coffee')
 
 
 export setup = (app) ->
@@ -13,6 +14,10 @@ export setup = (app) ->
   # Rent dashboard
   app.get '/rent', (req, res) ->
     res.sendFile 'rent.html', root: './static'
+
+  # Work management
+  app.get '/work', (req, res) ->
+    res.sendFile 'work.html', root: './static'
 
 
   # Timer operations
@@ -72,6 +77,9 @@ export setup = (app) ->
 
   # Set up rent routes
   rentRoutes.setup(app)
+
+  # Set up work management routes
+  workRoutes.setup(app)
 
 
   # Health check

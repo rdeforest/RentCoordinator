@@ -130,6 +130,7 @@ recordPaymentBtn.addEventListener('click', () => {
     document.getElementById('payment-year').value = currentYear;
     document.getElementById('payment-month').value = currentMonth;
     document.getElementById('payment-amount').value = '';
+    document.getElementById('payment-date').value = new Date().toISOString().split('T')[0]; // Today's date
     document.getElementById('payment-notes').value = '';
     paymentModal.style.display = 'block';
 });
@@ -145,6 +146,7 @@ paymentForm.addEventListener('submit', async (e) => {
         year: parseInt(document.getElementById('payment-year').value),
         month: parseInt(document.getElementById('payment-month').value),
         amount: parseFloat(document.getElementById('payment-amount').value),
+        payment_date: document.getElementById('payment-date').value,
         payment_method: document.getElementById('payment-method').value,
         notes: document.getElementById('payment-notes').value
     };
