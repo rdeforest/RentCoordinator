@@ -1,4 +1,4 @@
-timerService = await import('../services/timer_service.coffee')
+timerService = await import('../services/timer.coffee')
 workLogModel = await import('../models/work_log.coffee')
 
 

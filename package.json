@@ -1,21 +1,12 @@
 {
-  "name": "rentcoordinator",
+  "name": "tenant-coordinator",
   "version": "0.0.0",
-  "description": "Tool for coordinating efforts, reimbursements, plans and rent payments with Lyndzie",
-  "main": "index.coffee",
+  "description": "Tool for coordinating efforts, reimbursements, plans and rent payments with my tennant",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "deno task build",
+    "dev":   "deno task dev",
+    "start": "deno task start"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/rdeforest/RentCoordinator.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/rdeforest/RentCoordinator/issues"
-  },
-  "homepage": "https://github.com/rdeforest/RentCoordinator#readme"
+  "author": "Robert de Forest <robert@defore.st>",
+  "license": "MIT"
 }
