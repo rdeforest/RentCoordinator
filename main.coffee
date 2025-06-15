@@ -26,7 +26,7 @@ server = app.listen config.PORT, ->
     Port:        #{config.PORT}
     Environment: #{config.NODE_ENV or 'development'}
     Database:    #{config.DB_PATH}
-
+    
     Timer API available at http://localhost:#{config.PORT}/
   """
 

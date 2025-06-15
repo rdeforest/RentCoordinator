@@ -1,4 +1,5 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run --allow-net
+// scripts/build.ts
 
 import CoffeeScript from "coffeescript";
 import { walk } from "https://deno.land/std@0.224.0/fs/walk.ts";
@@ -60,7 +61,18 @@ async function compileCoffeeScript() {
     await ensureDir("dist/static/css");
     await Deno.copyFile("static/css/app.css", "dist/static/css/app.css");
     await ensureDir("dist/static/js");
-    await Deno.copyFile("static/js/timer.js", "dist/static/js/timer.js");
+
+    // Check if timer.coffee exists, compile it; otherwise copy timer.js
+    try {
+      const timerCoffee = await Deno.readTextFile("static/js/timer.coffee");
+      const timerJs = CoffeeScript.compile(timerCoffee, { bare: true });
+      await Deno.writeTextFile("dist/static/js/timer.js", timerJs);
+      console.log("✓ Compiled static/js/timer.coffee");
+    } catch (e) {
+      // Fall back to copying timer.js if timer.coffee doesn't exist
+      await Deno.copyFile("static/js/timer.js", "dist/static/js/timer.js");
+    }
+
     console.log("✓ Static files copied");
   } catch (error) {
     console.error("✗ Error copying static files:", error.message);

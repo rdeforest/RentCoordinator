@@ -1,3 +1,5 @@
+# lib/db/schema.coffee
+
 config = await import('../config.coffee')
 
 # Open database connection
@@ -56,12 +58,12 @@ export initialize = ->
   # For now, using Deno KV as SQLite isn't built-in yet
   # This will be migrated when SQLite support lands
   console.log "Database initialized at #{config.DB_PATH}"
-
+  
   # Initialize timer states for each worker
   for worker in config.WORKERS
     key = ['timer_state', worker]
     existing = await db.get(key)
-
+    
     if not existing.value
       await db.set key,
         worker: worker

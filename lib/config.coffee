@@ -1,3 +1,5 @@
+# lib/config.coffee
+
 # Environment configuration with sensible defaults
 
 export PORT     = Deno.env.get('PORT')     or 3000

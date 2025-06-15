@@ -1,9 +1,11 @@
-{ v4: uuidv4 } = await import('uuid')
+# lib/models/work_log.coffee
+
+{ v1 } = await import('uuid')
 db = (await import('../db/schema.coffee')).db
 
 
 export createWorkLog = (data) ->
-  id = uuidv4.generate()
+  id = v1.generate()
 
   workLog =
     id: id

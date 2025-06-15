@@ -1,3 +1,5 @@
+// static/js/timer.js
+
 // Timer state
 let currentWorker = null;
 let timerInterval = null;
