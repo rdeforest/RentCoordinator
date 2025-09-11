@@ -30,6 +30,11 @@ server = app.listen config.PORT, ->
     Timer API available at http://localhost:#{config.PORT}/
   """
 
+  # Start recurring events daily processing
+  recurringEventsService = await import('./lib/services/recurring_events.coffee')
+  recurringEventsService.scheduleDailyProcessing()
+  console.log 'Recurring events daily processing scheduled'
+
 
 # Graceful shutdown
 for signal in ['SIGINT', 'SIGTERM']

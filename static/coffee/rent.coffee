@@ -1,15 +1,45 @@
 # static/coffee/rent.coffee
 
-# Current date
+# State
 now = new Date()
 currentYear = now.getFullYear()
 currentMonth = now.getMonth() + 1
+currentFilters = {}
+allEvents = []
+eventToDelete = null
 
-# Load rent summary and current month on page load
+# DOM elements
+eventModal = document.getElementById 'event-modal'
+eventForm = document.getElementById 'event-form'
+addEventBtn = document.getElementById 'add-event-btn'
+cancelEventBtn = document.getElementById 'cancel-event'
+eventSubmitBtn = document.getElementById 'event-submit'
+eventModalTitle = document.getElementById 'event-modal-title'
+
+confirmDeleteModal = document.getElementById 'confirm-delete-modal'
+confirmDeleteBtn = document.getElementById 'confirm-delete-btn'
+cancelDeleteBtn = document.getElementById 'cancel-delete-btn'
+deleteEventDetails = document.getElementById 'delete-event-details'
+
+toggleFiltersBtn = document.getElementById 'toggle-filters-btn'
+eventFilters = document.getElementById 'event-filters'
+applyFiltersBtn = document.getElementById 'apply-filters-btn'
+clearFiltersBtn = document.getElementById 'clear-filters-btn'
+
+eventsTable = document.getElementById 'events-tbody'
+
+paymentModal = document.getElementById 'payment-modal'
+recordPaymentBtn = document.getElementById 'record-payment-btn'
+cancelPaymentBtn = document.getElementById 'cancel-payment'
+paymentForm = document.getElementById 'payment-form'
+
+# Load data on page load
 window.addEventListener 'load', ->
   loadRentSummary()
   loadCurrentMonth()
   loadAllPeriods()
+  loadEvents()
+  populateFilterYears()
 
 # Load rent summary
 loadRentSummary = ->
@@ -28,6 +58,7 @@ loadRentSummary = ->
 
   catch err
     console.error 'Error loading rent summary:', err
+    showError 'Failed to load rent summary'
 
 # Load current month details
 loadCurrentMonth = ->
@@ -55,6 +86,7 @@ loadCurrentMonth = ->
 
   catch err
     console.error 'Error loading current month:', err
+    showError 'Failed to load current month data'
 
 # Load all periods
 loadAllPeriods = ->
@@ -86,34 +118,239 @@ loadAllPeriods = ->
 
   catch err
     console.error 'Error loading periods:', err
+    showError 'Failed to load rent periods'
 
-# Recalculate all periods
-document.getElementById('recalculate-btn').addEventListener 'click', ->
-  unless confirm 'This will recalculate all rent periods including retroactive adjustments. Continue?'
+# Load rent events
+loadEvents = (filters = {}) ->
+  try
+    queryParams = new URLSearchParams()
+    
+    if filters.year
+      queryParams.append 'year', filters.year
+    if filters.month
+      queryParams.append 'month', filters.month
+
+    url = '/rent/events'
+    if queryParams.toString()
+      url += '?' + queryParams.toString()
+
+    response = await fetch url
+    events = await response.json()
+
+    # Apply client-side filters
+    if filters.type
+      events = events.filter (event) -> event.type is filters.type
+
+    allEvents = events
+    renderEventsTable events
+
+  catch err
+    console.error 'Error loading events:', err
+    showError 'Failed to load rent events'
+
+# Render events table
+renderEventsTable = (events) ->
+  tbody = eventsTable
+
+  if events.length is 0
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No events found</td></tr>'
     return
 
+  tbody.innerHTML = events.map((event) ->
+    dateStr = formatDate event.date
+    periodStr = formatMonthYear event.year, event.month
+    amountStr = formatCurrency event.amount
+    typeClass = event.type.replace('_', '-')
+
+    """
+      <tr>
+        <td>#{dateStr}</td>
+        <td class="event-type #{typeClass}">#{formatEventType event.type}</td>
+        <td>#{periodStr}</td>
+        <td class="#{if event.amount >= 0 then 'positive' else 'negative'}">#{amountStr}</td>
+        <td>#{escapeHtml event.description}</td>
+        <td class="actions">
+          <button class="btn btn-small" onclick="editEvent('#{event.id}')">Edit</button>
+          <button class="btn btn-small btn-danger" onclick="deleteEvent('#{event.id}')">Delete</button>
+        </td>
+      </tr>
+    """
+  ).join ''
+
+# Populate filter years from available data
+populateFilterYears = ->
+  currentYear = new Date().getFullYear()
+  years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1]
+  
+  yearSelect = document.getElementById 'filter-year'
+  yearSelect.innerHTML = '<option value="">All Years</option>' +
+    years.map((year) -> "<option value=\"#{year}\">#{year}</option>").join('')
+
+# Event Management Functions
+window.editEvent = (eventId) ->
+  event = allEvents.find (e) -> e.id is eventId
+  
+  if not event
+    showError 'Event not found'
+    return
+
+  # Populate form
+  document.getElementById('event-id').value = event.id
+  document.getElementById('event-type').value = event.type
+  document.getElementById('event-date').value = event.date.split('T')[0]
+  document.getElementById('event-year').value = event.year
+  document.getElementById('event-month').value = event.month
+  document.getElementById('event-amount').value = event.amount
+  document.getElementById('event-description').value = event.description
+  document.getElementById('event-notes').value = event.notes or ''
+
+  # Update modal
+  eventModalTitle.textContent = 'Edit Rent Event'
+  eventSubmitBtn.textContent = 'Update Event'
+  eventModal.style.display = 'block'
+
+window.deleteEvent = (eventId) ->
+  event = allEvents.find (e) -> e.id is eventId
+  
+  if not event
+    showError 'Event not found'
+    return
+
+  eventToDelete = event
+  
+  # Show event details in delete modal
+  deleteEventDetails.innerHTML = """
+    <p><strong>Date:</strong> #{formatDate event.date}</p>
+    <p><strong>Type:</strong> #{formatEventType event.type}</p>
+    <p><strong>Period:</strong> #{formatMonthYear event.year, event.month}</p>
+    <p><strong>Amount:</strong> #{formatCurrency event.amount}</p>
+    <p><strong>Description:</strong> #{escapeHtml event.description}</p>
+  """
+  
+  confirmDeleteModal.style.display = 'block'
+
+# Event Listeners
+
+# Add/Edit Event Modal
+addEventBtn.addEventListener 'click', ->
+  # Clear form
+  eventForm.reset()
+  document.getElementById('event-id').value = ''
+  
+  # Set defaults
+  document.getElementById('event-date').value = new Date().toISOString().split('T')[0]
+  document.getElementById('event-year').value = currentYear
+  document.getElementById('event-month').value = currentMonth
+
+  # Update modal
+  eventModalTitle.textContent = 'Add Rent Event'
+  eventSubmitBtn.textContent = 'Add Event'
+  eventModal.style.display = 'block'
+
+cancelEventBtn.addEventListener 'click', ->
+  eventModal.style.display = 'none'
+
+# Event Form Submit
+eventForm.addEventListener 'submit', (e) ->
+  e.preventDefault()
+  
+  eventId = document.getElementById('event-id').value
+  isEdit = eventId isnt ''
+
+  data =
+    type: document.getElementById('event-type').value
+    date: document.getElementById('event-date').value
+    year: parseInt document.getElementById('event-year').value
+    month: parseInt document.getElementById('event-month').value
+    amount: parseFloat document.getElementById('event-amount').value
+    description: document.getElementById('event-description').value
+    notes: document.getElementById('event-notes').value
+
   try
-    response = await fetch '/rent/recalculate-all', method: 'POST'
-    result = await response.json()
+    if isEdit
+      # Update existing event
+      response = await fetch "/rent/events/#{eventId}",
+        method: 'PUT'
+        headers: 'Content-Type': 'application/json'
+        body: JSON.stringify data
+    else
+      # Create new event
+      response = await fetch '/rent/events',
+        method: 'POST'
+        headers: 'Content-Type': 'application/json'
+        body: JSON.stringify data
 
     if response.ok
-      alert "Successfully recalculated #{result.periods_updated} periods"
-      # Reload all data
+      eventModal.style.display = 'none'
+      loadEvents currentFilters
       loadRentSummary()
       loadCurrentMonth()
       loadAllPeriods()
+      showSuccess if isEdit then 'Event updated successfully' else 'Event added successfully'
     else
-      alert "Error recalculating: #{result.error}"
+      error = await response.json()
+      showError "Failed to #{if isEdit then 'update' else 'add'} event: #{error.error}"
 
   catch err
-    alert "Error recalculating periods: #{err.message}"
+    showError "Error #{if isEdit then 'updating' else 'adding'} event: #{err.message}"
 
-# Payment modal handling
-paymentModal = document.getElementById 'payment-modal'
-recordPaymentBtn = document.getElementById 'record-payment-btn'
-cancelPaymentBtn = document.getElementById 'cancel-payment'
-paymentForm = document.getElementById 'payment-form'
+# Delete Confirmation
+confirmDeleteBtn.addEventListener 'click', ->
+  if not eventToDelete
+    return
 
+  try
+    response = await fetch "/rent/events/#{eventToDelete.id}",
+      method: 'DELETE'
+
+    if response.ok
+      confirmDeleteModal.style.display = 'none'
+      eventToDelete = null
+      loadEvents currentFilters
+      loadRentSummary()
+      loadCurrentMonth()
+      loadAllPeriods()
+      showSuccess 'Event deleted successfully'
+    else
+      error = await response.json()
+      showError "Failed to delete event: #{error.error}"
+
+  catch err
+    showError "Error deleting event: #{err.message}"
+
+cancelDeleteBtn.addEventListener 'click', ->
+  confirmDeleteModal.style.display = 'none'
+  eventToDelete = null
+
+# Filter Handling
+toggleFiltersBtn.addEventListener 'click', ->
+  isVisible = eventFilters.style.display isnt 'none'
+  eventFilters.style.display = if isVisible then 'none' else 'block'
+  toggleFiltersBtn.textContent = if isVisible then 'Filters' else 'Hide Filters'
+
+applyFiltersBtn.addEventListener 'click', ->
+  filters = {}
+  
+  type = document.getElementById('filter-type').value
+  year = document.getElementById('filter-year').value
+  month = document.getElementById('filter-month').value
+
+  if type then filters.type = type
+  if year then filters.year = year
+  if month then filters.month = month
+
+  currentFilters = filters
+  loadEvents filters
+
+clearFiltersBtn.addEventListener 'click', ->
+  document.getElementById('filter-type').value = ''
+  document.getElementById('filter-year').value = ''
+  document.getElementById('filter-month').value = ''
+  
+  currentFilters = {}
+  loadEvents {}
+
+# Legacy Payment Modal (keeping for compatibility)
 recordPaymentBtn.addEventListener 'click', ->
   document.getElementById('payment-year').value = currentYear
   document.getElementById('payment-month').value = currentMonth
@@ -144,16 +381,37 @@ paymentForm.addEventListener 'submit', (e) ->
 
     if response.ok
       paymentModal.style.display = 'none'
-      # Reload data
+      loadRentSummary()
+      loadCurrentMonth()
+      loadAllPeriods()
+      loadEvents currentFilters
+      showSuccess 'Payment recorded successfully'
+    else
+      error = await response.json()
+      showError "Failed to record payment: #{error.error}"
+
+  catch err
+    showError "Error recording payment: #{err.message}"
+
+# Recalculate all periods
+document.getElementById('recalculate-btn').addEventListener 'click', ->
+  unless confirm 'This will recalculate all rent periods including retroactive adjustments. Continue?'
+    return
+
+  try
+    response = await fetch '/rent/recalculate-all', method: 'POST'
+    result = await response.json()
+
+    if response.ok
+      showSuccess "Successfully recalculated #{result.periods_updated} periods"
       loadRentSummary()
       loadCurrentMonth()
       loadAllPeriods()
     else
-      error = await response.json()
-      alert "Error recording payment: #{error.error}"
+      showError "Error recalculating: #{result.error}"
 
   catch err
-    alert "Error recording payment: #{err.message}"
+    showError "Error recalculating periods: #{err.message}"
 
 # Helper functions
 formatCurrency = (amount) ->
@@ -162,11 +420,31 @@ formatCurrency = (amount) ->
     currency: 'USD'
   ).format amount
 
+formatDate = (dateStr) ->
+  date = new Date dateStr
+  date.toLocaleDateString 'en-US',
+    year: 'numeric'
+    month: 'short'
+    day: 'numeric'
+
 formatMonthYear = (year, month) ->
   date = new Date year, month - 1
   date.toLocaleDateString 'en-US',
     year: 'numeric'
     month: 'long'
+
+formatEventType = (type) ->
+  switch type
+    when 'payment' then 'Payment'
+    when 'adjustment' then 'Rent Adjustment'
+    when 'work_value_change' then 'Work Value Change'
+    when 'manual' then 'Manual Entry'
+    else type
+
+escapeHtml = (text) ->
+  div = document.createElement 'div'
+  div.textContent = text
+  return div.innerHTML
 
 getPaymentStatus = (period) ->
   due = period.amount_due
@@ -175,3 +453,11 @@ getPaymentStatus = (period) ->
   if paid >= due then 'PAID'
   else if paid > 0 then 'PARTIAL'
   else 'UNPAID'
+
+showSuccess = (message) ->
+  # Simple alert for now - could be enhanced with toast notifications
+  alert message
+
+showError = (message) ->
+  # Simple alert for now - could be enhanced with toast notifications  
+  alert message

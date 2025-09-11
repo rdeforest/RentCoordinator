@@ -4,6 +4,7 @@ timerService = await import('./services/timer.coffee')
 workLogModel = await import('./models/work_log.coffee')
 rentRoutes   = await import('./routes/rent.coffee')
 workRoutes   = await import('./routes/work.coffee')
+recurringEventsRoutes = await import('./routes/recurring_events.coffee')
 
 
 export setup = (app) ->
@@ -132,6 +133,9 @@ export setup = (app) ->
 
   # Set up work management routes
   workRoutes.setup(app)
+
+  # Set up recurring events routes
+  recurringEventsRoutes.setup(app)
 
 
   # Health check

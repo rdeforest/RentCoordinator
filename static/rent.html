@@ -86,6 +86,75 @@
                 </div>
             </section>
 
+            <!-- Rent Events Section -->
+            <section class="rent-events">
+                <div class="section-header">
+                    <h2>Rent Events History</h2>
+                    <div class="section-actions">
+                        <button id="add-event-btn" class="btn btn-primary">Add Event</button>
+                        <button id="toggle-filters-btn" class="btn btn-secondary">Filters</button>
+                    </div>
+                </div>
+
+                <!-- Event Filters -->
+                <div id="event-filters" class="filters" style="display: none;">
+                    <div class="filter-row">
+                        <label for="filter-type">Type:</label>
+                        <select id="filter-type">
+                            <option value="">All Types</option>
+                            <option value="payment">Payment</option>
+                            <option value="adjustment">Adjustment</option>
+                            <option value="work_value_change">Work Value Change</option>
+                            <option value="manual">Manual</option>
+                        </select>
+
+                        <label for="filter-year">Year:</label>
+                        <select id="filter-year">
+                            <option value="">All Years</option>
+                        </select>
+
+                        <label for="filter-month">Month:</label>
+                        <select id="filter-month">
+                            <option value="">All Months</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+
+                        <button id="apply-filters-btn" class="btn btn-primary">Apply</button>
+                        <button id="clear-filters-btn" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+
+                <!-- Events Table -->
+                <table id="events-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Period</th>
+                            <th>Amount</th>
+                            <th>Description</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="events-tbody">
+                        <tr>
+                            <td colspan="6" style="text-align: center;">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
             <!-- All Periods Table -->
             <section class="rent-periods">
                 <h2>All Rent Periods</h2>
@@ -138,6 +207,77 @@
                             <button type="button" id="cancel-payment" class="btn btn-secondary">Cancel</button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- Event Modal (hidden by default) -->
+            <div id="event-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3 id="event-modal-title">Add Rent Event</h3>
+                    <form id="event-form">
+                        <input type="hidden" id="event-id">
+                        
+                        <label for="event-type">Event Type:</label>
+                        <select id="event-type" required>
+                            <option value="">Select Type</option>
+                            <option value="payment">Payment</option>
+                            <option value="adjustment">Rent Adjustment</option>
+                            <option value="work_value_change">Work Value Change</option>
+                            <option value="manual">Manual Entry</option>
+                        </select>
+
+                        <label for="event-date">Date:</label>
+                        <input type="date" id="event-date" required>
+
+                        <label for="event-year">Year:</label>
+                        <input type="number" id="event-year" min="2020" max="2030" required>
+
+                        <label for="event-month">Month:</label>
+                        <select id="event-month" required>
+                            <option value="">Select Month</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+
+                        <label for="event-amount">Amount:</label>
+                        <input type="number" id="event-amount" step="0.01" required>
+
+                        <label for="event-description">Description:</label>
+                        <input type="text" id="event-description" required placeholder="Brief description of the event">
+
+                        <label for="event-notes">Notes (optional):</label>
+                        <textarea id="event-notes" rows="3" placeholder="Additional details or context"></textarea>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary" id="event-submit">Add Event</button>
+                            <button type="button" id="cancel-event" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Confirm Delete Modal -->
+            <div id="confirm-delete-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3>Confirm Delete</h3>
+                    <p>Are you sure you want to delete this rent event? This action cannot be undone.</p>
+                    <div class="event-details" id="delete-event-details">
+                        <!-- Event details will be populated here -->
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="confirm-delete-btn" class="btn btn-danger">Delete Event</button>
+                        <button type="button" id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+                    </div>
                 </div>
             </div>
         </main>

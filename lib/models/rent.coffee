@@ -110,3 +110,85 @@ export getPaymentsForPeriod = (year, month) ->
 
   payments.sort (a, b) -> new Date(a.payment_date) - new Date(b.payment_date)
   return payments
+
+
+# Rent events for comprehensive tracking
+export createRentEvent = (data) ->
+  id = v1.generate()
+
+  event =
+    id: id
+    type: data.type  # 'payment', 'adjustment', 'work_value_change', 'manual'
+    date: data.date or new Date().toISOString()
+    year: data.year
+    month: data.month
+    amount: data.amount
+    description: data.description
+    notes: data.notes or null
+    metadata: data.metadata or {}  # For storing type-specific data
+    created_at: new Date().toISOString()
+    updated_at: new Date().toISOString()
+
+  key = ['rent_events', id]
+  await db.set key, event
+
+  return event
+
+
+export getAllRentEvents = ->
+  events = []
+  prefix = ['rent_events']
+  entries = db.list({ prefix })
+
+  for await entry from entries
+    events.push entry.value
+
+  # Sort by date descending
+  events.sort (a, b) -> new Date(b.date) - new Date(a.date)
+  return events
+
+
+export getRentEvent = (id) ->
+  key = ['rent_events', id]
+  result = await db.get(key)
+  return result.value
+
+
+export updateRentEvent = (id, updates) ->
+  key = ['rent_events', id]
+  existing = await db.get(key)
+
+  if not existing.value
+    throw new Error "Rent event not found: #{id}"
+
+  updated = Object.assign({}, existing.value, updates, {
+    updated_at: new Date().toISOString()
+  })
+
+  await db.set key, updated
+  return updated
+
+
+export deleteRentEvent = (id) ->
+  key = ['rent_events', id]
+  existing = await db.get(key)
+
+  if not existing.value
+    throw new Error "Rent event not found: #{id}"
+
+  await db.delete(key)
+  return existing.value
+
+
+export getRentEventsForPeriod = (year, month) ->
+  events = []
+  prefix = ['rent_events']
+  entries = db.list({ prefix })
+
+  for await entry from entries
+    event = entry.value
+    if event.year is year and event.month is month
+      events.push event
+
+  events.sort (a, b) -> new Date(b.date) - new Date(a.date)
+  return events

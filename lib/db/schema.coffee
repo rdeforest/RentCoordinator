@@ -73,5 +73,9 @@ export initialize = ->
         project_id: null
         task_id: null
 
+  # Initialize recurring events system
+  recurringEventsService = await import('../services/recurring_events.coffee')
+  await recurringEventsService.initializeRecurringEvents()
+
 
 export { db }

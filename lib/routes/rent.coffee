@@ -104,3 +104,85 @@ export setup = (app) ->
       res.json periods
     catch err
       res.status(500).json error: err.message
+
+
+  # Rent Events CRUD
+  app.get '/rent/events', (req, res) ->
+    { year, month } = req.query
+
+    try
+      if year and month
+        events = await rentModel.getRentEventsForPeriod(parseInt(year), parseInt(month))
+      else
+        events = await rentModel.getAllRentEvents()
+      
+      res.json events
+    catch err
+      res.status(500).json error: err.message
+
+
+  app.post '/rent/events', (req, res) ->
+    { type, date, year, month, amount, description, notes, metadata } = req.body
+
+    if not type or not year or not month or not amount or not description
+      return res.status(400).json error: 'Type, year, month, amount, and description required'
+
+    try
+      event = await rentModel.createRentEvent
+        type: type
+        date: date
+        year: parseInt(year)
+        month: parseInt(month)
+        amount: parseFloat(amount)
+        description: description
+        notes: notes
+        metadata: metadata or {}
+
+      res.json event
+    catch err
+      res.status(500).json error: err.message
+
+
+  app.get '/rent/events/:id', (req, res) ->
+    try
+      event = await rentModel.getRentEvent(req.params.id)
+      
+      if not event
+        return res.status(404).json error: 'Event not found'
+      
+      res.json event
+    catch err
+      res.status(500).json error: err.message
+
+
+  app.put '/rent/events/:id', (req, res) ->
+    { type, date, year, month, amount, description, notes, metadata } = req.body
+
+    try
+      event = await rentModel.updateRentEvent req.params.id,
+        type: type
+        date: date
+        year: if year then parseInt(year) else undefined
+        month: if month then parseInt(month) else undefined
+        amount: if amount then parseFloat(amount) else undefined
+        description: description
+        notes: notes
+        metadata: metadata
+
+      res.json event
+    catch err
+      if err.message.includes 'not found'
+        res.status(404).json error: err.message
+      else
+        res.status(500).json error: err.message
+
+
+  app.delete '/rent/events/:id', (req, res) ->
+    try
+      deletedEvent = await rentModel.deleteRentEvent(req.params.id)
+      res.json message: 'Event deleted', event: deletedEvent
+    catch err
+      if err.message.includes 'not found'
+        res.status(404).json error: err.message
+      else
+        res.status(500).json error: err.message
