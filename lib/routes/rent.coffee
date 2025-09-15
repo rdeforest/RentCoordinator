@@ -108,14 +108,17 @@ export setup = (app) ->
 
   # Rent Events CRUD
   app.get '/rent/events', (req, res) ->
-    { year, month } = req.query
+    { year, month, includeDeleted } = req.query
 
     try
+      # Parse includeDeleted as boolean
+      showDeleted = includeDeleted is 'true'
+
       if year and month
-        events = await rentModel.getRentEventsForPeriod(parseInt(year), parseInt(month))
+        events = await rentModel.getRentEventsForPeriod(parseInt(year), parseInt(month), showDeleted)
       else
-        events = await rentModel.getAllRentEvents()
-      
+        events = await rentModel.getAllRentEvents(showDeleted)
+
       res.json events
     catch err
       res.status(500).json error: err.message
@@ -186,3 +189,34 @@ export setup = (app) ->
         res.status(404).json error: err.message
       else
         res.status(500).json error: err.message
+
+
+  # Undelete event
+  app.post '/rent/events/:id/undelete', (req, res) ->
+    try
+      undeletedEvent = await rentModel.undeleteRentEvent(req.params.id)
+      res.json message: 'Event undeleted', event: undeletedEvent
+    catch err
+      if err.message.includes 'not found'
+        res.status(404).json error: err.message
+      else if err.message.includes 'not deleted'
+        res.status(400).json error: err.message
+      else
+        res.status(500).json error: err.message
+
+
+  # Audit logs endpoint
+  app.get '/rent/audit-logs', (req, res) ->
+    { entity_type, entity_id, action, user } = req.query
+
+    try
+      filters = {}
+      if entity_type then filters.entity_type = entity_type
+      if entity_id then filters.entity_id = entity_id
+      if action then filters.action = action
+      if user then filters.user = user
+
+      logs = await rentModel.getAuditLogs(filters)
+      res.json logs
+    catch err
+      res.status(500).json error: err.message

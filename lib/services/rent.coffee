@@ -45,7 +45,25 @@ export calculateRent = (year, month) ->
 
   # Calculate discount
   discountApplied = hoursToApply * HOURLY_CREDIT
-  amountDue = BASE_RENT - discountApplied
+  baseAmountDue = BASE_RENT - discountApplied
+
+  # Get manual adjustments and payments for this period
+  events = await rentModel.getRentEventsForPeriod(year, month)
+
+  # Calculate adjustments from manual events
+  manualAdjustments = 0
+  totalPayments = 0
+
+  for event in events
+    if event.type is 'adjustment' or event.type is 'manual'
+      # Manual adjustments affect the amount due
+      manualAdjustments += event.amount
+    else if event.type is 'payment'
+      # Payments are tracked separately
+      totalPayments += event.amount
+
+  # Final amount due includes manual adjustments
+  amountDue = baseAmountDue + manualAdjustments
 
   return {
     year: year
@@ -56,7 +74,9 @@ export calculateRent = (year, month) ->
     hours_applied: hoursToApply
     hours_to_next: hoursToNext
     discount_applied: discountApplied
+    manual_adjustments: manualAdjustments
     amount_due: amountDue
+    amount_paid: totalPayments
   }
 
 
@@ -110,9 +130,22 @@ export recalculateAllRent = ->
       retroactiveAdjustment = maxRetroactiveHours * HOURLY_CREDIT
       totalShortfall -= retroactiveAdjustment
 
+    # Get manual adjustments and payments for this period
+    events = await rentModel.getRentEventsForPeriod(year, month)
+
+    # Calculate adjustments from manual events
+    manualAdjustments = 0
+    totalPayments = 0
+
+    for event in events
+      if event.type is 'adjustment' or event.type is 'manual'
+        manualAdjustments += event.amount
+      else if event.type is 'payment'
+        totalPayments += event.amount
+
     # Final amounts
     totalDiscount = baseDiscount + retroactiveAdjustment
-    finalAmountDue = BASE_RENT - totalDiscount
+    finalAmountDue = BASE_RENT - totalDiscount + manualAdjustments
 
     # Update carry-over for next month
     hoursUsed = baseHoursApplied + (retroactiveAdjustment / HOURLY_CREDIT)
@@ -134,7 +167,9 @@ export recalculateAllRent = ->
       base_discount: baseDiscount
       retroactive_adjustment: retroactiveAdjustment
       total_discount: totalDiscount
+      manual_adjustments: manualAdjustments
       amount_due: finalAmountDue
+      amount_paid: totalPayments
       cumulative_shortfall: totalShortfall
 
   return periods
@@ -147,13 +182,14 @@ export createOrUpdateRentPeriod = (year, month) ->
   existing = await rentModel.getRentPeriod(year, month)
 
   if existing
-    # Update existing period
+    # Update existing period, preserving payment data if not recalculated
     updated = await rentModel.updateRentPeriod year, month,
       hours_worked: calculation.hours_worked
       hours_from_previous: calculation.hours_from_previous
       hours_to_next: calculation.hours_to_next
       discount_applied: calculation.discount_applied
       amount_due: calculation.amount_due
+      amount_paid: calculation.amount_paid
 
     return updated
   else

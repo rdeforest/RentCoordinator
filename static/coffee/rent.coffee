@@ -7,6 +7,7 @@ currentMonth = now.getMonth() + 1
 currentFilters = {}
 allEvents = []
 eventToDelete = null
+showingDeleted = false
 
 # DOM elements
 eventModal = document.getElementById 'event-modal'
@@ -22,6 +23,7 @@ cancelDeleteBtn = document.getElementById 'cancel-delete-btn'
 deleteEventDetails = document.getElementById 'delete-event-details'
 
 toggleFiltersBtn = document.getElementById 'toggle-filters-btn'
+toggleDeletedBtn = document.getElementById 'toggle-deleted-btn'
 eventFilters = document.getElementById 'event-filters'
 applyFiltersBtn = document.getElementById 'apply-filters-btn'
 clearFiltersBtn = document.getElementById 'clear-filters-btn'
@@ -124,11 +126,13 @@ loadAllPeriods = ->
 loadEvents = (filters = {}) ->
   try
     queryParams = new URLSearchParams()
-    
+
     if filters.year
       queryParams.append 'year', filters.year
     if filters.month
       queryParams.append 'month', filters.month
+    if showingDeleted
+      queryParams.append 'includeDeleted', 'true'
 
     url = '/rent/events'
     if queryParams.toString()
@@ -136,6 +140,11 @@ loadEvents = (filters = {}) ->
 
     response = await fetch url
     events = await response.json()
+
+    # Filter out malformed events first
+    events = events.filter (event) ->
+      event.type? and event.date? and event.year? and event.month? and
+      event.amount? and event.description? and event.id?
 
     # Apply client-side filters
     if filters.type
@@ -156,23 +165,43 @@ renderEventsTable = (events) ->
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No events found</td></tr>'
     return
 
-  tbody.innerHTML = events.map((event) ->
+  # Filter out malformed events and render valid ones
+  validEvents = events.filter (event) ->
+    # Check that all required fields are present
+    event.type? and event.date? and event.year? and event.month? and
+    event.amount? and event.description? and event.id?
+
+  if validEvents.length is 0
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No valid events found</td></tr>'
+    return
+
+  tbody.innerHTML = validEvents.map((event) ->
     dateStr = formatDate event.date
     periodStr = formatMonthYear event.year, event.month
     amountStr = formatCurrency event.amount
     typeClass = event.type.replace('_', '-')
+    isDeleted = event.deleted
+
+    rowClass = if isDeleted then 'deleted-row' else ''
+    actions = if isDeleted
+      """
+        <button class="btn btn-small btn-success" onclick="undeleteEvent('#{event.id}')">Undelete</button>
+        <button class="btn btn-small" onclick="viewAuditLog('#{event.id}')">Audit Log</button>
+      """
+    else
+      """
+        <button class="btn btn-small" onclick="editEvent('#{event.id}')">Edit</button>
+        <button class="btn btn-small btn-danger" onclick="deleteEvent('#{event.id}')">Delete</button>
+      """
 
     """
-      <tr>
+      <tr class="#{rowClass}">
         <td>#{dateStr}</td>
-        <td class="event-type #{typeClass}">#{formatEventType event.type}</td>
+        <td class="event-type #{typeClass}">#{formatEventType event.type}#{if isDeleted then ' (DELETED)' else ''}</td>
         <td>#{periodStr}</td>
         <td class="#{if event.amount >= 0 then 'positive' else 'negative'}">#{amountStr}</td>
         <td>#{escapeHtml event.description}</td>
-        <td class="actions">
-          <button class="btn btn-small" onclick="editEvent('#{event.id}')">Edit</button>
-          <button class="btn btn-small btn-danger" onclick="deleteEvent('#{event.id}')">Delete</button>
-        </td>
+        <td class="actions">#{actions}</td>
       </tr>
     """
   ).join ''
@@ -211,13 +240,13 @@ window.editEvent = (eventId) ->
 
 window.deleteEvent = (eventId) ->
   event = allEvents.find (e) -> e.id is eventId
-  
+
   if not event
     showError 'Event not found'
     return
 
   eventToDelete = event
-  
+
   # Show event details in delete modal
   deleteEventDetails.innerHTML = """
     <p><strong>Date:</strong> #{formatDate event.date}</p>
@@ -226,8 +255,49 @@ window.deleteEvent = (eventId) ->
     <p><strong>Amount:</strong> #{formatCurrency event.amount}</p>
     <p><strong>Description:</strong> #{escapeHtml event.description}</p>
   """
-  
+
   confirmDeleteModal.style.display = 'block'
+
+window.undeleteEvent = (eventId) ->
+  try
+    response = await fetch "/rent/events/#{eventId}/undelete",
+      method: 'POST'
+
+    if response.ok
+      loadEvents currentFilters
+      loadRentSummary()
+      loadCurrentMonth()
+      loadAllPeriods()
+    else
+      error = await response.json()
+      showError "Failed to undelete event: #{error.error}"
+
+  catch err
+    showError "Error undeleting event: #{err.message}"
+
+window.viewAuditLog = (eventId) ->
+  try
+    response = await fetch "/rent/audit-logs?entity_type=rent_event&entity_id=#{eventId}"
+    logs = await response.json()
+
+    if logs.length is 0
+      alert 'No audit log entries found for this event'
+      return
+
+    # Format audit log for display
+    logContent = logs.map((log) ->
+      """
+      Action: #{log.action}
+      User: #{log.user}
+      Time: #{formatDate log.timestamp}
+      ---
+      """
+    ).join '\n'
+
+    alert "Audit Log for Event:\n\n#{logContent}"
+
+  catch err
+    showError "Error loading audit log: #{err.message}"
 
 # Event Listeners
 
@@ -286,7 +356,6 @@ eventForm.addEventListener 'submit', (e) ->
       loadRentSummary()
       loadCurrentMonth()
       loadAllPeriods()
-      showSuccess if isEdit then 'Event updated successfully' else 'Event added successfully'
     else
       error = await response.json()
       showError "Failed to #{if isEdit then 'update' else 'add'} event: #{error.error}"
@@ -310,7 +379,6 @@ confirmDeleteBtn.addEventListener 'click', ->
       loadRentSummary()
       loadCurrentMonth()
       loadAllPeriods()
-      showSuccess 'Event deleted successfully'
     else
       error = await response.json()
       showError "Failed to delete event: #{error.error}"
@@ -327,6 +395,13 @@ toggleFiltersBtn.addEventListener 'click', ->
   isVisible = eventFilters.style.display isnt 'none'
   eventFilters.style.display = if isVisible then 'none' else 'block'
   toggleFiltersBtn.textContent = if isVisible then 'Filters' else 'Hide Filters'
+
+# Toggle deleted events
+toggleDeletedBtn.addEventListener 'click', ->
+  showingDeleted = not showingDeleted
+  toggleDeletedBtn.textContent = if showingDeleted then 'Hide Deleted' else 'Show Deleted'
+  toggleDeletedBtn.className = if showingDeleted then 'btn btn-warning' else 'btn btn-secondary'
+  loadEvents currentFilters
 
 applyFiltersBtn.addEventListener 'click', ->
   filters = {}
@@ -385,7 +460,6 @@ paymentForm.addEventListener 'submit', (e) ->
       loadCurrentMonth()
       loadAllPeriods()
       loadEvents currentFilters
-      showSuccess 'Payment recorded successfully'
     else
       error = await response.json()
       showError "Failed to record payment: #{error.error}"
@@ -395,15 +469,11 @@ paymentForm.addEventListener 'submit', (e) ->
 
 # Recalculate all periods
 document.getElementById('recalculate-btn').addEventListener 'click', ->
-  unless confirm 'This will recalculate all rent periods including retroactive adjustments. Continue?'
-    return
-
   try
     response = await fetch '/rent/recalculate-all', method: 'POST'
     result = await response.json()
 
     if response.ok
-      showSuccess "Successfully recalculated #{result.periods_updated} periods"
       loadRentSummary()
       loadCurrentMonth()
       loadAllPeriods()

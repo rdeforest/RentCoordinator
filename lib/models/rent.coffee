@@ -132,16 +132,30 @@ export createRentEvent = (data) ->
   key = ['rent_events', id]
   await db.set key, event
 
+  # Add audit log entry
+  await createAuditLog {
+    action: 'create'
+    entity_type: 'rent_event'
+    entity_id: id
+    old_value: null
+    new_value: event
+    user: data.created_by or 'user'
+  }
+
   return event
 
 
-export getAllRentEvents = ->
+export getAllRentEvents = (includeDeleted = false) ->
   events = []
   prefix = ['rent_events']
   entries = db.list({ prefix })
 
   for await entry from entries
-    events.push entry.value
+    event = entry.value
+    # Skip deleted events unless specifically requested
+    if not includeDeleted and event.deleted
+      continue
+    events.push event
 
   # Sort by date descending
   events.sort (a, b) -> new Date(b.date) - new Date(a.date)
@@ -166,29 +180,140 @@ export updateRentEvent = (id, updates) ->
   })
 
   await db.set key, updated
+
+  # Add audit log entry
+  await createAuditLog {
+    action: 'update'
+    entity_type: 'rent_event'
+    entity_id: id
+    old_value: existing.value
+    new_value: updated
+    user: updates.updated_by or 'user'
+  }
+
   return updated
 
 
-export deleteRentEvent = (id) ->
+export deleteRentEvent = (id, deletedBy = 'user') ->
   key = ['rent_events', id]
   existing = await db.get(key)
 
   if not existing.value
     throw new Error "Rent event not found: #{id}"
 
-  await db.delete(key)
-  return existing.value
+  # Soft delete - mark as deleted instead of removing
+  deleted = Object.assign({}, existing.value, {
+    deleted: true
+    deleted_at: new Date().toISOString()
+    deleted_by: deletedBy
+    updated_at: new Date().toISOString()
+  })
+
+  await db.set key, deleted
+
+  # Add audit log entry
+  await createAuditLog {
+    action: 'delete'
+    entity_type: 'rent_event'
+    entity_id: id
+    old_value: existing.value
+    new_value: deleted
+    user: deletedBy
+  }
+
+  return deleted
 
 
-export getRentEventsForPeriod = (year, month) ->
+# Undelete a soft-deleted rent event
+export undeleteRentEvent = (id, undeletedBy = 'user') ->
+  key = ['rent_events', id]
+  existing = await db.get(key)
+
+  if not existing.value
+    throw new Error "Rent event not found: #{id}"
+
+  if not existing.value.deleted
+    throw new Error "Rent event is not deleted: #{id}"
+
+  # Remove deletion markers
+  undeleted = Object.assign({}, existing.value)
+  delete undeleted.deleted
+  delete undeleted.deleted_at
+  delete undeleted.deleted_by
+  undeleted.updated_at = new Date().toISOString()
+
+  await db.set key, undeleted
+
+  # Add audit log entry
+  await createAuditLog {
+    action: 'undelete'
+    entity_type: 'rent_event'
+    entity_id: id
+    old_value: existing.value
+    new_value: undeleted
+    user: undeletedBy
+  }
+
+  return undeleted
+
+
+export getRentEventsForPeriod = (year, month, includeDeleted = false) ->
   events = []
   prefix = ['rent_events']
   entries = db.list({ prefix })
 
   for await entry from entries
     event = entry.value
+    # Skip deleted events unless specifically requested
+    if not includeDeleted and event.deleted
+      continue
     if event.year is year and event.month is month
       events.push event
 
   events.sort (a, b) -> new Date(b.date) - new Date(a.date)
   return events
+
+
+# Audit log functionality
+export createAuditLog = (data) ->
+  id = v1.generate()
+
+  log =
+    id: id
+    action: data.action  # 'create', 'update', 'delete', 'undelete'
+    entity_type: data.entity_type
+    entity_id: data.entity_id
+    old_value: data.old_value or null
+    new_value: data.new_value or null
+    user: data.user or 'system'
+    timestamp: new Date().toISOString()
+    metadata: data.metadata or {}
+
+  key = ['audit_logs', id]
+  await db.set key, log
+  return log
+
+
+export getAuditLogs = (filters = {}) ->
+  logs = []
+  prefix = ['audit_logs']
+  entries = db.list({ prefix })
+
+  for await entry from entries
+    log = entry.value
+
+    # Apply filters
+    if filters.entity_type and log.entity_type != filters.entity_type
+      continue
+    if filters.entity_id and log.entity_id != filters.entity_id
+      continue
+    if filters.action and log.action != filters.action
+      continue
+    if filters.user and log.user != filters.user
+      continue
+
+    logs.push log
+
+  # Sort by timestamp descending
+  logs.sort (a, b) -> new Date(b.timestamp) - new Date(a.timestamp)
+  return logs

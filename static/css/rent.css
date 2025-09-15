@@ -231,6 +231,41 @@ th {
     background: #c0392b;
 }
 
+/* Deleted events styling */
+.deleted-row {
+    opacity: 0.6;
+    background-color: #f5f5f5;
+}
+
+.deleted-row td:not(.actions) {
+    text-decoration: line-through;
+    color: #999;
+}
+
+.deleted-row .actions button {
+    text-decoration: none;
+}
+
+.btn-success {
+    background-color: #28a745;
+    color: white;
+    border: none;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+}
+
+.btn-warning {
+    background-color: #ffc107;
+    color: #212529;
+    border: none;
+}
+
+.btn-warning:hover {
+    background-color: #e0a800;
+}
+
 /* Event Details in Delete Modal */
 .event-details {
     background: #f8f9fa;
