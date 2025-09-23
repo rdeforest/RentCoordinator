@@ -266,10 +266,7 @@ window.undeleteEvent = (eventId) ->
       method: 'POST'
 
     if response.ok
-      loadEvents currentFilters
-      loadRentSummary()
-      loadCurrentMonth()
-      loadAllPeriods()
+      autoRecalculateAndReload()
     else
       error = await response.json()
       showError "Failed to undelete event: #{error.error}"
@@ -354,10 +351,7 @@ eventForm.addEventListener 'submit', (e) ->
 
     if response.ok
       eventModal.style.display = 'none'
-      loadEvents currentFilters
-      loadRentSummary()
-      loadCurrentMonth()
-      loadAllPeriods()
+      autoRecalculateAndReload()
     else
       error = await response.json()
       showError "Failed to #{if isEdit then 'update' else 'add'} event: #{error.error}"
@@ -377,10 +371,7 @@ confirmDeleteBtn.addEventListener 'click', ->
     if response.ok
       confirmDeleteModal.style.display = 'none'
       eventToDelete = null
-      loadEvents currentFilters
-      loadRentSummary()
-      loadCurrentMonth()
-      loadAllPeriods()
+      autoRecalculateAndReload()
     else
       error = await response.json()
       showError "Failed to delete event: #{error.error}"
@@ -458,10 +449,7 @@ paymentForm.addEventListener 'submit', (e) ->
 
     if response.ok
       paymentModal.style.display = 'none'
-      loadRentSummary()
-      loadCurrentMonth()
-      loadAllPeriods()
-      loadEvents currentFilters
+      autoRecalculateAndReload()
     else
       error = await response.json()
       showError "Failed to record payment: #{error.error}"
@@ -471,19 +459,7 @@ paymentForm.addEventListener 'submit', (e) ->
 
 # Recalculate all periods
 document.getElementById('recalculate-btn').addEventListener 'click', ->
-  try
-    response = await fetch '/rent/recalculate-all', method: 'POST'
-    result = await response.json()
-
-    if response.ok
-      loadRentSummary()
-      loadCurrentMonth()
-      loadAllPeriods()
-    else
-      showError "Error recalculating: #{result.error}"
-
-  catch err
-    showError "Error recalculating periods: #{err.message}"
+  autoRecalculateAndReload()
 
 # Helper functions
 formatCurrency = (amount) ->
@@ -491,6 +467,18 @@ formatCurrency = (amount) ->
     style: 'currency'
     currency: 'USD'
   ).format amount
+
+# Auto-recalculate and reload all data
+autoRecalculateAndReload = ->
+  try
+    response = await fetch '/rent/recalculate-all', method: 'POST'
+    if response.ok
+      loadRentSummary()
+      loadCurrentMonth()
+      loadAllPeriods()
+      loadEvents currentFilters
+  catch err
+    console.error 'Auto-recalculation failed:', err
 
 formatDate = (dateStr) ->
   date = new Date dateStr
