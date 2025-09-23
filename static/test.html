@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CoffeeScript Test</title>
+</head>
+<body>
+    <h1>CoffeeScript Compiler Test</h1>
+    <div id="test-output">Waiting for CoffeeScript...</div>
+
+    <script src="/vendor/coffeescript.js"></script>
+    <script type="text/coffeescript">
+        console.log "CoffeeScript is running!"
+        document.getElementById('test-output').textContent = 'CoffeeScript works!'
+
+        # Test async function
+        testAsync = ->
+            try
+                response = await fetch '/health'
+                data = await response.json()
+                console.log 'Health check:', data
+                document.getElementById('test-output').textContent += " - API works: #{data.status}"
+            catch err
+                console.error 'Error:', err
+
+        testAsync()
+    </script>
+</body>
+</html>

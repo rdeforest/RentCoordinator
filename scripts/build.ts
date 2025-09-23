@@ -69,7 +69,14 @@ async function compileCoffeeScript() {
     await Deno.copyFile("static/css/work.css", "dist/static/css/work.css");
     await Deno.copyFile("static/css/timer.css", "dist/static/css/timer.css");
 
-    // Copy CoffeeScript files (no compilation - browser will handle it)
+    // Copy JavaScript files (compiled from CoffeeScript)
+    await ensureDir("dist/static/js");
+    await Deno.copyFile("static/js/shared-utils.js", "dist/static/js/shared-utils.js");
+    await Deno.copyFile("static/js/timer.js", "dist/static/js/timer.js");
+    await Deno.copyFile("static/js/rent.js", "dist/static/js/rent.js");
+    await Deno.copyFile("static/js/work.js", "dist/static/js/work.js");
+
+    // Still copy CoffeeScript files for reference
     await ensureDir("dist/static/coffee");
     await Deno.copyFile("static/coffee/shared-utils.coffee", "dist/static/coffee/shared-utils.coffee");
     await Deno.copyFile("static/coffee/timer.coffee", "dist/static/coffee/timer.coffee");

@@ -83,6 +83,8 @@ loadCurrentMonth = ->
       formatCurrency period.amount_due
     document.getElementById('amount-paid').textContent =
       formatCurrency period.amount_paid or 0
+    document.getElementById('outstanding-balance-current').textContent =
+      formatCurrency (period.amount_due - (period.amount_paid or 0))
 
     document.querySelector('.current-month').style.display = 'block'
 
