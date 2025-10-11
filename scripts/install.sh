@@ -195,17 +195,19 @@ install_deno() {
     fi
 
     # Download and install Deno
+    # Note: Deno installer may try to access /dev/tty and fail, but still successfully install
+    # So we allow non-zero exit and verify installation afterward
     if command -v curl &>/dev/null; then
         if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
-            curl -fsSL https://deno.land/install.sh | sh
+            curl -fsSL https://deno.land/install.sh | sh < /dev/null || true
         else
-            su - "$APP_USER" -c "curl -fsSL https://deno.land/install.sh | sh"
+            su - "$APP_USER" -c "curl -fsSL https://deno.land/install.sh | sh < /dev/null" || true
         fi
     elif command -v wget &>/dev/null; then
         if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
-            wget -qO- https://deno.land/install.sh | sh
+            wget -qO- https://deno.land/install.sh | sh < /dev/null || true
         else
-            su - "$APP_USER" -c "wget -qO- https://deno.land/install.sh | sh"
+            su - "$APP_USER" -c "wget -qO- https://deno.land/install.sh | sh < /dev/null" || true
         fi
     else
         print_error "Neither curl nor wget found. Please install one of them."
