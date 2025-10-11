@@ -134,42 +134,64 @@ create_user() {
     fi
 }
 
-# Create directory structure
-create_directories() {
-    print_info "Creating directories..."
+# Create initial directories (before git clone)
+create_initial_directories() {
+    print_info "Creating initial directories..."
 
-    # Create directories
-    mkdir -p "$PREFIX"
+    # Create non-PREFIX directories only
     mkdir -p "$LOG_DIR"
     mkdir -p "$(dirname "$DB_PATH")"
-    mkdir -p "$PREFIX/bin"
-    mkdir -p "$PREFIX/scripts"
 
     # Set ownership
     if [ "$SKIP_USER" = false ] && [ "$EUID" -eq 0 ]; then
-        chown -R "$APP_USER:$APP_USER" "$PREFIX"
         chown -R "$APP_USER:$APP_USER" "$LOG_DIR"
         chown -R "$APP_USER:$APP_USER" "$(dirname "$DB_PATH")"
     fi
 
-    print_success "Directories created"
+    print_success "Initial directories created"
+}
+
+# Create additional directories (after git clone)
+create_additional_directories() {
+    print_info "Creating additional directories..."
+
+    # Create subdirectories if they don't exist
+    mkdir -p "$PREFIX/bin"
+    mkdir -p "$PREFIX/scripts"
+    mkdir -p "$PREFIX/dist"
+
+    # Set ownership
+    if [ "$SKIP_USER" = false ] && [ "$EUID" -eq 0 ]; then
+        chown -R "$APP_USER:$APP_USER" "$PREFIX"
+    fi
+
+    print_success "Additional directories created"
 }
 
 # Install Deno
 install_deno() {
     print_info "Installing Deno..."
 
-    # Determine Deno install location
+    # Determine Deno install location and user home directory
     if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
+        USER_HOME="$HOME"
         DENO_INSTALL="$HOME/.deno"
     else
-        DENO_INSTALL="/home/$APP_USER/.deno"
+        # Get actual home directory from passwd, not hardcoded /home
+        USER_HOME=$(eval echo ~"$APP_USER")
+        DENO_INSTALL="$USER_HOME/.deno"
     fi
 
     # Check if Deno is already installed
     if [ -f "$DENO_INSTALL/bin/deno" ]; then
         print_warning "Deno already installed at $DENO_INSTALL"
-        return
+        # Verify it works
+        if "$DENO_INSTALL/bin/deno" --version &>/dev/null; then
+            print_success "Deno verified working"
+            return
+        else
+            print_warning "Deno exists but not working, reinstalling..."
+        fi
     fi
 
     # Download and install Deno
@@ -190,59 +212,132 @@ install_deno() {
         exit 1
     fi
 
-    # Add to PATH in user's profile
-    if [ "$SKIP_USER" = false ] && [ "$EUID" -eq 0 ]; then
-        echo "export DENO_INSTALL=\"$DENO_INSTALL\"" >> "/home/$APP_USER/.bashrc"
-        echo "export PATH=\"\$DENO_INSTALL/bin:\$PATH\"" >> "/home/$APP_USER/.bashrc"
+    # Verify installation succeeded
+    if [ ! -f "$DENO_INSTALL/bin/deno" ]; then
+        print_error "Deno installation failed - binary not found at $DENO_INSTALL/bin/deno"
+        exit 1
     fi
 
-    print_success "Deno installed at $DENO_INSTALL"
+    # Test that Deno actually runs
+    if ! "$DENO_INSTALL/bin/deno" --version &>/dev/null; then
+        print_error "Deno installed but does not execute properly"
+        exit 1
+    fi
+
+    # Add to PATH in user's profile
+    if [ "$SKIP_USER" = false ] && [ "$EUID" -eq 0 ]; then
+        echo "export DENO_INSTALL=\"$DENO_INSTALL\"" >> "$USER_HOME/.bashrc"
+        echo "export PATH=\"\$DENO_INSTALL/bin:\$PATH\"" >> "$USER_HOME/.bashrc"
+    fi
+
+    print_success "Deno installed and verified at $DENO_INSTALL"
 }
 
 # Clone repository
 clone_repository() {
     print_info "Cloning repository..."
 
+    # Check if git is available
+    if ! command -v git &>/dev/null; then
+        print_error "Git is not installed. Please install git first."
+        exit 1
+    fi
+
     if [ -d "$PREFIX/.git" ]; then
         print_warning "Repository already exists, pulling latest changes..."
-        cd "$PREFIX"
         if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
-            git pull
+            cd "$PREFIX" || exit 1
+            git pull || {
+                print_error "Failed to pull repository updates"
+                exit 1
+            }
         else
-            su - "$APP_USER" -c "cd $PREFIX && git pull"
+            su "$APP_USER" -c "cd '$PREFIX' && git pull" || {
+                print_error "Failed to pull repository updates"
+                exit 1
+            }
         fi
     else
-        if command -v git &>/dev/null; then
-            if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
-                git clone "$REPO_URL" "$PREFIX"
-            else
-                su - "$APP_USER" -c "git clone $REPO_URL $PREFIX"
-            fi
+        # Clone the repository
+        if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
+            git clone "$REPO_URL" "$PREFIX" || {
+                print_error "Failed to clone repository from $REPO_URL"
+                exit 1
+            }
         else
-            print_error "Git is not installed. Please install git first."
-            exit 1
+            # Create parent directory with correct ownership if needed
+            PARENT_DIR=$(dirname "$PREFIX")
+            if [ ! -d "$PARENT_DIR" ]; then
+                mkdir -p "$PARENT_DIR"
+            fi
+
+            su "$APP_USER" -c "git clone '$REPO_URL' '$PREFIX'" || {
+                print_error "Failed to clone repository from $REPO_URL"
+                exit 1
+            }
         fi
     fi
 
-    print_success "Repository cloned"
+    # Verify the repository was cloned/updated successfully
+    if [ ! -d "$PREFIX/.git" ]; then
+        print_error "Repository clone verification failed - .git directory not found"
+        exit 1
+    fi
+
+    # Verify essential files exist
+    if [ ! -f "$PREFIX/deno.json" ]; then
+        print_error "Repository verification failed - deno.json not found"
+        exit 1
+    fi
+
+    print_success "Repository cloned and verified"
 }
 
 # Build application
 build_application() {
     print_info "Building application..."
 
-    cd "$PREFIX"
-
-    # Set up environment
+    # Determine paths
     if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
-        export DENO_INSTALL="$HOME/.deno"
-        export PATH="$DENO_INSTALL/bin:$PATH"
-        deno task build
+        USER_HOME="$HOME"
+        DENO_INSTALL="$HOME/.deno"
     else
-        su - "$APP_USER" -c "cd $PREFIX && export DENO_INSTALL=/home/$APP_USER/.deno && export PATH=\$DENO_INSTALL/bin:\$PATH && deno task build"
+        USER_HOME=$(eval echo ~"$APP_USER")
+        DENO_INSTALL="$USER_HOME/.deno"
     fi
 
-    print_success "Application built"
+    # Ensure dist directory exists
+    mkdir -p "$PREFIX/dist"
+
+    # Build the application
+    if [ "$SKIP_USER" = true ] || [ "$EUID" -ne 0 ]; then
+        cd "$PREFIX" || exit 1
+        export DENO_INSTALL="$DENO_INSTALL"
+        export PATH="$DENO_INSTALL/bin:$PATH"
+        deno task build || {
+            print_error "Build failed"
+            exit 1
+        }
+    else
+        su "$APP_USER" -c "cd '$PREFIX' && export DENO_INSTALL='$DENO_INSTALL' && export PATH=\$DENO_INSTALL/bin:\$PATH && deno task build" || {
+            print_error "Build failed"
+            exit 1
+        }
+    fi
+
+    # Verify build output exists
+    if [ ! -f "$PREFIX/dist/main.js" ]; then
+        print_error "Build verification failed - dist/main.js not found"
+        print_info "Build may have completed but output is missing"
+        exit 1
+    fi
+
+    # Check if dist has other expected files
+    if [ ! -d "$PREFIX/dist/static" ]; then
+        print_warning "dist/static directory not found - static assets may be missing"
+    fi
+
+    print_success "Application built and verified"
 }
 
 # Create configuration file
@@ -285,10 +380,11 @@ create_management_script() {
 
 # RentCoordinator Management Script
 APP_DIR="PREFIX_PLACEHOLDER"
-PID_FILE="/var/run/rentcoordinator.pid"
+PID_FILE="PREFIX_PLACEHOLDER/rentcoordinator.pid"
 LOG_FILE="LOG_DIR_PLACEHOLDER/app.log"
 USER="USER_PLACEHOLDER"
-DENO_INSTALL="/home/$USER/.deno"
+USER_HOME=$(eval echo ~"$USER")
+DENO_INSTALL="$USER_HOME/.deno"
 
 # Source environment if exists
 if [ -f "$APP_DIR/.env" ]; then
@@ -304,19 +400,20 @@ start() {
     fi
 
     echo "Starting RentCoordinator..."
-    cd "$APP_DIR"
+    cd "$APP_DIR" || exit 1
 
     if [ "$(whoami)" = "$USER" ]; then
         export PATH="$DENO_INSTALL/bin:$PATH"
         nohup deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js > "$LOG_FILE" 2>&1 &
         echo $! > "$PID_FILE"
     else
-        su - "$USER" -c "cd $APP_DIR && export PATH=$DENO_INSTALL/bin:\$PATH && nohup deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js > $LOG_FILE 2>&1 & echo \$!"
- > "$PID_FILE"
+        # Run as the application user and capture PID
+        PID=$(su "$USER" -c "cd '$APP_DIR' && export PATH='$DENO_INSTALL/bin:\$PATH' && nohup deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js > '$LOG_FILE' 2>&1 & echo \$!")
+        echo "$PID" > "$PID_FILE"
     fi
 
     sleep 2
-    if kill -0 $(cat "$PID_FILE") 2>/dev/null; then
+    if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
         echo "RentCoordinator started successfully (PID: $(cat $PID_FILE))"
     else
         echo "Failed to start RentCoordinator"
@@ -445,9 +542,10 @@ main() {
     detect_os
     check_root
     create_user
-    create_directories
+    create_initial_directories
     install_deno
     clone_repository
+    create_additional_directories
     build_application
     create_config
     create_management_script
