@@ -47,9 +47,9 @@ else
 fi
 
 # 3. Optional: Run tests if they exist
-if grep -q '"test"' deno.json 2>/dev/null; then
+if find . -name "*_test.ts" -o -name "*_test.js" -o -name "*.test.ts" -o -name "*.test.js" 2>/dev/null | grep -q .; then
     print_info "Running tests..."
-    if deno test -A; then
+    if deno test -A 2>/dev/null; then
         print_success "Tests passed"
     else
         print_error "Tests failed"
@@ -57,6 +57,8 @@ if grep -q '"test"' deno.json 2>/dev/null; then
         echo "Fix failing tests before pushing"
         exit 1
     fi
+else
+    print_info "No tests found, skipping test step"
 fi
 
 echo

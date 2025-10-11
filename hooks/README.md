@@ -20,7 +20,7 @@ Runs before `git push` and performs the following checks:
 
 1. **Build** - Compiles CoffeeScript to JavaScript via `deno task build`
 2. **Lint** - Runs `deno lint` on compiled JavaScript output (dist/ and scripts/)
-3. **Test** - Runs `deno test` if tests are configured
+3. **Test** - Runs `deno test` if test files exist (skipped if no tests found)
 
 If any check fails, the push is aborted and you'll need to fix the issues before pushing.
 
