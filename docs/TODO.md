@@ -4,8 +4,18 @@ Post-v1.0 improvements and technical debt.
 
 ## Installation Scripts Refactoring (Post-v1.0)
 
+### Problem Statement
+The scripts in `scripts/` contain **significant redundant code** that needs comprehensive refactoring:
+- `install.sh` and `uninstall.sh` duplicate: color functions, output helpers, user/path utilities, OS detection, process management
+- Init system handling duplicated within each script (systemd, openrc detection/setup)
+- Deno installation logic is complex and could be reusable
+- Argument parsing patterns repeated across scripts
+- Path resolution and validation logic duplicated
+
+**Scope**: This is broader than just abstracting init systems - the entire scripts directory needs DRY refactoring.
+
 ### Goal
-Modularize install/uninstall scripts to reduce duplication and improve maintainability.
+Modularize install/uninstall scripts to eliminate all duplication and improve maintainability.
 
 ### Tasks
 

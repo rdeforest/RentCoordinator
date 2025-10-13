@@ -1,0 +1,82 @@
+#!/bin/bash
+
+APP_DIR="PREFIX_PLACEHOLDER"
+PID_FILE="$APP_DIR/rentcoordinator.pid"
+LOG_FILE="LOG_DIR_PLACEHOLDER/app.log"
+USER="USER_PLACEHOLDER"
+USER_HOME=$(eval echo ~"$USER")
+DENO_INSTALL="$USER_HOME/.deno"
+
+if [ -f "$APP_DIR/.env" ]; then
+    set -a
+    . "$APP_DIR/.env"
+    set +a
+fi
+
+start() {
+    if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
+        echo "RentCoordinator is already running (PID: $(cat $PID_FILE))"
+        return 1
+    fi
+
+    echo "Starting RentCoordinator..."
+    cd "$APP_DIR" || exit 1
+
+    if [ "$(whoami)" = "$USER" ]; then
+        export PATH="$DENO_INSTALL/bin:$PATH"
+        nohup deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js > "$LOG_FILE" 2>&1 &
+        echo $! > "$PID_FILE"
+    else
+        PID=$(su "$USER" -c "cd '$APP_DIR' && export PATH='$DENO_INSTALL/bin:\$PATH' && nohup deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js > '$LOG_FILE' 2>&1 & echo \$!")
+        echo "$PID" > "$PID_FILE"
+    fi
+
+    sleep 2
+    if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
+        echo "RentCoordinator started successfully (PID: $(cat $PID_FILE))"
+    else
+        echo "Failed to start RentCoordinator"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+}
+
+stop() {
+    if [ ! -f "$PID_FILE" ]; then
+        echo "RentCoordinator is not running"
+        return 1
+    fi
+
+    echo "Stopping RentCoordinator..."
+    kill $(cat "$PID_FILE") 2>/dev/null
+    rm -f "$PID_FILE"
+    echo "RentCoordinator stopped"
+}
+
+restart() {
+    stop
+    sleep 2
+    start
+}
+
+status() {
+    if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
+        echo "RentCoordinator is running (PID: $(cat $PID_FILE))"
+    else
+        echo "RentCoordinator is not running"
+        [ -f "$PID_FILE" ] && rm -f "$PID_FILE"
+    fi
+}
+
+logs() {
+    tail -f "$LOG_FILE"
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) restart ;;
+    status)  status ;;
+    logs)    logs ;;
+    *)       echo "Usage: $0 {start|stop|restart|status|logs}" ;;
+esac

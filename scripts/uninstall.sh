@@ -1,9 +1,12 @@
 #!/bin/bash
 
-# RentCoordinator Automated Uninstall Script
-# Safely removes RentCoordinator installation
-
 set -e
+
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/init-manager.sh"
+
 
 # Default values (should match install defaults)
 PREFIX="/opt/rentcoordinator"
@@ -11,64 +14,15 @@ APP_USER="rentcoordinator"
 DB_PATH="/var/lib/rentcoordinator/db.kv"
 LOG_DIR="/var/log/rentcoordinator"
 
-# Uninstall options
 KEEP_DATA=false
 KEEP_LOGS=false
 KEEP_USER=false
 FORCE=false
 DRY_RUN=false
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
 
-# Helper functions
-print_success() { echo -e "${GREEN}✓${NC} $1"; }
-print_error() { echo -e "${RED}✗${NC} $1"; }
-print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-print_info() { echo -e "${BLUE}ℹ${NC} $1"; }
-print_dry_run() { echo -e "${BLUE}[DRY RUN]${NC} $1"; }
-
-# Parse command line arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --prefix)
-            PREFIX="$2"
-            shift 2
-            ;;
-        --user)
-            APP_USER="$2"
-            shift 2
-            ;;
-        --db-path)
-            DB_PATH="$2"
-            shift 2
-            ;;
-        --keep-data)
-            KEEP_DATA=true
-            shift
-            ;;
-        --keep-logs)
-            KEEP_LOGS=true
-            shift
-            ;;
-        --keep-user)
-            KEEP_USER=true
-            shift
-            ;;
-        --force)
-            FORCE=true
-            shift
-            ;;
-        --dry-run)
-            DRY_RUN=true
-            shift
-            ;;
-        --help)
-            cat << EOF
+show_help() {
+    cat << EOF
 RentCoordinator Uninstall Script
 
 Usage: $0 [OPTIONS]
@@ -90,38 +44,60 @@ Examples:
     $0 --keep-data --keep-logs        # Remove app but keep data and logs
     $0 --dry-run                      # Preview what would be removed
 EOF
-            exit 0
-            ;;
-        *)
-            print_error "Unknown option: $1"
-            echo "Use --help for usage information"
-            exit 1
-            ;;
-    esac
-done
-
-# Detect init system
-detect_init_system() {
-    if [ -d /run/systemd/system ]; then
-        echo "systemd"
-    elif [ -f /sbin/openrc ]; then
-        echo "openrc"
-    elif [ -d /etc/init.d ]; then
-        echo "sysvinit"
-    elif [ -d /etc/sv ]; then
-        echo "runit"
-    elif [ -d /etc/init ]; then
-        echo "upstart"
-    else
-        echo "unknown"
-    fi
 }
 
-# Stop the application
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --prefix)
+                PREFIX="$2"
+                shift 2
+                ;;
+            --user)
+                APP_USER="$2"
+                shift 2
+                ;;
+            --db-path)
+                DB_PATH="$2"
+                shift 2
+                ;;
+            --keep-data)
+                KEEP_DATA=true
+                shift
+                ;;
+            --keep-logs)
+                KEEP_LOGS=true
+                shift
+                ;;
+            --keep-user)
+                KEEP_USER=true
+                shift
+                ;;
+            --force)
+                FORCE=true
+                shift
+                ;;
+            --dry-run)
+                DRY_RUN=true
+                shift
+                ;;
+            --help)
+                show_help
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
+
+
 stop_application() {
     print_info "Stopping RentCoordinator..."
 
-    # Try management script first
     if [ -x "$PREFIX/bin/rentcoordinator" ]; then
         if [ "$DRY_RUN" = true ]; then
             print_dry_run "Would run: $PREFIX/bin/rentcoordinator stop"
@@ -130,128 +106,37 @@ stop_application() {
         fi
     fi
 
-    # Check for PID file in PREFIX
-    if [ -f "$PREFIX/rentcoordinator.pid" ]; then
-        PID=$(cat "$PREFIX/rentcoordinator.pid")
-        if kill -0 "$PID" 2>/dev/null; then
+    if [ "$DRY_RUN" != true ]; then
+        stop_init_service
+    fi
+
+    local pid_file="$PREFIX/rentcoordinator.pid"
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if process_running "$pid"; then
             if [ "$DRY_RUN" = true ]; then
-                print_dry_run "Would kill process $PID"
+                print_dry_run "Would kill process $pid"
             else
-                print_info "Stopping process $PID..."
-                kill "$PID" 2>/dev/null || true
-                sleep 2
-                kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null || true
+                stop_process "$pid"
             fi
         fi
     fi
 
-    # Check for PID file in /var/run (legacy location)
-    if [ -f "/var/run/rentcoordinator.pid" ]; then
-        PID=$(cat "/var/run/rentcoordinator.pid")
-        if kill -0 "$PID" 2>/dev/null; then
-            if [ "$DRY_RUN" = true ]; then
-                print_dry_run "Would kill process $PID"
-            else
-                print_info "Stopping process $PID..."
-                kill "$PID" 2>/dev/null || true
-                sleep 2
-                kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null || true
-            fi
+    if [ "$DRY_RUN" = true ]; then
+        local pids=$(find_processes "deno.*rentcoordinator.*main.js")
+        if [ -n "$pids" ]; then
+            print_dry_run "Would kill processes: $pids"
         fi
-    fi
-
-    # Fallback: find and kill any running deno processes running main.js
-    RUNNING_PIDS=$(pgrep -f "deno.*rentcoordinator.*main.js" 2>/dev/null || true)
-    if [ -n "$RUNNING_PIDS" ]; then
-        if [ "$DRY_RUN" = true ]; then
-            print_dry_run "Would kill processes: $RUNNING_PIDS"
-        else
-            print_info "Stopping processes: $RUNNING_PIDS"
-            kill $RUNNING_PIDS 2>/dev/null || true
-            sleep 2
-            pkill -9 -f "deno.*rentcoordinator.*main.js" 2>/dev/null || true
-        fi
+    else
+        stop_processes_matching "deno.*rentcoordinator.*main.js"
     fi
 
     print_success "Application stopped"
 }
 
-# Remove systemd service
-remove_systemd_service() {
-    if [ ! -f "/etc/systemd/system/rentcoordinator.service" ]; then
-        return 0
-    fi
-
-    print_info "Removing systemd service..."
-
-    if [ "$DRY_RUN" = true ]; then
-        print_dry_run "Would stop and disable systemd service"
-        print_dry_run "Would remove /etc/systemd/system/rentcoordinator.service"
-        return 0
-    fi
-
-    # Stop and disable service
-    systemctl stop rentcoordinator 2>/dev/null || true
-    systemctl disable rentcoordinator 2>/dev/null || true
-
-    # Remove service file
-    rm -f /etc/systemd/system/rentcoordinator.service
-
-    # Reload systemd
-    systemctl daemon-reload 2>/dev/null || true
-
-    print_success "Systemd service removed"
-}
-
-# Remove OpenRC service
-remove_openrc_service() {
-    if [ ! -f "/etc/init.d/rentcoordinator" ]; then
-        return 0
-    fi
-
-    print_info "Removing OpenRC service..."
-
-    if [ "$DRY_RUN" = true ]; then
-        print_dry_run "Would stop OpenRC service"
-        print_dry_run "Would remove from runlevels"
-        print_dry_run "Would remove /etc/init.d/rentcoordinator"
-        return 0
-    fi
-
-    # Stop service
-    rc-service rentcoordinator stop 2>/dev/null || true
-
-    # Remove from runlevels
-    rc-update del rentcoordinator 2>/dev/null || true
-
-    # Remove init script
-    rm -f /etc/init.d/rentcoordinator
-
-    print_success "OpenRC service removed"
-}
-
-# Remove init system service
-remove_init_service() {
-    INIT_SYSTEM=$(detect_init_system)
-
-    case $INIT_SYSTEM in
-        systemd)
-            remove_systemd_service
-            ;;
-        openrc)
-            remove_openrc_service
-            ;;
-        *)
-            print_info "No known init system service to remove"
-            ;;
-    esac
-}
-
-# Remove application files
 remove_application() {
     print_info "Removing application files..."
 
-    # Remove symlink
     if [ -L "/usr/local/bin/rentcoordinator" ]; then
         if [ "$DRY_RUN" = true ]; then
             print_dry_run "Would remove /usr/local/bin/rentcoordinator"
@@ -261,13 +146,9 @@ remove_application() {
         fi
     fi
 
-    # Remove installation directory
     if [ -d "$PREFIX" ]; then
-        if [ "$DRY_RUN" = true ]; then
-            print_dry_run "Would remove directory: $PREFIX"
-            du -sh "$PREFIX" 2>/dev/null | awk '{print "  Size: " $1}'
-        else
-            rm -rf "$PREFIX"
+        safe_remove "$PREFIX" "$DRY_RUN"
+        if [ "$DRY_RUN" != true ]; then
             print_success "Removed installation directory: $PREFIX"
         fi
     else
@@ -275,8 +156,7 @@ remove_application() {
     fi
 }
 
-# Remove data files
-remove_data() {
+remove_data_files() {
     if [ "$KEEP_DATA" = true ]; then
         print_info "Keeping database files (--keep-data specified)"
         return 0
@@ -284,22 +164,18 @@ remove_data() {
 
     print_info "Removing database files..."
 
-    DB_DIR=$(dirname "$DB_PATH")
-    if [ -d "$DB_DIR" ]; then
-        if [ "$DRY_RUN" = true ]; then
-            print_dry_run "Would remove directory: $DB_DIR"
-            du -sh "$DB_DIR" 2>/dev/null | awk '{print "  Size: " $1}'
-        else
-            rm -rf "$DB_DIR"
-            print_success "Removed database directory: $DB_DIR"
+    local db_dir=$(dirname "$DB_PATH")
+    if [ -d "$db_dir" ]; then
+        safe_remove "$db_dir" "$DRY_RUN"
+        if [ "$DRY_RUN" != true ]; then
+            print_success "Removed database directory: $db_dir"
         fi
     else
-        print_info "Database directory not found: $DB_DIR"
+        print_info "Database directory not found: $db_dir"
     fi
 }
 
-# Remove log files
-remove_logs() {
+remove_log_files() {
     if [ "$KEEP_LOGS" = true ]; then
         print_info "Keeping log files (--keep-logs specified)"
         return 0
@@ -308,53 +184,12 @@ remove_logs() {
     print_info "Removing log files..."
 
     if [ -d "$LOG_DIR" ]; then
-        if [ "$DRY_RUN" = true ]; then
-            print_dry_run "Would remove directory: $LOG_DIR"
-            du -sh "$LOG_DIR" 2>/dev/null | awk '{print "  Size: " $1}'
-        else
-            rm -rf "$LOG_DIR"
+        safe_remove "$LOG_DIR" "$DRY_RUN"
+        if [ "$DRY_RUN" != true ]; then
             print_success "Removed log directory: $LOG_DIR"
         fi
     else
         print_info "Log directory not found: $LOG_DIR"
-    fi
-}
-
-# Remove user
-remove_user() {
-    if [ "$KEEP_USER" = true ]; then
-        print_info "Keeping user account (--keep-user specified)"
-        return 0
-    fi
-
-    # Don't remove if user doesn't exist
-    if ! id "$APP_USER" &>/dev/null; then
-        print_info "User $APP_USER does not exist"
-        return 0
-    fi
-
-    # Don't remove current user
-    if [ "$(whoami)" = "$APP_USER" ]; then
-        print_warning "Cannot remove current user, skipping user removal"
-        return 0
-    fi
-
-    print_info "Removing user: $APP_USER"
-
-    if [ "$DRY_RUN" = true ]; then
-        print_dry_run "Would remove user: $APP_USER"
-        return 0
-    fi
-
-    # Try userdel first
-    if command -v userdel &>/dev/null; then
-        userdel -r "$APP_USER" 2>/dev/null || userdel "$APP_USER" 2>/dev/null || true
-        print_success "User removed: $APP_USER"
-    elif command -v deluser &>/dev/null; then
-        deluser --remove-home "$APP_USER" 2>/dev/null || deluser "$APP_USER" 2>/dev/null || true
-        print_success "User removed: $APP_USER"
-    else
-        print_warning "Cannot remove user: no userdel or deluser command found"
     fi
 }
 
@@ -370,8 +205,11 @@ show_removal_plan() {
 
     [ -d "$PREFIX" ] && echo "  • Application: $PREFIX"
     [ -L "/usr/local/bin/rentcoordinator" ] && echo "  • Symlink: /usr/local/bin/rentcoordinator"
-    [ -f "/etc/systemd/system/rentcoordinator.service" ] && echo "  • Systemd service: /etc/systemd/system/rentcoordinator.service"
-    [ -f "/etc/init.d/rentcoordinator" ] && echo "  • OpenRC service: /etc/init.d/rentcoordinator"
+
+    local init_system=$(detect_init_system)
+    if [ "$init_system" != "none" ]; then
+        echo "  • $init_system service"
+    fi
 
     if [ "$KEEP_DATA" = false ] && [ -d "$(dirname "$DB_PATH")" ]; then
         echo "  • Database: $(dirname "$DB_PATH")"
@@ -381,7 +219,7 @@ show_removal_plan() {
         echo "  • Logs: $LOG_DIR"
     fi
 
-    if [ "$KEEP_USER" = false ] && id "$APP_USER" &>/dev/null; then
+    if [ "$KEEP_USER" = false ] && user_exists "$APP_USER"; then
         echo "  • User: $APP_USER"
     fi
 
@@ -389,83 +227,72 @@ show_removal_plan() {
     echo "The following will be kept:"
     echo
 
-    if [ "$KEEP_DATA" = true ]; then
-        echo "  • Database: $(dirname "$DB_PATH") (--keep-data)"
-    fi
-
-    if [ "$KEEP_LOGS" = true ]; then
-        echo "  • Logs: $LOG_DIR (--keep-logs)"
-    fi
-
-    if [ "$KEEP_USER" = true ]; then
-        echo "  • User: $APP_USER (--keep-user)"
-    fi
+    [ "$KEEP_DATA" = true ] && echo "  • Database: $(dirname "$DB_PATH") (--keep-data)"
+    [ "$KEEP_LOGS" = true ] && echo "  • Logs: $LOG_DIR (--keep-logs)"
+    [ "$KEEP_USER" = true ] && echo "  • User: $APP_USER (--keep-user)"
 
     echo
 }
 
-# Confirm uninstall
-confirm_uninstall() {
-    if [ "$FORCE" = true ]; then
-        return 0
-    fi
 
-    read -p "Do you want to continue? (yes/no): " CONFIRM
-    if [ "$CONFIRM" != "yes" ]; then
-        echo "Uninstall cancelled"
-        exit 0
-    fi
-}
-
-# Check if running as root
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        if [ "$DRY_RUN" = true ]; then
-            print_warning "Not running as root - some operations may fail in actual run"
-            return 0
-        fi
-
-        # Check if we need root
-        NEEDS_ROOT=false
-        [ -d "$PREFIX" ] && [ ! -w "$PREFIX" ] && NEEDS_ROOT=true
-        [ -f "/etc/systemd/system/rentcoordinator.service" ] && NEEDS_ROOT=true
-        [ -f "/etc/init.d/rentcoordinator" ] && NEEDS_ROOT=true
-        [ "$KEEP_USER" = false ] && id "$APP_USER" &>/dev/null && NEEDS_ROOT=true
-
-        if [ "$NEEDS_ROOT" = true ]; then
-            print_error "This script must be run as root for the current configuration"
-            print_info "Try: sudo $0"
-            exit 1
-        fi
-    fi
-}
-
-# Main uninstall process
 main() {
     echo "========================================"
     echo " RentCoordinator Uninstall Script"
     echo "========================================"
     echo
 
+    parse_arguments "$@"
+
     if [ "$DRY_RUN" = true ]; then
         print_info "DRY RUN MODE - No changes will be made"
         echo
     fi
 
-    check_root
+    local needs_root=false
+    [ -d "$PREFIX" ] && [ ! -w "$PREFIX" ] && needs_root=true
+    [ "$KEEP_USER" = false ] && user_exists "$APP_USER" && needs_root=true
+
+    if [ "$needs_root" = true ] && ! is_root; then
+        if [ "$DRY_RUN" = true ]; then
+            print_warning "Not running as root - some operations may fail in actual run"
+        else
+            check_root "This uninstallation" || exit 1
+        fi
+    fi
+
     show_removal_plan
-    confirm_uninstall
+    confirm "Do you want to continue?" "$FORCE" || {
+        echo "Uninstall cancelled"
+        exit 0
+    }
 
     echo
     print_info "Starting uninstall..."
     echo
 
     stop_application
-    remove_init_service
+
+    if [ "$DRY_RUN" != true ]; then
+        uninstall_init_service
+    else
+        print_dry_run "Would uninstall init system service"
+    fi
+
     remove_application
-    remove_data
-    remove_logs
-    remove_user
+    remove_data_files
+    remove_log_files
+
+    if [ "$KEEP_USER" = false ]; then
+        if [ "$DRY_RUN" = true ]; then
+            if user_exists "$APP_USER"; then
+                print_dry_run "Would remove user: $APP_USER"
+            fi
+        else
+            remove_user "$APP_USER"
+        fi
+    else
+        print_info "Keeping user account (--keep-user specified)"
+    fi
 
     echo
     if [ "$DRY_RUN" = true ]; then
@@ -476,5 +303,4 @@ main() {
     echo
 }
 
-# Run main uninstall
-main
+main "$@"
