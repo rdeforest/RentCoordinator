@@ -106,10 +106,6 @@ stop_application() {
         fi
     fi
 
-    if [ "$DRY_RUN" != true ]; then
-        stop_init_service
-    fi
-
     local pid_file="$PREFIX/rentcoordinator.pid"
     if [ -f "$pid_file" ]; then
         local pid=$(cat "$pid_file")
@@ -194,6 +190,34 @@ remove_log_files() {
 }
 
 # Show what will be removed
+create_service_config() {
+    local config_file="$SCRIPT_DIR/lib/.rentcoordinator-service.conf"
+
+    local user_home=""
+    if user_exists "$APP_USER"; then
+        user_home=$(get_user_home "$APP_USER")
+    else
+        user_home="/var/lib/$APP_USER"
+    fi
+
+    cat > "$config_file" << EOF
+#!/bin/bash
+# RentCoordinator Service Configuration
+
+export PREFIX="$PREFIX"
+export APP_USER="$APP_USER"
+export PORT="${PORT:-3000}"
+export DB_PATH="$DB_PATH"
+export LOG_DIR="$LOG_DIR"
+export USER_HOME="$user_home"
+export DENO_INSTALL="\$USER_HOME/.deno"
+
+source "$SCRIPT_DIR/lib/rentcoordinator-service.conf.sh"
+EOF
+
+    echo "$config_file"
+}
+
 show_removal_plan() {
     echo
     echo "========================================"
@@ -272,8 +296,9 @@ main() {
 
     stop_application
 
+    local service_config=$(create_service_config)
     if [ "$DRY_RUN" != true ]; then
-        uninstall_init_service
+        uninstall_init_service "$service_config"
     else
         print_dry_run "Would uninstall init system service"
     fi
