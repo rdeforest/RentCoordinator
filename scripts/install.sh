@@ -120,8 +120,10 @@ clone_repository() {
                 exit 1
             }
         else
-            # Ensure parent directory exists
-            create_directory "$(dirname "$PREFIX")"
+            create_directory "$PREFIX" "$APP_USER:$APP_USER" || {
+                print_error "Failed to create installation directory"
+                exit 1
+            }
 
             su "$APP_USER" -c "git clone '$REPO_URL' '$PREFIX'" || {
                 print_error "Failed to clone repository from $REPO_URL"
