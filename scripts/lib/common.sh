@@ -255,25 +255,33 @@ install_deno() {
         print_warning "Deno exists but not working, reinstalling..."
     fi
 
-    # XXX: Deno installer tries to access /dev/tty for progress bars and interactive features
-    # XXX: In su context this fails with "cannot open /dev/tty" - stdin redirect makes it non-interactive
-    # XXX: Installer may exit non-zero due to TTY errors but still successfully install the binary
+    local install_script="/tmp/deno-install-$$.sh"
+
     if command_exists curl; then
-        if [ "$(get_current_user)" = "$username" ]; then
-            curl -fsSL https://deno.land/install.sh | sh < /dev/null || true
-        else
-            su - "$username" -c "curl -fsSL https://deno.land/install.sh | sh < /dev/null" || true
-        fi
+        curl -fsSL https://deno.land/install.sh -o "$install_script" || {
+            print_error "Failed to download Deno installer"
+            return 1
+        }
     elif command_exists wget; then
-        if [ "$(get_current_user)" = "$username" ]; then
-            wget -qO- https://deno.land/install.sh | sh < /dev/null || true
-        else
-            su - "$username" -c "wget -qO- https://deno.land/install.sh | sh < /dev/null" || true
-        fi
+        wget -qO "$install_script" https://deno.land/install.sh || {
+            print_error "Failed to download Deno installer"
+            return 1
+        }
     else
         print_error "Neither curl nor wget found"
         return 1
     fi
+
+    # XXX: Deno installer tries to access /dev/tty for progress bars and interactive features
+    # XXX: Redirecting stdin from /dev/null makes it non-interactive to prevent TTY errors in su context
+    # XXX: Installer may exit non-zero due to TTY errors but still successfully install the binary
+    if [ "$(get_current_user)" = "$username" ]; then
+        sh "$install_script" < /dev/null || true
+    else
+        su - "$username" -c "sh '$install_script'" < /dev/null || true
+    fi
+
+    rm -f "$install_script"
 
     if [ ! -f "$deno_install/bin/deno" ]; then
         print_error "Deno installation failed - binary not found at $deno_install/bin/deno"
