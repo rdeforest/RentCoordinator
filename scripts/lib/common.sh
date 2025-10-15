@@ -13,6 +13,7 @@ print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 print_info() { echo -e "${BLUE}ℹ${NC} $1"; }
 print_dry_run() { echo -e "${BLUE}[DRY RUN]${NC} $1"; }
 
+export PATH="$PATH:/sbin:/usr/sbin"
 
 detect_os() {
     if [ -f /etc/os-release ]; then
