@@ -14,7 +14,7 @@ PORT="3000"
 DB_PATH="/var/lib/rentcoordinator/db.kv"
 LOG_DIR="/var/log/rentcoordinator"
 SKIP_USER=false
-REPO_URL="https://github.com/rdeforest/RentCoordinator.git"
+REPO_URL="git@github.com:rdeforest/RentCoordinator.git"
 
 
 show_help() {
