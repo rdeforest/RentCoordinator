@@ -97,40 +97,20 @@ clone_repository() {
     require_command git "Git is required but not installed"
 
     if [ -d "$PREFIX/.git" ]; then
-        # Repository exists, pull updates
         print_warning "Repository already exists, pulling latest changes..."
-
-        if [ "$(get_current_user)" = "$APP_USER" ]; then
-            cd "$PREFIX" || exit 1
-            git pull || {
-                print_error "Failed to pull repository updates"
-                exit 1
-            }
-        else
-            su "$APP_USER" -c "cd '$PREFIX' && git pull" || {
-                print_error "Failed to pull repository updates"
-                exit 1
-            }
-        fi
+        cd "$PREFIX" || exit 1
+        git pull || {
+            print_error "Failed to pull repository updates"
+            exit 1
+        }
     else
-        # Clone fresh
-        if [ "$(get_current_user)" = "$APP_USER" ]; then
-            git clone "$REPO_URL" "$PREFIX" || {
-                print_error "Failed to clone repository from $REPO_URL"
-                exit 1
-            }
-        else
-            create_directory "$PREFIX" "$APP_USER:$APP_USER" || {
-                print_error "Failed to create installation directory"
-                exit 1
-            }
-
-            su "$APP_USER" -c "git clone '$REPO_URL' '$PREFIX'" || {
-                print_error "Failed to clone repository from $REPO_URL"
-                exit 1
-            }
-        fi
+        git clone "$REPO_URL" "$PREFIX" || {
+            print_error "Failed to clone repository from $REPO_URL"
+            exit 1
+        }
     fi
+
+    set_ownership "$PREFIX" "$APP_USER:$APP_USER"
 
     # Verify
     if [ ! -d "$PREFIX/.git" ]; then
