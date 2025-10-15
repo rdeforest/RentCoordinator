@@ -277,12 +277,13 @@ install_deno() {
     fi
 
     # XXX: Deno installer tries to access /dev/tty for progress bars and interactive features
-    # XXX: Redirecting stdin from /dev/null makes it non-interactive to prevent TTY errors in su context
+    # XXX: Redirecting stdin from /dev/null makes it non-interactive to prevent TTY errors
     # XXX: Installer may exit non-zero due to TTY errors but still successfully install the binary
     if [ "$(get_current_user)" = "$username" ]; then
         sh "$install_script" < /dev/null || true
     else
-        run_as_root su - "$username" -c "sh '$install_script'" < /dev/null || true
+        local user_home=$(get_user_home "$username")
+        sudo -u "$username" -H sh -c "cd '$user_home' && sh '$install_script'" < /dev/null || true
     fi
 
     rm -f "$install_script"

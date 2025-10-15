@@ -180,7 +180,7 @@ build_application() {
             exit 1
         }
     else
-        su "$APP_USER" -c "cd '$PREFIX' && export DENO_INSTALL='$deno_install' && export PATH=\$DENO_INSTALL/bin:\$PATH && deno task build" || {
+        sudo -u "$APP_USER" sh -c "cd '$PREFIX' && export DENO_INSTALL='$deno_install' && export PATH=\$DENO_INSTALL/bin:\$PATH && deno task build" || {
             print_error "Build failed"
             exit 1
         }
