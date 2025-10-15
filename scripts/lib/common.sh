@@ -102,7 +102,7 @@ create_user() {
         return 1
     fi
 
-    if ! run_as_root "$adduser" -m -s /bin/bash "$username"; then
+    if [ $? != 0 ]; then
         print_error "adduser failed"
         return 1
     fi
