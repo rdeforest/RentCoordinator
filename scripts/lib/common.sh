@@ -93,17 +93,19 @@ create_user() {
 
     print_info "Creating user: $username"
 
-    # Check common paths for useradd/adduser since they may not be in user's PATH
-    local useradd_path=$(command -v useradd 2>/dev/null || [ -x /usr/sbin/useradd ] && echo /usr/sbin/useradd || [ -x /sbin/useradd ] && echo /sbin/useradd)
-    local adduser_path=$(command -v adduser 2>/dev/null || [ -x /usr/sbin/adduser ] && echo /usr/sbin/adduser || [ -x /sbin/adduser ] && echo /sbin/adduser)
-
-    if [ -n "$useradd_path" ]; then
-        run_as_root "$useradd_path" -m -s /bin/bash "$username"
-    elif [ -n "$adduser_path" ]; then
-        run_as_root "$adduser_path" --disabled-password --gecos "" "$username"
-    else
-        print_error "Cannot create user: no useradd or adduser command found"
+    adduser=adduser
+    if ! command -v adduser 2>/dev/null; then
+      if command -v useradd 2>/dev/null; then
+        adduser=useradd
+      else
+        print_error "No useradd or adduser found in $PATH"
         return 1
+      fi
+    fi
+
+    if ! run_as_root "$adduser" -m -s /bin/bash "$username"; then
+      print_error "adduser failed"
+      return 1
     fi
 
     print_success "User created: $username"
@@ -125,17 +127,20 @@ remove_user() {
 
     print_info "Removing user: $username"
 
-    # Check common paths for userdel/deluser since they may not be in user's PATH
-    local userdel_path=$(command -v userdel 2>/dev/null || [ -x /usr/sbin/userdel ] && echo /usr/sbin/userdel || [ -x /sbin/userdel ] && echo /sbin/userdel)
-    local deluser_path=$(command -v deluser 2>/dev/null || [ -x /usr/sbin/deluser ] && echo /usr/sbin/deluser || [ -x /sbin/deluser ] && echo /sbin/deluser)
-
-    if [ -n "$userdel_path" ]; then
-        run_as_root "$userdel_path" -r "$username" 2>/dev/null || run_as_root "$userdel_path" "$username" 2>/dev/null
-    elif [ -n "$deluser_path" ]; then
-        run_as_root "$deluser_path" --remove-home "$username" 2>/dev/null || run_as_root "$deluser_path" "$username" 2>/dev/null
-    else
-        print_warning "Cannot remove user: no userdel or deluser command found"
+    deluser=deluser
+    if ! command -v deluser 2>/dev/null; then
+      if command -v userdel 2>/dev/null; then
+        adduser=userdel
+      else
+        print_error "No userdel or deluser found in $PATH"
         return 1
+      fi
+    fi
+
+    if ! run_as_root "$deluser_path" --remove-home "$username" 2>/dev/null ||
+         run_as_root "$deluser_path"               "$username" 2>/dev/null; then
+      print_error "User removal failed"
+      return 1
     fi
 
     print_success "User removed: $username"
