@@ -127,13 +127,12 @@ clone_repository() {
 
     if [ -d "$PREFIX/.git" ]; then
         print_warning "Repository already exists, pulling latest changes..."
-        cd "$PREFIX" || exit 1
-        git pull || {
+        run_as_root sh -c "cd '$PREFIX' && git pull" || {
             print_error "Failed to pull repository updates"
             exit 1
         }
     else
-        git clone "$REPO_URL" "$PREFIX" || {
+        run_as_root git clone "$REPO_URL" "$PREFIX" || {
             print_error "Failed to clone repository from $REPO_URL"
             exit 1
         }
