@@ -36,7 +36,7 @@ install() {
 
     print_info "Installing SysVinit service..."
 
-    cat > "$init_script" << EOF
+    run_as_root tee "$init_script" > /dev/null << EOF
 #!/bin/sh
 ### BEGIN INIT INFO
 # Provides:          $SERVICE_NAME
@@ -152,16 +152,16 @@ esac
 exit \$?
 EOF
 
-    chmod +x "$init_script"
+    run_as_root chmod +x "$init_script"
 
     # Install service for default runlevels
     if command -v update-rc.d >/dev/null 2>&1; then
-        update-rc.d "$SERVICE_NAME" defaults || {
+        run_as_root update-rc.d "$SERVICE_NAME" defaults || {
             print_error "Failed to install service with update-rc.d"
             return 1
         }
     elif command -v chkconfig >/dev/null 2>&1; then
-        chkconfig --add "$SERVICE_NAME" || {
+        run_as_root chkconfig --add "$SERVICE_NAME" || {
             print_error "Failed to install service with chkconfig"
             return 1
         }
@@ -192,19 +192,19 @@ uninstall() {
 
     # Stop service
     if [ -x "$init_script" ]; then
-        "$init_script" stop 2>/dev/null || true
+        run_as_root "$init_script" stop 2>/dev/null || true
     fi
 
     # Remove from runlevels
     if command -v update-rc.d >/dev/null 2>&1; then
-        update-rc.d -f "$SERVICE_NAME" remove 2>/dev/null || true
+        run_as_root update-rc.d -f "$SERVICE_NAME" remove 2>/dev/null || true
     elif command -v chkconfig >/dev/null 2>&1; then
-        chkconfig --del "$SERVICE_NAME" 2>/dev/null || true
+        run_as_root chkconfig --del "$SERVICE_NAME" 2>/dev/null || true
     fi
 
     # Remove init script
     if [ -f "$init_script" ]; then
-        rm -f "$init_script"
+        run_as_root rm -f "$init_script"
     fi
 
     print_success "SysVinit service uninstalled"

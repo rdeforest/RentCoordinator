@@ -21,7 +21,7 @@ install() {
 
     print_info "Installing OpenRC service..."
 
-    cat > "$init_script" << EOF
+    run_as_root tee "$init_script" > /dev/null << EOF
 #!/sbin/openrc-run
 
 name="$SERVICE_NAME"
@@ -67,7 +67,7 @@ stop_post() {
 }
 EOF
 
-    chmod +x "$init_script"
+    run_as_root chmod +x "$init_script"
 
     print_success "OpenRC service installed"
     print_info "To add to default runlevel: sudo rc-update add $SERVICE_NAME default"
@@ -89,11 +89,11 @@ uninstall() {
 
     print_info "Uninstalling OpenRC service..."
 
-    rc-service "$SERVICE_NAME" stop 2>/dev/null || true
-    rc-update del "$SERVICE_NAME" 2>/dev/null || true
+    run_as_root rc-service "$SERVICE_NAME" stop 2>/dev/null || true
+    run_as_root rc-update del "$SERVICE_NAME" 2>/dev/null || true
 
     if [ -f "$init_script" ]; then
-        rm -f "$init_script"
+        run_as_root rm -f "$init_script"
     fi
 
     print_success "OpenRC service uninstalled"

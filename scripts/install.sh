@@ -23,6 +23,9 @@ RentCoordinator Installation Script
 
 Usage: $0 [OPTIONS]
 
+NOTE: Script will automatically request sudo when needed.
+      Your SSH agent will be preserved for private git repositories.
+
 Options:
     --prefix PATH      Installation directory (default: /opt/rentcoordinator)
     --user USER        Application user (default: rentcoordinator)
@@ -72,6 +75,32 @@ parse_arguments() {
                 ;;
         esac
     done
+}
+
+run_as_root() {
+    if is_root; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+configure_sudo_for_ssh() {
+    local sudoers_file="/etc/sudoers.d/ssh-agent-preserve"
+
+    if [ -f "$sudoers_file" ]; then
+        return 0
+    fi
+
+    print_info "Configuring sudo to preserve SSH agent..."
+
+    local content='# Preserve SSH agent socket for git operations with SSH keys
+Defaults env_keep += "SSH_AUTH_SOCK"'
+
+    echo "$content" | run_as_root tee "$sudoers_file" > /dev/null
+    run_as_root chmod 440 "$sudoers_file"
+
+    print_success "Sudo configured to preserve SSH agent"
 }
 
 
@@ -264,12 +293,10 @@ main() {
 
     parse_arguments "$@"
 
+    configure_sudo_for_ssh
+
     detect_os
     print_info "Detected OS: $OS (family: ${OS_FAMILY:-none})"
-
-    if [ "$SKIP_USER" = false ]; then
-        check_root "User creation" || exit 1
-    fi
 
     if [ "$SKIP_USER" = true ]; then
         APP_USER=$(get_current_user)

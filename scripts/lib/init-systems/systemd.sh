@@ -21,7 +21,7 @@ install() {
 
     print_info "Installing systemd service..."
 
-    cat > "$service_file" << EOF
+    run_as_root tee "$service_file" > /dev/null << EOF
 [Unit]
 Description=$SERVICE_DESCRIPTION
 After=network.target
@@ -59,9 +59,9 @@ EOF
         return 1
     fi
 
-    chmod 644 "$service_file"
+    run_as_root chmod 644 "$service_file"
 
-    systemctl daemon-reload || {
+    run_as_root systemctl daemon-reload || {
         print_error "Failed to reload systemd"
         return 1
     }
@@ -86,14 +86,14 @@ uninstall() {
 
     print_info "Uninstalling systemd service..."
 
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    run_as_root systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    run_as_root systemctl disable "$SERVICE_NAME" 2>/dev/null || true
 
     if [ -f "$service_file" ]; then
-        rm -f "$service_file"
+        run_as_root rm -f "$service_file"
     fi
 
-    systemctl daemon-reload 2>/dev/null || true
+    run_as_root systemctl daemon-reload 2>/dev/null || true
 
     print_success "Systemd service uninstalled"
     return 0

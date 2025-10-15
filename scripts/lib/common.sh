@@ -47,6 +47,14 @@ is_root() {
     [ "$EUID" -eq 0 ]
 }
 
+run_as_root() {
+    if is_root; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
 
 get_user_home() {
     local username="$1"
@@ -85,9 +93,9 @@ create_user() {
     print_info "Creating user: $username"
 
     if command -v useradd &>/dev/null; then
-        useradd -m -s /bin/bash "$username"
+        run_as_root useradd -m -s /bin/bash "$username"
     elif command -v adduser &>/dev/null; then
-        adduser --disabled-password --gecos "" "$username"
+        run_as_root adduser --disabled-password --gecos "" "$username"
     else
         print_error "Cannot create user: no useradd or adduser command found"
         return 1
@@ -149,10 +157,10 @@ create_directory() {
     local dir="$1"
     local owner="$2"
 
-    mkdir -p "$dir" || return 1
+    run_as_root mkdir -p "$dir" || return 1
 
-    if [ -n "$owner" ] && is_root; then
-        chown -R "$owner" "$dir" || return 1
+    if [ -n "$owner" ]; then
+        run_as_root chown -R "$owner" "$dir" || return 1
     fi
 
     return 0
@@ -231,11 +239,7 @@ set_ownership() {
         return 1
     fi
 
-    if ! is_root; then
-        return 0
-    fi
-
-    chown -R "$owner" "$path"
+    run_as_root chown -R "$owner" "$path"
     return $?
 }
 
@@ -278,7 +282,7 @@ install_deno() {
     if [ "$(get_current_user)" = "$username" ]; then
         sh "$install_script" < /dev/null || true
     else
-        su - "$username" -c "sh '$install_script'" < /dev/null || true
+        run_as_root su - "$username" -c "sh '$install_script'" < /dev/null || true
     fi
 
     rm -f "$install_script"
@@ -319,7 +323,7 @@ confirm() {
 
 
 export -f print_success print_error print_warning print_info print_dry_run
-export -f detect_os check_root is_root
+export -f detect_os check_root is_root run_as_root
 export -f get_user_home get_deno_install_path get_current_user
 export -f user_exists create_user remove_user
 export -f command_exists require_command directory_writable create_directory
