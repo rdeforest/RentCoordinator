@@ -93,19 +93,18 @@ create_user() {
 
     print_info "Creating user: $username"
 
-    adduser=adduser
-    if ! command -v adduser 2>/dev/null; then
-      if command -v useradd 2>/dev/null; then
-        adduser=useradd
-      else
+         if command -v adduser 2>/dev/null; then
+        run_as_root "$adduser_path" --disabled-password --gecos "" "$username"
+    else if command -v useradd 2>/dev/null; then
+        run_as_root "$useradd_path" -m -s /bin/bash "$username"
+    else
         print_error "No useradd or adduser found in $PATH"
         return 1
-      fi
     fi
 
     if ! run_as_root "$adduser" -m -s /bin/bash "$username"; then
-      print_error "adduser failed"
-      return 1
+        print_error "adduser failed"
+        return 1
     fi
 
     print_success "User created: $username"
@@ -128,19 +127,18 @@ remove_user() {
     print_info "Removing user: $username"
 
     deluser=deluser
-    if ! command -v deluser 2>/dev/null; then
-      if command -v userdel 2>/dev/null; then
-        adduser=userdel
-      else
+        if command -v deluser 2>/dev/null; then
+       run_as_root "$deluser_path" --remove-home "$username" 2>/dev/null || run_as_root "$deluser_path" "$username" 2>/dev/null
+    else if command -v userdel 2>/dev/null; then
+        run_as_root "$userdel_path" -r "$username" 2>/dev/null || run_as_root "$userdel_path" "$username" 2>/dev/null
+    else
         print_error "No userdel or deluser found in $PATH"
         return 1
-      fi
     fi
 
-    if ! run_as_root "$deluser_path" --remove-home "$username" 2>/dev/null ||
-         run_as_root "$deluser_path"               "$username" 2>/dev/null; then
-      print_error "User removal failed"
-      return 1
+    if [ $? != 0 ]; then
+        print_error "User removal failed"
+        return 1
     fi
 
     print_success "User removed: $username"
