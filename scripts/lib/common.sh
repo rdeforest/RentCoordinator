@@ -92,8 +92,9 @@ create_user() {
 
     print_info "Creating user: $username"
 
-    local useradd_path=$(command -v useradd 2>/dev/null)
-    local adduser_path=$(command -v adduser 2>/dev/null)
+    # Check common paths for useradd/adduser since they may not be in user's PATH
+    local useradd_path=$(command -v useradd 2>/dev/null || [ -x /usr/sbin/useradd ] && echo /usr/sbin/useradd || [ -x /sbin/useradd ] && echo /sbin/useradd)
+    local adduser_path=$(command -v adduser 2>/dev/null || [ -x /usr/sbin/adduser ] && echo /usr/sbin/adduser || [ -x /sbin/adduser ] && echo /sbin/adduser)
 
     if [ -n "$useradd_path" ]; then
         run_as_root "$useradd_path" -m -s /bin/bash "$username"
@@ -123,8 +124,9 @@ remove_user() {
 
     print_info "Removing user: $username"
 
-    local userdel_path=$(command -v userdel 2>/dev/null)
-    local deluser_path=$(command -v deluser 2>/dev/null)
+    # Check common paths for userdel/deluser since they may not be in user's PATH
+    local userdel_path=$(command -v userdel 2>/dev/null || [ -x /usr/sbin/userdel ] && echo /usr/sbin/userdel || [ -x /sbin/userdel ] && echo /sbin/userdel)
+    local deluser_path=$(command -v deluser 2>/dev/null || [ -x /usr/sbin/deluser ] && echo /usr/sbin/deluser || [ -x /sbin/deluser ] && echo /sbin/deluser)
 
     if [ -n "$userdel_path" ]; then
         run_as_root "$userdel_path" -r "$username" 2>/dev/null || run_as_root "$userdel_path" "$username" 2>/dev/null
