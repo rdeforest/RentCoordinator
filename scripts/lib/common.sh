@@ -92,10 +92,13 @@ create_user() {
 
     print_info "Creating user: $username"
 
-    if command -v useradd &>/dev/null; then
-        run_as_root useradd -m -s /bin/bash "$username"
-    elif command -v adduser &>/dev/null; then
-        run_as_root adduser --disabled-password --gecos "" "$username"
+    local useradd_path=$(command -v useradd 2>/dev/null)
+    local adduser_path=$(command -v adduser 2>/dev/null)
+
+    if [ -n "$useradd_path" ]; then
+        run_as_root "$useradd_path" -m -s /bin/bash "$username"
+    elif [ -n "$adduser_path" ]; then
+        run_as_root "$adduser_path" --disabled-password --gecos "" "$username"
     else
         print_error "Cannot create user: no useradd or adduser command found"
         return 1
@@ -120,10 +123,13 @@ remove_user() {
 
     print_info "Removing user: $username"
 
-    if command -v userdel &>/dev/null; then
-        userdel -r "$username" 2>/dev/null || userdel "$username" 2>/dev/null
-    elif command -v deluser &>/dev/null; then
-        deluser --remove-home "$username" 2>/dev/null || deluser "$username" 2>/dev/null
+    local userdel_path=$(command -v userdel 2>/dev/null)
+    local deluser_path=$(command -v deluser 2>/dev/null)
+
+    if [ -n "$userdel_path" ]; then
+        run_as_root "$userdel_path" -r "$username" 2>/dev/null || run_as_root "$userdel_path" "$username" 2>/dev/null
+    elif [ -n "$deluser_path" ]; then
+        run_as_root "$deluser_path" --remove-home "$username" 2>/dev/null || run_as_root "$deluser_path" "$username" 2>/dev/null
     else
         print_warning "Cannot remove user: no userdel or deluser command found"
         return 1
