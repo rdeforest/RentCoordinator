@@ -93,10 +93,12 @@ create_user() {
 
     print_info "Creating user: $username"
 
-         if command -v adduser 2>/dev/null; then
-        run_as_root "$adduser_path" --disabled-password --gecos "" "$username"
+      if command -v adduser 2>/dev/null; then
+        run_as_root adduser --disabled-password --gecos "" "$username"
+
     elif command -v useradd 2>/dev/null; then
-        run_as_root "$useradd_path" -m -s /bin/bash "$username"
+        run_as_root useradd -m -s /bin/bash "$username"
+
     else
         print_error "No useradd or adduser found in $PATH"
         return 1
@@ -127,10 +129,12 @@ remove_user() {
     print_info "Removing user: $username"
 
     deluser=deluser
-        if command -v deluser 2>/dev/null; then
-       run_as_root "$deluser_path" --remove-home "$username" 2>/dev/null || run_as_root "$deluser_path" "$username" 2>/dev/null
-    elif command -v userdel 2>/dev/null; then
-        run_as_root "$userdel_path" -r "$username" 2>/dev/null || run_as_root "$userdel_path" "$username" 2>/dev/null
+      if command -v userdel 2>/dev/null; then
+        run_as_root userdel -r "$username" 2>/dev/null || run_as_root "$userdel_path" "$username" 2>/dev/null
+
+    elif command -v deluser 2>/dev/null; then
+        run_as_root deluser --remove-home "$username" 2>/dev/null || run_as_root "$deluser_path" "$username" 2>/dev/null
+
     else
         print_error "No userdel or deluser found in $PATH"
         return 1
