@@ -42,12 +42,10 @@ command_user="\$APP_USER"
 command_background=true
 directory="\$PREFIX"
 
+[ -f "\$PREFIX/.env" ] && . "\$PREFIX/.env"
+
 export DENO_INSTALL="\$DENO_INSTALL"
 export PATH="\$DENO_INSTALL/bin:\$PATH"
-export PORT="\$PORT"
-export DB_PATH="\$DB_PATH"
-export LOG_DIR="\$LOG_DIR"
-export NODE_ENV="production"
 
 output_log="\$LOG_DIR/app.log"
 error_log="\$LOG_DIR/app.log"

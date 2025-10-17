@@ -59,12 +59,10 @@ USER_HOME="$USER_HOME"
 DENO_INSTALL="$DENO_INSTALL"
 PIDFILE="\$PREFIX/\$SERVICE_NAME.pid"
 
+[ -f "\$PREFIX/.env" ] && . "\$PREFIX/.env"
+
 export DENO_INSTALL="\$DENO_INSTALL"
 export PATH="\$DENO_INSTALL/bin:\$PATH"
-export PORT="\$PORT"
-export DB_PATH="\$DB_PATH"
-export LOG_DIR="\$LOG_DIR"
-export NODE_ENV="production"
 
 # Source LSB init functions
 . /lib/lsb/init-functions
