@@ -267,12 +267,16 @@ install_deno() {
 
     print_info "Installing Deno for $username..."
 
-    if [ -f "$deno_install/bin/deno" ]; then
-        if "$deno_install/bin/deno" --version &>/dev/null; then
+    if [ "$(get_current_user)" = "$username" ]; then
+        if [ -f "$deno_install/bin/deno" ] && "$deno_install/bin/deno" --version &>/dev/null; then
             print_success "Deno already installed at $deno_install"
             return 0
         fi
-        print_warning "Deno exists but not working, reinstalling..."
+    else
+        if sudo -u "$username" sh -c "test -f \"$deno_install/bin/deno\" && \"$deno_install/bin/deno\" --version" &>/dev/null; then
+            print_success "Deno already installed at $deno_install"
+            return 0
+        fi
     fi
 
     local install_script="/tmp/deno-install-$$.sh"
@@ -304,14 +308,26 @@ install_deno() {
 
     rm -f "$install_script"
 
-    if [ ! -f "$deno_install/bin/deno" ]; then
-        print_error "Deno installation failed - binary not found at $deno_install/bin/deno"
-        return 1
-    fi
+    if [ "$(get_current_user)" = "$username" ]; then
+        if [ ! -f "$deno_install/bin/deno" ]; then
+            print_error "Deno installation failed - binary not found at $deno_install/bin/deno"
+            return 1
+        fi
 
-    if ! "$deno_install/bin/deno" --version &>/dev/null; then
-        print_error "Deno installed but does not execute properly"
-        return 1
+        if ! "$deno_install/bin/deno" --version &>/dev/null; then
+            print_error "Deno installed but does not execute properly"
+            return 1
+        fi
+    else
+        if ! sudo -u "$username" test -f "$deno_install/bin/deno"; then
+            print_error "Deno installation failed - binary not found at $deno_install/bin/deno"
+            return 1
+        fi
+
+        if ! sudo -u "$username" "$deno_install/bin/deno" --version &>/dev/null; then
+            print_error "Deno installed but does not execute properly"
+            return 1
+        fi
     fi
 
     if is_root && [ "$(get_current_user)" != "$username" ]; then
