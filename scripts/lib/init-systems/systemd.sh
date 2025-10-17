@@ -47,7 +47,7 @@ StandardError=append:$LOG_DIR/app.log
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ReadWritePaths=$LOG_DIR $(dirname "$DB_PATH")
 
 [Install]
