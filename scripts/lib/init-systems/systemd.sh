@@ -43,8 +43,8 @@ StandardError=append:$LOG_DIR/app.log
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ReadWritePaths=$LOG_DIR $(dirname "$DB_PATH")
+#ProtectSystem=strict
+#ReadWritePaths=$PREFIX $LOG_DIR $(dirname "$DB_PATH")
 
 [Install]
 WantedBy=multi-user.target
