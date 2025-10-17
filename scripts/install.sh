@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/init-manager.sh"
 
 PREFIX="/opt/rentcoordinator"
 APP_USER="rentcoordinator"
-PORT="3000"
+PORT="8080"
 DB_PATH="/var/lib/rentcoordinator/db.kv"
 LOG_DIR="/var/log/rentcoordinator"
 SKIP_USER=false
