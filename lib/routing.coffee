@@ -1,13 +1,31 @@
 # lib/routing.coffee
 
-timerService = await import('./services/timer.coffee')
-workLogModel = await import('./models/work_log.coffee')
-rentRoutes   = await import('./routes/rent.coffee')
-workRoutes   = await import('./routes/work.coffee')
+timerService          = await import('./services/timer.coffee')
+workLogModel          = await import('./models/work_log.coffee')
+rentRoutes            = await import('./routes/rent.coffee')
+workRoutes            = await import('./routes/work.coffee')
 recurringEventsRoutes = await import('./routes/recurring_events.coffee')
+authRoutes            = await import('./routes/auth.coffee')
+middleware            = await import('./middleware.coffee')
 
 
 export setup = (app) ->
+  # Health check (public)
+  app.get '/health', (req, res) ->
+    res.json
+      status: 'healthy'
+      timestamp: new Date().toISOString()
+
+  # Set up auth routes (public)
+  authRoutes.setup(app)
+
+  # Login page (public)
+  app.get '/login.html', (req, res) ->
+    res.sendFile 'login.html', root: './static'
+
+  # Apply authentication to all routes below this point
+  app.use middleware.requireAuth
+
   # Main interface
   app.get '/', (req, res) ->
     res.sendFile 'index.html', root: './static'
@@ -136,10 +154,3 @@ export setup = (app) ->
 
   # Set up recurring events routes
   recurringEventsRoutes.setup(app)
-
-
-  # Health check
-  app.get '/health', (req, res) ->
-    res.json
-      status: 'healthy'
-      timestamp: new Date().toISOString()

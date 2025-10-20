@@ -1,9 +1,11 @@
 {
   "tasks": {
-    "build": "deno run --allow-read --allow-write --allow-env                                     scripts/build.ts",
-    "dev":   "deno run --allow-read --allow-write --allow-env --allow-net --allow-run --unstable-kv scripts/build.ts --watch",
-    "start": "deno run --allow-read --allow-write --allow-env --allow-net             --unstable-kv dist/main.js",
-    "lint":  "deno lint dist/ scripts/"
+    "build":   "deno run --allow-read --allow-write --allow-env                                     scripts/build.ts",
+    "dev":     "deno run --allow-read --allow-write --allow-env --allow-net --allow-run --unstable-kv scripts/build.ts --watch",
+    "start":   "deno run --allow-read --allow-write --allow-env --allow-net             --unstable-kv dist/main.js",
+    "lint":    "deno lint dist/ scripts/",
+    "backup":  "deno run --allow-read --allow-write --allow-env             --unstable-kv scripts/backup.ts backup",
+    "restore": "deno run --allow-read --allow-write --allow-env             --unstable-kv scripts/backup.ts restore"
   },
   "imports": {
     "express":      "npm:express@4",
