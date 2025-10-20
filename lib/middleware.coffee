@@ -68,6 +68,11 @@ export requireAuth = (req, res, next) ->
   if req.session?.authenticated
     next()
   else
-    res.status(401).json
-      error: 'Authentication required'
-      redirect: '/login.html'
+    # For browser requests (HTML pages), redirect to login
+    # For API requests (JSON), return 401
+    if req.accepts('html')
+      res.redirect(302, '/login.html')
+    else
+      res.status(401).json
+        error: 'Authentication required'
+        redirect: '/login.html'

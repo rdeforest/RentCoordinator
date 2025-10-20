@@ -24,10 +24,24 @@ deno task build
 npm run start
 # or
 deno task start
+
+# Upgrade to latest from GitHub (production)
+./scripts/upgrade.sh
 ```
 
 ### Build System
 The build system (scripts/build.ts) compiles CoffeeScript files to JavaScript, handles import path rewriting (.coffee → .js), and copies static assets to dist/. Watch mode rebuilds on changes and restarts the server automatically.
+
+### Deployment & Upgrades
+The `scripts/upgrade.sh` script handles production upgrades:
+- Creates automatic backups before upgrading
+- Pulls latest code from GitHub
+- Runs any database migrations from `migrations/` directory
+- Rebuilds the project
+- Restarts the systemd service
+- Provides rollback instructions on failure
+
+See `migrations/README.md` for details on creating database migrations.
 
 ## Technology Stack
 
@@ -44,26 +58,42 @@ The build system (scripts/build.ts) compiles CoffeeScript files to JavaScript, h
 lib/
 ├── config.coffee          - Environment config and constants
 ├── db/schema.coffee       - Database initialization and KV setup
-├── middleware.coffee      - Express middleware setup
+├── middleware.coffee      - Express middleware and auth middleware
 ├── routing.coffee         - Main route definitions and timer API
 ├── services/             - Business logic layer
 │   ├── timer.coffee      - Timer operations and session management
 │   ├── rent.coffee       - Rent calculation logic
-│   └── recurring_events.coffee - Recurring events processing
+│   ├── recurring_events.coffee - Recurring events processing
+│   ├── backup.coffee     - Database backup/restore
+│   └── email.coffee      - Email verification codes
 ├── models/               - Data access layer
 │   ├── work_session.coffee - Work session CRUD operations
 │   ├── work_log.coffee   - Work log management
-│   └── rent.coffee       - Rent periods, events, audit logs
+│   ├── rent.coffee       - Rent periods, events, audit logs
+│   └── auth.coffee       - Auth verification codes and validation
 └── routes/               - Route handlers
     ├── work.coffee       - Work management routes
     ├── rent.coffee       - Rent-related endpoints
-    └── recurring_events.coffee - Recurring events API
+    ├── recurring_events.coffee - Recurring events API
+    └── auth.coffee       - Authentication endpoints
 
 static/                   - Frontend assets
 ├── coffee/               - Frontend CoffeeScript (source)
+│   ├── auth.coffee       - Shared auth utilities
+│   └── login.coffee      - Login page logic
 ├── js/                   - Compiled JavaScript (served to browser)
 ├── css/                  - Stylesheets
-└── *.html               - HTML pages (index, work, rent)
+└── *.html               - HTML pages (index, work, rent, login)
+
+scripts/                  - Build and deployment scripts
+├── build.ts              - CoffeeScript compilation and asset copying
+├── backup.ts             - Database backup CLI
+└── upgrade.sh            - Production upgrade automation
+
+migrations/               - Database migrations (empty for now)
+└── README.md             - Migration documentation
+
+backups/                  - Database backups (gitignored)
 ```
 
 ### Database Design
@@ -85,11 +115,29 @@ Uses Deno KV with keys like `['timer_state', worker]`, `['work_session', session
 - Rent calculation based on work logs with manual adjustments
 - Audit logging for all rent events
 
+#### Authentication System
+- Email-based verification code authentication (6-digit codes, 10-minute expiration)
+- Session management with 30-day cookie expiration
+- Whitelist-based access control (robert@defore.st, lynz57@hotmail.com)
+- All routes protected except `/login.html`, `/auth/*`, and `/health`
+- Browser requests redirect to login page, API requests return 401 JSON
+- Console logging in development, SMTP-ready for production
+
 ### Key Configuration
 - Workers defined in `config.WORKERS` array
-- Database path configurable via `DB_PATH` environment variable
-- Default port 3000, configurable via `PORT` environment variable
+- Allowed emails defined in `config.ALLOWED_EMAILS` array
 - Timer polling interval: 1000ms client-side
+
+### Environment Variables
+- `PORT` - Server port (default: 3000)
+- `NODE_ENV` - Environment mode (development/production)
+- `DB_PATH` - Deno KV database path (default: ./tenant-coordinator.db)
+- `SESSION_SECRET` - Secret for session encryption (required for production)
+- `SMTP_HOST` - SMTP server for sending verification emails (optional in dev)
+- `SMTP_PORT` - SMTP port (default: 587)
+- `SMTP_USER` - SMTP username
+- `SMTP_PASS` - SMTP password
+- `EMAIL_FROM` - From address for emails (default: noreply@thatsnice.org)
 
 ### Build Process
 1. Compiles all server-side `.coffee` files to `dist/*.js`
