@@ -14,7 +14,7 @@
     "coffeescript": "npm:coffeescript@2",
     "stripe":       "npm:stripe@17"
   },
-  "nodeModulesDir": "auto",
+  "nodeModulesDir": true,
   "lint": {
     "exclude": ["lib/", "static/"]
   }

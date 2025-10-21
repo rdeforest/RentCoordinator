@@ -25,7 +25,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.42.x
+          deno-version: v1.x  # Use latest stable 1.x version
 
       - name: Build application
         run: deno task build
