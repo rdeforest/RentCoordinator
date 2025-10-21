@@ -33,7 +33,7 @@ User=$APP_USER
 WorkingDirectory=$PREFIX
 Environment="DENO_INSTALL=$DENO_INSTALL"
 Environment="PATH=$DENO_INSTALL/bin:/usr/local/bin:/usr/bin:/bin"
-EnvironmentFile=$PREFIX/.env
+EnvironmentFile=$PREFIX/config.sh
 ExecStart=$DENO_INSTALL/bin/deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv $PREFIX/dist/main.js
 Restart=on-failure
 RestartSec=10

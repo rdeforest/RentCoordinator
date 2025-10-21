@@ -4,6 +4,7 @@
 import CoffeeScript from "coffeescript";
 import { walk } from "https://deno.land/std@0.224.0/fs/walk.ts";
 import { ensureDir } from "https://deno.land/std@0.224.0/fs/ensure_dir.ts";
+import { copy } from "https://deno.land/std@0.224.0/fs/copy.ts";
 import { relative, dirname, join } from "https://deno.land/std@0.224.0/path/mod.ts";
 
 const WATCH_MODE = Deno.args.includes("--watch");
@@ -52,36 +53,62 @@ async function compileCoffeeScript() {
     }
   }
 
+  // Compile client-side CoffeeScript
+  console.log("\nCompiling client-side CoffeeScript...");
+  await ensureDir("static/js");
+
+  try {
+    for await (const entry of walk("static/coffee", {
+      exts: [".coffee"]
+    })) {
+      const inputPath = entry.path;
+      const outputPath = inputPath.replace("static/coffee/", "static/js/").replace(".coffee", ".js");
+
+      try {
+        const coffeeCode = await Deno.readTextFile(inputPath);
+        const jsCode = CoffeeScript.compile(coffeeCode, {
+          bare: true,
+          filename: inputPath
+        });
+
+        await Deno.writeTextFile(outputPath, jsCode);
+        console.log(`✓ ${inputPath} → ${outputPath}`);
+      } catch (error) {
+        console.error(`✗ Error compiling ${inputPath}:`, error.message);
+      }
+    }
+  } catch (error) {
+    console.error("✗ Error compiling client-side CoffeeScript:", error.message);
+  }
+
+  // Copy scripts directory (for backup.ts used during upgrades)
+  console.log("\nCopying scripts...");
+  await ensureDir("dist/scripts");
+  try {
+    await copy("scripts/backup.ts", "dist/scripts/backup.ts", { overwrite: true });
+    console.log("✓ Scripts copied");
+  } catch (error) {
+    console.error("✗ Error copying scripts:", error.message);
+  }
+
   // Copy static files
   console.log("\nCopying static files...");
   await ensureDir("dist/static");
 
   try {
-    // Copy HTML files
-    await Deno.copyFile("static/index.html", "dist/static/index.html");
-    await Deno.copyFile("static/rent.html", "dist/static/rent.html");
-    await Deno.copyFile("static/work.html", "dist/static/work.html");
+    // Copy all HTML files
+    for await (const entry of walk("static", {
+      exts: [".html"],
+      maxDepth: 1
+    })) {
+      const dest = entry.path.replace("static/", "dist/static/");
+      await Deno.copyFile(entry.path, dest);
+    }
 
-    // Copy CSS
-    await ensureDir("dist/static/css");
-    await Deno.copyFile("static/css/app.css", "dist/static/css/app.css");
-    await Deno.copyFile("static/css/rent.css", "dist/static/css/rent.css");
-    await Deno.copyFile("static/css/work.css", "dist/static/css/work.css");
-    await Deno.copyFile("static/css/timer.css", "dist/static/css/timer.css");
-
-    // Copy JavaScript files (compiled from CoffeeScript)
-    await ensureDir("dist/static/js");
-    await Deno.copyFile("static/js/shared-utils.js", "dist/static/js/shared-utils.js");
-    await Deno.copyFile("static/js/timer.js", "dist/static/js/timer.js");
-    await Deno.copyFile("static/js/rent.js", "dist/static/js/rent.js");
-    await Deno.copyFile("static/js/work.js", "dist/static/js/work.js");
-
-    // Still copy CoffeeScript files for reference
-    await ensureDir("dist/static/coffee");
-    await Deno.copyFile("static/coffee/shared-utils.coffee", "dist/static/coffee/shared-utils.coffee");
-    await Deno.copyFile("static/coffee/timer.coffee", "dist/static/coffee/timer.coffee");
-    await Deno.copyFile("static/coffee/rent.coffee", "dist/static/coffee/rent.coffee");
-    await Deno.copyFile("static/coffee/work.coffee", "dist/static/coffee/work.coffee");
+    // Copy entire directories
+    await copy("static/css", "dist/static/css", { overwrite: true });
+    await copy("static/js", "dist/static/js", { overwrite: true });
+    await copy("static/coffee", "dist/static/coffee", { overwrite: true });
 
     // Copy CoffeeScript browser compiler
     await ensureDir("dist/static/vendor");

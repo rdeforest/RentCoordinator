@@ -25,23 +25,53 @@ npm run start
 # or
 deno task start
 
-# Upgrade to latest from GitHub (production)
-./scripts/upgrade.sh
+# Local installation (current machine)
+./scripts/install.sh
+
+# Remote deployment (to production server)
+./scripts/deploy-install.sh vault2.thatsnice.org
+./scripts/deploy-upgrade.sh vault2.thatsnice.org
+./scripts/deploy-uninstall.sh vault2.thatsnice.org
 ```
 
 ### Build System
 The build system (scripts/build.ts) compiles CoffeeScript files to JavaScript, handles import path rewriting (.coffee → .js), and copies static assets to dist/. Watch mode rebuilds on changes and restarts the server automatically.
 
-### Deployment & Upgrades
-The `scripts/upgrade.sh` script handles production upgrades:
-- Creates automatic backups before upgrading
-- Pulls latest code from GitHub
-- Runs any database migrations from `migrations/` directory
-- Rebuilds the project
-- Restarts the systemd service
-- Provides rollback instructions on failure
+### Deployment System
+RentCoordinator uses a **push-based remote deployment model**:
 
-See `migrations/README.md` for details on creating database migrations.
+**Local Scripts** (run from dev machine):
+- `deploy-install.sh <host>` - First-time installation on remote server
+- `deploy-upgrade.sh <host>` - Safe upgrade with automatic rollback
+- `deploy-uninstall.sh <host>` - Remove installation from remote
+
+**How it works:**
+1. Build project locally on dev machine
+2. Create deployment package
+3. Push to remote server via rsync
+4. Execute remote installation/upgrade script
+5. Automatic health checks and rollback on failure
+
+**Upgrade safety features:**
+- Automatic database backup before upgrade
+- Atomic swap between versions (dist.new → dist, dist.old for rollback)
+- Health check verification after deployment
+- Automatic rollback if health check fails
+- Database and config never touched during upgrades
+
+**Remote structure:**
+```
+~/rent-coordinator/
+├── dist/              # Active version
+├── dist.old/          # Previous version (for rollback)
+├── config.sh          # Configuration (persists across upgrades)
+├── tenant-coordinator.db  # Database (never deleted)
+└── backups/           # Automatic backups
+```
+
+See `scripts/DEPLOYMENT.md` for complete deployment documentation.
+See `migrations/README.md` for database migration guide.
+See `DISASTER-RECOVERY.md` for complete disaster recovery procedures.
 
 ## Technology Stack
 
@@ -138,6 +168,43 @@ Uses Deno KV with keys like `['timer_state', worker]`, `['work_session', session
 - `SMTP_USER` - SMTP username
 - `SMTP_PASS` - SMTP password
 - `EMAIL_FROM` - From address for emails (default: noreply@thatsnice.org)
+- `STRIPE_SECRET_KEY` - Stripe API secret key (sk_test_... or sk_live_...)
+- `STRIPE_PUBLISHABLE_KEY` - Stripe publishable key (pk_test_... or pk_live_...)
+
+### Backup and Disaster Recovery
+
+**Automated Backups:**
+```bash
+# Create database backup
+deno task backup
+
+# Restore from backup
+deno task restore backups/backup-YYYY-MM-DD*.json
+
+# Backups include:
+# - All Deno KV database data
+# - Non-sensitive configuration (port, business rules, etc.)
+# - Database schema version
+```
+
+**Secrets Management:**
+- Application secrets stored in AWS Secrets Manager
+- Secret name: `rent-coordinator/config` (us-west-2)
+- Protected by IAM credentials
+
+```bash
+# Restore secrets to a server
+./scripts/restore-secrets.sh vault2
+
+# Manual secret retrieval
+aws secretsmanager get-secret-value \
+  --secret-id rent-coordinator/config \
+  --region us-west-2 \
+  --query 'SecretString' \
+  --output text
+```
+
+See `DISASTER-RECOVERY.md` for complete restoration procedures.
 
 ### Build Process
 1. Compiles all server-side `.coffee` files to `dist/*.js`

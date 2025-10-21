@@ -4,16 +4,17 @@
     "dev":     "deno run --allow-read --allow-write --allow-env --allow-net --allow-run --unstable-kv scripts/build.ts --watch",
     "start":   "deno run --allow-read --allow-write --allow-env --allow-net             --unstable-kv dist/main.js",
     "lint":    "deno lint dist/ scripts/",
-    "backup":  "deno run --allow-read --allow-write --allow-env             --unstable-kv scripts/backup.ts backup",
-    "restore": "deno run --allow-read --allow-write --allow-env             --unstable-kv scripts/backup.ts restore"
+    "backup":  "deno run --allow-read --allow-write --allow-env             --unstable-kv dist/scripts/backup.ts backup",
+    "restore": "deno run --allow-read --allow-write --allow-env             --unstable-kv dist/scripts/backup.ts restore"
   },
   "imports": {
     "express":      "npm:express@4",
     "cors":         "npm:cors@2",
     "uuid":         "https://deno.land/std@0.224.0/uuid/mod.ts",
-    "coffeescript": "npm:coffeescript@2"
+    "coffeescript": "npm:coffeescript@2",
+    "stripe":       "npm:stripe@17"
   },
-  "nodeModulesDir": true,
+  "nodeModulesDir": "auto",
   "lint": {
     "exclude": ["lib/", "static/"]
   }

@@ -34,6 +34,25 @@ export exportBackup = ->
     timestamp: new Date().toISOString()
     db_path:   config.DB_PATH
     data:      {}
+    config:    {}  # Configuration and environment
+
+  # Export environment configuration (for disaster recovery)
+  console.log '  Exporting configuration...'
+  backup.config =
+    port:                 config.PORT
+    node_env:             config.NODE_ENV
+    db_path:              config.DB_PATH
+    base_rent:            config.BASE_RENT
+    hourly_credit:        config.HOURLY_CREDIT
+    max_monthly_hours:    config.MAX_MONTHLY_HOURS
+    workers:              config.WORKERS
+    default_stakeholders: config.DEFAULT_STAKEHOLDERS
+    allowed_emails:       config.ALLOWED_EMAILS
+    session_max_age:      config.SESSION_MAX_AGE
+    code_expiry:          config.CODE_EXPIRY
+    # Note: Secrets like SESSION_SECRET, SMTP credentials, and Stripe keys
+    # should be stored separately in a secure location (password manager)
+    # and restored manually during disaster recovery
 
   totalEntries = 0
 

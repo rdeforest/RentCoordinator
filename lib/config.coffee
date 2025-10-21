@@ -6,6 +6,9 @@ export PORT     = Deno.env.get('PORT')     or 3000
 export NODE_ENV = Deno.env.get('NODE_ENV') or 'development'
 export DB_PATH  = Deno.env.get('DB_PATH')  or './tenant-coordinator.db'
 
+# Static files directory (different in dev vs production)
+export STATIC_DIR = if NODE_ENV is 'production' then './dist/static' else './static'
+
 # Timer configuration
 export TIMER_POLL_INTERVAL = 1000  # Client polls every second
 export SESSION_TIMEOUT     = 8 * 60 * 60 * 1000  # 8 hours max session
@@ -33,3 +36,7 @@ export SMTP_PORT = Deno.env.get('SMTP_PORT') or 587
 export SMTP_USER = Deno.env.get('SMTP_USER')
 export SMTP_PASS = Deno.env.get('SMTP_PASS')
 export EMAIL_FROM = Deno.env.get('EMAIL_FROM') or 'noreply@thatsnice.org'
+
+# Stripe configuration (for rent payments)
+export STRIPE_SECRET_KEY      = Deno.env.get('STRIPE_SECRET_KEY')
+export STRIPE_PUBLISHABLE_KEY = Deno.env.get('STRIPE_PUBLISHABLE_KEY')

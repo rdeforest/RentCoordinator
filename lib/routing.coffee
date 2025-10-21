@@ -1,11 +1,13 @@
 # lib/routing.coffee
 
+config                = await import('./config.coffee')
 timerService          = await import('./services/timer.coffee')
 workLogModel          = await import('./models/work_log.coffee')
 rentRoutes            = await import('./routes/rent.coffee')
 workRoutes            = await import('./routes/work.coffee')
 recurringEventsRoutes = await import('./routes/recurring_events.coffee')
 authRoutes            = await import('./routes/auth.coffee')
+paymentRoutes         = await import('./routes/payment.coffee')
 middleware            = await import('./middleware.coffee')
 
 
@@ -21,22 +23,31 @@ export setup = (app) ->
 
   # Login page (public)
   app.get '/login.html', (req, res) ->
-    res.sendFile 'login.html', root: './static'
+    res.sendFile 'login.html', root: config.STATIC_DIR
+
+  # Stripe publishable key (public - safe to expose)
+  app.get '/payment/config', (req, res) ->
+    res.json
+      publishableKey: config.STRIPE_PUBLISHABLE_KEY
 
   # Apply authentication to all routes below this point
   app.use middleware.requireAuth
 
   # Main interface
   app.get '/', (req, res) ->
-    res.sendFile 'index.html', root: './static'
+    res.sendFile 'index.html', root: config.STATIC_DIR
 
   # Rent dashboard
   app.get '/rent', (req, res) ->
-    res.sendFile 'rent.html', root: './static'
+    res.sendFile 'rent.html', root: config.STATIC_DIR
 
   # Work management
   app.get '/work', (req, res) ->
-    res.sendFile 'work.html', root: './static'
+    res.sendFile 'work.html', root: config.STATIC_DIR
+
+  # Payment page
+  app.get '/payment', (req, res) ->
+    res.sendFile 'payment.html', root: config.STATIC_DIR
 
 
   # Timer operations
@@ -154,3 +165,6 @@ export setup = (app) ->
 
   # Set up recurring events routes
   recurringEventsRoutes.setup(app)
+
+  # Set up payment routes
+  paymentRoutes.setup(app)

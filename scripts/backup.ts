@@ -64,10 +64,10 @@ Examples:
 }
 
 // Initialize database schema (required before backup operations)
-await import("../dist/lib/db/schema.js");
+await import("../lib/db/schema.js");
 
 // Import backup service
-const backupService = await import("../dist/lib/services/backup.js");
+const backupService = await import("../lib/services/backup.js");
 
 // Execute command
 try {

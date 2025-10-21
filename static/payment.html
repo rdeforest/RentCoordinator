@@ -1,0 +1,108 @@
+<!-- static/payment.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pay Rent - Tenant Coordinator</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="/js/auth.js"></script>
+    <style>
+        .payment-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .payment-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .payment-amount {
+            font-size: 32px;
+            font-weight: bold;
+            color: #007bff;
+            margin: 10px 0;
+        }
+        .payment-form {
+            background: white;
+            padding: 30px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+        #bank-account-element {
+            padding: 20px 0;
+        }
+        .btn-pay {
+            background: #28a745;
+            color: white;
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn-pay:hover {
+            background: #218838;
+        }
+        .btn-pay:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .message {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="payment-container">
+        <header>
+            <h1>Pay Rent</h1>
+            <nav>
+                <a href="/rent" class="btn btn-secondary">Back to Rent Dashboard</a>
+            </nav>
+        </header>
+
+        <div class="payment-summary">
+            <h2>Payment Summary</h2>
+            <div>
+                <strong>Period:</strong> <span id="payment-period">Loading...</span>
+            </div>
+            <div>
+                <strong>Amount Due:</strong>
+                <div class="payment-amount" id="payment-amount">$0.00</div>
+            </div>
+        </div>
+
+        <div id="message-container"></div>
+
+        <div class="payment-form">
+            <h3>Bank Account Information</h3>
+            <p style="color: #6c757d; margin-bottom: 20px;">
+                Pay securely with ACH bank transfer. Your bank information is processed securely by Stripe.
+            </p>
+
+            <div id="bank-account-element"></div>
+
+            <button id="pay-button" class="btn btn-pay" disabled>
+                Process Payment
+            </button>
+        </div>
+    </div>
+
+    <script src="/js/payment.js"></script>
+</body>
+</html>
