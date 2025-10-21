@@ -60,9 +60,14 @@ isEventDue = (recurringEvent, currentDate = new Date()) ->
 
 # Process a single recurring event
 processRecurringEvent = (recurringEvent, currentDate = new Date()) ->
+  # Ensure rent period exists upfront for logging
+  year = currentDate.getFullYear()
+  month = currentDate.getMonth() + 1
+  period = await rentModel.getOrCreateRentPeriod(year, month)
+
   try
     eventsCreated = []
-    
+
     switch recurringEvent.event_type
       when 'rent_due'
         eventId = await processRentDueEvent(recurringEvent, currentDate)
@@ -87,6 +92,7 @@ processRecurringEvent = (recurringEvent, currentDate = new Date()) ->
     # Log successful processing
     await recurringEventsModel.createProcessingLog
       recurring_event_id: recurringEvent.id
+      period_id: period.id
       processing_date: currentDate.toISOString()
       events_created: eventsCreated
       status: 'success'
@@ -98,6 +104,7 @@ processRecurringEvent = (recurringEvent, currentDate = new Date()) ->
     # Log error
     await recurringEventsModel.createProcessingLog
       recurring_event_id: recurringEvent.id
+      period_id: period.id
       processing_date: currentDate.toISOString()
       events_created: []
       status: 'error'
@@ -112,7 +119,7 @@ processRecurringEvent = (recurringEvent, currentDate = new Date()) ->
 processRentDueEvent = (recurringEvent, currentDate) ->
   year = currentDate.getFullYear()
   month = currentDate.getMonth() + 1
-  
+
   # Check if rent due event already exists for this period
   existingEvents = await rentModel.getRentEventsForPeriod(year, month)
   rentDueExists = existingEvents.some (event) ->

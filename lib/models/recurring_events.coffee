@@ -185,6 +185,9 @@ export createProcessingLog = (data) ->
   id = v1()
   now = new Date().toISOString()
 
+  unless data.period_id
+    throw new Error "period_id is required for processing logs"
+
   # Store additional fields in metadata since schema only has: id, recurring_event_id, period_id, amount, processed_at
   # But we want to preserve: events_created, status, message, error_details
   # We'll need to check if the schema should be extended or use metadata approach
@@ -198,7 +201,7 @@ export createProcessingLog = (data) ->
   """).run(
     id,
     data.recurring_event_id,
-    data.period_id or '',  # Schema requires this but old code doesn't always have it
+    data.period_id,
     data.amount or 0,
     data.processing_date or now
   )

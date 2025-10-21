@@ -44,6 +44,19 @@ export getRentPeriod = (year, month) ->
   """).get(year, month)
 
 
+# Get or create rent period - ensures period exists before operations
+export getOrCreateRentPeriod = (year, month) ->
+  existing = getRentPeriod(year, month)
+  return existing if existing
+
+  # Create new period with default values
+  return await createRentPeriod {
+    year:        year
+    month:       month
+    amount_due:  config.BASE_RENT or 1600  # Will be recalculated later
+  }
+
+
 export getAllRentPeriods = ->
   periods = db.prepare("""
     SELECT * FROM rent_periods
