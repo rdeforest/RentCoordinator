@@ -83,8 +83,18 @@ loadCurrentMonth = ->
       formatCurrency period.amount_due
     document.getElementById('amount-paid').textContent =
       formatCurrency period.amount_paid or 0
+    outstanding = period.amount_due - (period.amount_paid or 0)
     document.getElementById('outstanding-balance-current').textContent =
-      formatCurrency (period.amount_due - (period.amount_paid or 0))
+      formatCurrency outstanding
+
+    # Show "Pay Rent Online" button if there's an outstanding balance
+    payOnlineBtn = document.getElementById('pay-rent-online-btn')
+    if outstanding > 0
+      payOnlineBtn.style.display = 'inline-block'
+      payOnlineBtn.onclick = ->
+        window.location.href = "/payment?year=#{currentYear}&month=#{currentMonth}"
+    else
+      payOnlineBtn.style.display = 'none'
 
     document.querySelector('.current-month').style.display = 'block'
 

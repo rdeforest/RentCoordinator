@@ -6,114 +6,93 @@ db = (await import('../db/schema.coffee')).db
 
 # Create a new work session
 export createWorkSession = (worker) ->
-  id = v1.generate()
+  id = v1()
   now = new Date().toISOString()
 
-  session =
-    id: id
-    worker: worker
-    description: ''
-    status: 'active'  # active, paused, completed, cancelled
-    created_at: now
-    updated_at: now
-    total_duration: 0  # Total accumulated time in seconds
-    billable: true
+  # Insert session
+  db.prepare("""
+    INSERT INTO work_sessions (id, worker, description, status, total_duration, billable, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  """).run(id, worker, '', 'active', 0, 1, now, now)
 
-  key = ['work_sessions', id]
-  await db.set key, session
-
-  # Also maintain current session reference
-  currentKey = ['current_session', worker]
-  await db.set currentKey, id
+  # Set current session
+  db.prepare("""
+    INSERT OR REPLACE INTO current_sessions (worker, session_id)
+    VALUES (?, ?)
+  """).run(worker, id)
 
   # Create initial start event
   await createWorkEvent id, 'start', now
 
-  return session
+  # Return the session
+  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get(id)
 
 
 # Create a work event (start/pause/resume/stop/cancel)
 export createWorkEvent = (sessionId, eventType, timestamp = null) ->
-  id = v1.generate()
+  id = v1()
   timestamp ?= new Date().toISOString()
 
-  event =
-    id: id
-    session_id: sessionId
-    event_type: eventType  # start, pause, resume, stop, cancel
-    timestamp: timestamp
-    created_at: new Date().toISOString()
-
-  key = ['work_events', sessionId, id]
-  await db.set key, event
+  # Insert event
+  db.prepare("""
+    INSERT INTO work_events (id, session_id, event_type, timestamp, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  """).run(id, sessionId, eventType, timestamp, new Date().toISOString())
 
   # Update session status based on event
   await updateSessionStatus sessionId, eventType
 
-  return event
+  return db.prepare("SELECT * FROM work_events WHERE id = ?").get(id)
 
 
 # Update session status based on event
 updateSessionStatus = (sessionId, eventType) ->
-  sessionKey = ['work_sessions', sessionId]
-  session = await db.get(sessionKey)
-
-  return unless session.value
-
   newStatus = switch eventType
     when 'start', 'resume' then 'active'
     when 'pause' then 'paused'
     when 'stop' then 'completed'
     when 'cancel' then 'cancelled'
-    else session.value.status
+    else null
 
-  updated = Object.assign {}, session.value,
-    status: newStatus
-    updated_at: new Date().toISOString()
+  return unless newStatus
 
-  await db.set sessionKey, updated
+  db.prepare("""
+    UPDATE work_sessions
+    SET status = ?, updated_at = ?
+    WHERE id = ?
+  """).run(newStatus, new Date().toISOString(), sessionId)
 
 
 # Update work session description
 export updateSessionDescription = (sessionId, description) ->
-  key = ['work_sessions', sessionId]
-  session = await db.get(key)
+  db.prepare("""
+    UPDATE work_sessions
+    SET description = ?, updated_at = ?
+    WHERE id = ?
+  """).run(description, new Date().toISOString(), sessionId)
 
-  return null unless session.value
-
-  updated = Object.assign {}, session.value,
-    description: description
-    updated_at: new Date().toISOString()
-
-  await db.set key, updated
-  return updated
+  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get(sessionId)
 
 
 # Get current session for a worker
 export getCurrentSession = (worker) ->
-  currentKey = ['current_session', worker]
-  sessionIdResult = await db.get(currentKey)
+  result = db.prepare("""
+    SELECT s.* FROM work_sessions s
+    JOIN current_sessions cs ON cs.session_id = s.id
+    WHERE cs.worker = ?
+  """).get(worker)
 
-  return null unless sessionIdResult.value
-
-  sessionKey = ['work_sessions', sessionIdResult.value]
-  session = await db.get(sessionKey)
-
-  return session.value
+  return result or null
 
 
 # Calculate total duration for a session
 export calculateSessionDuration = (sessionId) ->
   # Get all events for this session
-  events = []
-  prefix = ['work_events', sessionId]
-  entries = db.list({ prefix })
-
-  for await entry from entries
-    events.push entry.value
-
-  # Sort events by timestamp
-  events.sort (a, b) -> new Date(a.timestamp) - new Date(b.timestamp)
+  events = db.prepare("""
+    SELECT * FROM work_events
+    WHERE session_id = ?
+    ORDER BY timestamp ASC
+  """).all(sessionId)
 
   totalDuration = 0
   lastStartTime = null
@@ -138,16 +117,16 @@ export calculateSessionDuration = (sessionId) ->
 
 # Get all sessions with calculated durations
 export getAllSessions = (worker = null) ->
-  sessions = []
-  prefix = ['work_sessions']
-  entries = db.list({ prefix })
+  query = if worker
+    db.prepare("SELECT * FROM work_sessions WHERE worker = ?")
+  else
+    db.prepare("SELECT * FROM work_sessions")
 
-  for await entry from entries
-    session = entry.value
-    if not worker or session.worker is worker
-      # Calculate current duration
-      session.total_duration = await calculateSessionDuration(session.id)
-      sessions.push session
+  sessions = if worker then query.all(worker) else query.all()
+
+  # Calculate current duration for each session
+  for session in sessions
+    session.total_duration = await calculateSessionDuration(session.id)
 
   return sessions
 
@@ -170,25 +149,22 @@ export resumeSession = (sessionId, worker) ->
   await createWorkEvent sessionId, 'resume'
 
   # Update current session reference
-  currentKey = ['current_session', worker]
-  await db.set currentKey, sessionId
+  db.prepare("""
+    INSERT OR REPLACE INTO current_sessions (worker, session_id)
+    VALUES (?, ?)
+  """).run(worker, sessionId)
 
-  sessionKey = ['work_sessions', sessionId]
-  session = await db.get(sessionKey)
-  return session.value
+  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get(sessionId)
 
 
 # Convert session to work log entry (for backwards compatibility)
 export sessionToWorkLog = (session) ->
   # Get first and last events
-  events = []
-  prefix = ['work_events', session.id]
-  entries = db.list({ prefix })
-
-  for await entry from entries
-    events.push entry.value
-
-  events.sort (a, b) -> new Date(a.timestamp) - new Date(b.timestamp)
+  events = db.prepare("""
+    SELECT * FROM work_events
+    WHERE session_id = ?
+    ORDER BY timestamp ASC
+  """).all(session.id)
 
   firstEvent = events[0]
   lastEvent = events[events.length - 1]

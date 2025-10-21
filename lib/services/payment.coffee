@@ -4,22 +4,29 @@ import Stripe    from 'stripe'
 import * as config from '../config.coffee'
 import * as rentModel from '../models/rent.coffee'
 
-# Initialize Stripe
-stripe = new Stripe(config.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-12-18.acacia'
-})
+# Lazy-load Stripe instance
+stripe = null
+getStripe = ->
+  unless config.STRIPE_SECRET_KEY
+    throw new Error 'Stripe not configured'
+
+  unless stripe
+    stripe = new Stripe(config.STRIPE_SECRET_KEY, {
+      apiVersion: '2024-12-18.acacia'
+    })
+
+  return stripe
 
 
 # Create a Payment Intent for ACH payment
 # Returns the client secret for frontend confirmation
 export createPaymentIntent = (amount, description, metadata = {}) ->
-  unless config.STRIPE_SECRET_KEY
-    throw new Error 'Stripe not configured'
+  stripeClient = getStripe()
 
   # Amount must be in cents
   amountCents = Math.round(amount * 100)
 
-  paymentIntent = await stripe.paymentIntents.create
+  paymentIntent = await stripeClient.paymentIntents.create
     amount:               amountCents
     currency:             'usd'
     description:          description
@@ -35,7 +42,8 @@ export createPaymentIntent = (amount, description, metadata = {}) ->
 
 # Get payment status
 export getPaymentStatus = (paymentIntentId) ->
-  paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+  stripeClient = getStripe()
+  paymentIntent = await stripeClient.paymentIntents.retrieve(paymentIntentId)
 
   return {
     id:     paymentIntent.id
@@ -46,8 +54,9 @@ export getPaymentStatus = (paymentIntentId) ->
 
 # Confirm successful payment and update rent record
 export confirmPayment = (paymentIntentId, year, month) ->
+  stripeClient = getStripe()
   # Get payment details
-  paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+  paymentIntent = await stripeClient.paymentIntents.retrieve(paymentIntentId)
 
   unless paymentIntent.status is 'succeeded'
     throw new Error "Payment not successful: #{paymentIntent.status}"
@@ -72,6 +81,7 @@ export confirmPayment = (paymentIntentId, year, month) ->
 
 # Create a SetupIntent for saving bank account for future use
 export createSetupIntent = (customerId = null) ->
+  stripeClient = getStripe()
   options = {
     payment_method_types: ['us_bank_account']
   }
@@ -79,7 +89,7 @@ export createSetupIntent = (customerId = null) ->
   if customerId
     options.customer = customerId
 
-  setupIntent = await stripe.setupIntents.create(options)
+  setupIntent = await stripeClient.setupIntents.create(options)
 
   return {
     clientSecret: setupIntent.client_secret
@@ -89,8 +99,9 @@ export createSetupIntent = (customerId = null) ->
 
 # Get or create Stripe customer for a user
 export getOrCreateCustomer = (email, name) ->
+  stripeClient = getStripe()
   # Search for existing customer
-  customers = await stripe.customers.list {
+  customers = await stripeClient.customers.list {
     email: email
     limit: 1
   }
@@ -99,7 +110,7 @@ export getOrCreateCustomer = (email, name) ->
     return customers.data[0]
 
   # Create new customer
-  customer = await stripe.customers.create {
+  customer = await stripeClient.customers.create {
     email:       email
     name:        name
     description: "RentCoordinator tenant"

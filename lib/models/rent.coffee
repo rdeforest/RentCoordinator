@@ -1,319 +1,304 @@
 # lib/models/rent.coffee
 
 { v1 } = await import('uuid')
-db = (await import('../db/schema.coffee')).db
+db     = (await import('../db/schema.coffee')).db
 config = await import('../config.coffee')
 
 
 # Rent period record
 export createRentPeriod = (data) ->
-  id = v1.generate()
+  id  = v1()
+  now = new Date().toISOString()
 
-  rentPeriod =
-    id: id
-    year: data.year
-    month: data.month  # 1-12
-    base_rent: config.BASE_RENT or 1600
-    hours_worked: data.hours_worked or 0
-    hours_from_previous: data.hours_from_previous or 0  # Roll-over hours
-    hours_to_next: data.hours_to_next or 0  # Excess hours
-    discount_applied: data.discount_applied or 0
-    amount_due: data.amount_due
-    amount_paid: data.amount_paid or 0
-    paid_date: data.paid_date or null
-    notes: data.notes or null
-    created_at: new Date().toISOString()
+  db.prepare("""
+    INSERT INTO rent_periods (
+      id, year, month, base_rent, hourly_credit, max_monthly_hours,
+      hours_worked, hours_from_previous, hours_to_next, manual_adjustments,
+      amount_due, amount_paid, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  """).run(
+    id,
+    data.year,
+    data.month,
+    data.base_rent or config.BASE_RENT or 1600,
+    data.hourly_credit or config.HOURLY_CREDIT or 50,
+    data.max_monthly_hours or config.MAX_MONTHLY_HOURS or 8,
+    data.hours_worked or 0,
+    data.hours_from_previous or 0,
+    data.hours_to_next or 0,
+    data.manual_adjustments or 0,
+    data.amount_due,
+    data.amount_paid or 0,
+    now,
+    now
+  )
 
-  key = ['rent_periods', "#{data.year}-#{String(data.month).padStart(2, '0')}"]
-  await db.set key, rentPeriod
-
-  return rentPeriod
+  return db.prepare("SELECT * FROM rent_periods WHERE id = ?").get(id)
 
 
 export getRentPeriod = (year, month) ->
-  key = ['rent_periods', "#{year}-#{String(month).padStart(2, '0')}"]
-  result = await db.get(key)
-  return result.value
+  return db.prepare("""
+    SELECT * FROM rent_periods
+    WHERE year = ? AND month = ?
+  """).get(year, month)
 
 
 export getAllRentPeriods = ->
-  periods = []
-  prefix = ['rent_periods']
-  entries = db.list({ prefix })
-
-  for await entry from entries
-    periods.push entry.value
-
-  # Sort by year and month descending
-  periods.sort (a, b) ->
-    if a.year != b.year
-      b.year - a.year
-    else
-      b.month - a.month
+  periods = db.prepare("""
+    SELECT * FROM rent_periods
+    ORDER BY year DESC, month DESC
+  """).all()
 
   return periods
 
 
 export updateRentPeriod = (year, month, updates) ->
-  key = ['rent_periods', "#{year}-#{String(month).padStart(2, '0')}"]
-  existing = await db.get(key)
+  existing = getRentPeriod(year, month)
 
-  if not existing.value
+  if not existing
     throw new Error "Rent period not found: #{year}-#{month}"
 
-  updated = Object.assign({}, existing.value, updates, {
-    updated_at: new Date().toISOString()
-  })
+  # Build dynamic update query based on provided fields
+  fields = []
+  values = []
 
-  await db.set key, updated
-  return updated
+  for key, value of updates
+    # Skip non-column fields
+    continue if key in ['id', 'created_at']
+    fields.push "#{key} = ?"
+    values.push value
 
+  # Always update updated_at
+  fields.push "updated_at = ?"
+  values.push new Date().toISOString()
 
-# Payment record
-export recordPayment = (data) ->
-  id = v1.generate()
+  # Add WHERE clause values
+  values.push year, month
 
-  payment =
-    id: id
-    year: data.year
-    month: data.month
-    amount: data.amount
-    payment_date: data.payment_date or new Date().toISOString()
-    payment_method: data.payment_method or 'cash'
-    notes: data.notes or null
-    created_at: new Date().toISOString()
+  query = """
+    UPDATE rent_periods
+    SET #{fields.join(', ')}
+    WHERE year = ? AND month = ?
+  """
 
-  # Store payment
-  paymentKey = ['rent_payments', id]
-  await db.set paymentKey, payment
+  db.prepare(query).run(values...)
 
-  # Update rent period
-  period = await getRentPeriod(data.year, data.month)
-  if period
-    newPaidAmount = (period.amount_paid or 0) + data.amount
-    await updateRentPeriod data.year, data.month,
-      amount_paid: newPaidAmount
-      paid_date: data.payment_date or new Date().toISOString()
-
-  return payment
-
-
-export getPaymentsForPeriod = (year, month) ->
-  payments = []
-  prefix = ['rent_payments']
-  entries = db.list({ prefix })
-
-  for await entry from entries
-    payment = entry.value
-    if payment.year is year and payment.month is month
-      payments.push payment
-
-  payments.sort (a, b) -> new Date(a.payment_date) - new Date(b.payment_date)
-  return payments
+  return getRentPeriod(year, month)
 
 
 # Rent events for comprehensive tracking
 export createRentEvent = (data) ->
-  id = v1.generate()
+  id  = v1()
+  now = new Date().toISOString()
 
-  event =
-    id: id
-    type: data.type  # 'payment', 'adjustment', 'work_value_change', 'manual'
-    date: data.date or new Date().toISOString()
-    year: data.year
-    month: data.month
-    amount: data.amount
-    description: data.description
-    notes: data.notes or null
-    metadata: data.metadata or {}  # For storing type-specific data
-    created_at: new Date().toISOString()
-    updated_at: new Date().toISOString()
+  # Get period_id from year/month if not provided
+  period_id = data.period_id
+  if not period_id and data.year and data.month
+    period = getRentPeriod(data.year, data.month)
+    period_id = period?.id
 
-  key = ['rent_events', id]
-  await db.set key, event
+  if not period_id
+    throw new Error "Cannot create rent event: period not found for #{data.year}-#{data.month}"
+
+  db.prepare("""
+    INSERT INTO rent_events (id, period_id, type, amount, description, metadata, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  """).run(
+    id,
+    period_id,
+    data.type,
+    data.amount,
+    data.description or null,
+    JSON.stringify(data.metadata or {}),
+    now
+  )
 
   # Add audit log entry
   await createAuditLog {
-    action: 'create'
+    action:      'create'
     entity_type: 'rent_event'
-    entity_id: id
-    old_value: null
-    new_value: event
-    user: data.created_by or 'user'
+    entity_id:   id
+    old_value:   null
+    new_value:   data
+    user:        data.created_by or 'user'
   }
 
-  return event
+  return db.prepare("SELECT * FROM rent_events WHERE id = ?").get(id)
 
 
 export getAllRentEvents = (includeDeleted = false) ->
-  events = []
-  prefix = ['rent_events']
-  entries = db.list({ prefix })
+  # Note: SQLite version doesn't have soft delete in rent_events table
+  # This is handled at the application layer if needed
+  events = db.prepare("""
+    SELECT * FROM rent_events
+    ORDER BY created_at DESC
+  """).all()
 
-  for await entry from entries
-    event = entry.value
-    # Skip deleted events unless specifically requested
-    if not includeDeleted and event.deleted
-      continue
-    events.push event
+  # Parse metadata JSON
+  for event in events
+    event.metadata = JSON.parse(event.metadata) if event.metadata
 
-  # Sort by date descending
-  events.sort (a, b) -> new Date(b.date) - new Date(a.date)
   return events
 
 
 export getRentEvent = (id) ->
-  key = ['rent_events', id]
-  result = await db.get(key)
-  return result.value
+  event = db.prepare("SELECT * FROM rent_events WHERE id = ?").get(id)
+
+  if event?.metadata
+    event.metadata = JSON.parse(event.metadata)
+
+  return event
 
 
 export updateRentEvent = (id, updates) ->
-  key = ['rent_events', id]
-  existing = await db.get(key)
+  existing = getRentEvent(id)
 
-  if not existing.value
+  if not existing
     throw new Error "Rent event not found: #{id}"
 
-  updated = Object.assign({}, existing.value, updates, {
-    updated_at: new Date().toISOString()
-  })
+  # Build dynamic update query
+  fields = []
+  values = []
 
-  await db.set key, updated
+  for key, value of updates
+    continue if key in ['id', 'created_at', 'updated_by']
+    if key is 'metadata'
+      fields.push "metadata = ?"
+      values.push JSON.stringify(value)
+    else
+      fields.push "#{key} = ?"
+      values.push value
+
+  # Add WHERE clause value
+  values.push id
+
+  query = """
+    UPDATE rent_events
+    SET #{fields.join(', ')}
+    WHERE id = ?
+  """
+
+  db.prepare(query).run(values...)
 
   # Add audit log entry
   await createAuditLog {
-    action: 'update'
+    action:      'update'
     entity_type: 'rent_event'
-    entity_id: id
-    old_value: existing.value
-    new_value: updated
-    user: updates.updated_by or 'user'
+    entity_id:   id
+    old_value:   existing
+    new_value:   updates
+    user:        updates.updated_by or 'user'
   }
 
-  return updated
+  return getRentEvent(id)
 
 
 export deleteRentEvent = (id, deletedBy = 'user') ->
-  key = ['rent_events', id]
-  existing = await db.get(key)
+  existing = getRentEvent(id)
 
-  if not existing.value
+  if not existing
     throw new Error "Rent event not found: #{id}"
 
-  # Soft delete - mark as deleted instead of removing
-  deleted = Object.assign({}, existing.value, {
-    deleted: true
-    deleted_at: new Date().toISOString()
-    deleted_by: deletedBy
-    updated_at: new Date().toISOString()
-  })
-
-  await db.set key, deleted
+  # Hard delete in SQLite version - soft delete would require schema change
+  db.prepare("DELETE FROM rent_events WHERE id = ?").run(id)
 
   # Add audit log entry
   await createAuditLog {
-    action: 'delete'
+    action:      'delete'
     entity_type: 'rent_event'
-    entity_id: id
-    old_value: existing.value
-    new_value: deleted
-    user: deletedBy
+    entity_id:   id
+    old_value:   existing
+    new_value:   null
+    user:        deletedBy
   }
 
-  return deleted
-
-
-# Undelete a soft-deleted rent event
-export undeleteRentEvent = (id, undeletedBy = 'user') ->
-  key = ['rent_events', id]
-  existing = await db.get(key)
-
-  if not existing.value
-    throw new Error "Rent event not found: #{id}"
-
-  if not existing.value.deleted
-    throw new Error "Rent event is not deleted: #{id}"
-
-  # Remove deletion markers
-  undeleted = Object.assign({}, existing.value)
-  delete undeleted.deleted
-  delete undeleted.deleted_at
-  delete undeleted.deleted_by
-  undeleted.updated_at = new Date().toISOString()
-
-  await db.set key, undeleted
-
-  # Add audit log entry
-  await createAuditLog {
-    action: 'undelete'
-    entity_type: 'rent_event'
-    entity_id: id
-    old_value: existing.value
-    new_value: undeleted
-    user: undeletedBy
-  }
-
-  return undeleted
+  return { deleted: true, id: id }
 
 
 export getRentEventsForPeriod = (year, month, includeDeleted = false) ->
-  events = []
-  prefix = ['rent_events']
-  entries = db.list({ prefix })
+  period = getRentPeriod(year, month)
 
-  for await entry from entries
-    event = entry.value
-    # Skip deleted events unless specifically requested
-    if not includeDeleted and event.deleted
-      continue
-    if event.year is year and event.month is month
-      events.push event
+  if not period
+    return []
 
-  events.sort (a, b) -> new Date(b.date) - new Date(a.date)
+  events = db.prepare("""
+    SELECT * FROM rent_events
+    WHERE period_id = ?
+    ORDER BY created_at DESC
+  """).all(period.id)
+
+  # Parse metadata JSON
+  for event in events
+    event.metadata = JSON.parse(event.metadata) if event.metadata
+
   return events
 
 
 # Audit log functionality
 export createAuditLog = (data) ->
-  id = v1.generate()
+  id  = v1()
+  now = new Date().toISOString()
 
-  log =
-    id: id
-    action: data.action  # 'create', 'update', 'delete', 'undelete'
-    entity_type: data.entity_type
-    entity_id: data.entity_id
+  # Prepare changes object
+  changes = {
     old_value: data.old_value or null
     new_value: data.new_value or null
-    user: data.user or 'system'
-    timestamp: new Date().toISOString()
-    metadata: data.metadata or {}
+    metadata:  data.metadata or {}
+  }
 
-  key = ['audit_logs', id]
-  await db.set key, log
-  return log
+  db.prepare("""
+    INSERT INTO audit_logs (id, action, entity_type, entity_id, user, changes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  """).run(
+    id,
+    data.action,
+    data.entity_type,
+    data.entity_id,
+    data.user or 'system',
+    JSON.stringify(changes),
+    now
+  )
+
+  return db.prepare("SELECT * FROM audit_logs WHERE id = ?").get(id)
 
 
 export getAuditLogs = (filters = {}) ->
-  logs = []
-  prefix = ['audit_logs']
-  entries = db.list({ prefix })
+  # Build dynamic WHERE clause
+  conditions = []
+  values     = []
 
-  for await entry from entries
-    log = entry.value
+  if filters.entity_type
+    conditions.push "entity_type = ?"
+    values.push filters.entity_type
 
-    # Apply filters
-    if filters.entity_type and log.entity_type != filters.entity_type
-      continue
-    if filters.entity_id and log.entity_id != filters.entity_id
-      continue
-    if filters.action and log.action != filters.action
-      continue
-    if filters.user and log.user != filters.user
-      continue
+  if filters.entity_id
+    conditions.push "entity_id = ?"
+    values.push filters.entity_id
 
-    logs.push log
+  if filters.action
+    conditions.push "action = ?"
+    values.push filters.action
 
-  # Sort by timestamp descending
-  logs.sort (a, b) -> new Date(b.timestamp) - new Date(a.timestamp)
+  if filters.user
+    conditions.push "user = ?"
+    values.push filters.user
+
+  whereClause = if conditions.length > 0
+    "WHERE #{conditions.join(' AND ')}"
+  else
+    ""
+
+  query = """
+    SELECT * FROM audit_logs
+    #{whereClause}
+    ORDER BY created_at DESC
+  """
+
+  logs = db.prepare(query).all(values...)
+
+  # Parse changes JSON
+  for log in logs
+    log.changes = JSON.parse(log.changes) if log.changes
+
   return logs

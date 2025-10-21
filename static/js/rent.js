@@ -86,7 +86,7 @@ loadRentSummary = async function() {
 
 // Load current month details
 loadCurrentMonth = async function() {
-  var err, period, response;
+  var err, outstanding, payOnlineBtn, period, response;
   try {
     response = (await fetch(`/rent/period/${currentYear}/${currentMonth}`));
     period = (await response.json());
@@ -97,7 +97,18 @@ loadCurrentMonth = async function() {
     document.getElementById('credit-applied').textContent = formatCurrency(period.discount_applied);
     document.getElementById('amount-due').textContent = formatCurrency(period.amount_due);
     document.getElementById('amount-paid').textContent = formatCurrency(period.amount_paid || 0);
-    document.getElementById('outstanding-balance-current').textContent = formatCurrency(period.amount_due - (period.amount_paid || 0));
+    outstanding = period.amount_due - (period.amount_paid || 0);
+    document.getElementById('outstanding-balance-current').textContent = formatCurrency(outstanding);
+    // Show "Pay Rent Online" button if there's an outstanding balance
+    payOnlineBtn = document.getElementById('pay-rent-online-btn');
+    if (outstanding > 0) {
+      payOnlineBtn.style.display = 'inline-block';
+      payOnlineBtn.onclick = function() {
+        return window.location.href = `/payment?year=${currentYear}&month=${currentMonth}`;
+      };
+    } else {
+      payOnlineBtn.style.display = 'none';
+    }
     return document.querySelector('.current-month').style.display = 'block';
   } catch (error1) {
     err = error1;

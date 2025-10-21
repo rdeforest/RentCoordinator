@@ -5,92 +5,90 @@ db = (await import('../db/schema.coffee')).db
 
 
 export createWorkLog = (data) ->
-  id = v1.generate()
+  id = v1()
+  now = new Date().toISOString()
 
-  workLog =
-    id: id
-    worker: data.worker
-    start_time: data.start_time
-    end_time: data.end_time
-    duration: data.duration
-    description: data.description
-    project_id: data.project_id or null
-    task_id: data.task_id or null
-    billable: data.billable ? true
-    submitted: false
-    created_at: new Date().toISOString()
+  # Insert work log
+  db.prepare("""
+    INSERT INTO work_logs (
+      id, worker, start_time, end_time, duration, description,
+      project_id, task_id, billable, submitted, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  """).run(
+    id,
+    data.worker,
+    data.start_time,
+    data.end_time,
+    data.duration,
+    data.description,
+    data.project_id or null,
+    data.task_id or null,
+    if data.billable? then data.billable else true,
+    false,
+    now
+  )
 
-  # Store in KV store
-  key = ['work_logs', id]
-  await db.set key, workLog
-
-  # Also maintain index by worker
-  workerKey = ['work_logs_by_worker', data.worker, id]
-  await db.set workerKey, id
-
-  # And by date for efficient queries
-  dateKey = ['work_logs_by_date', data.start_time.split('T')[0], id]
-  await db.set dateKey, id
-
-  return workLog
+  # Return the created work log
+  return db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)
 
 
 export getWorkLogs = (filters = {}) ->
-  logs = []
+  # Build base query
+  query = "SELECT * FROM work_logs WHERE 1=1"
+  params = []
 
+  # Apply worker filter
   if filters.worker
-    # Get logs for specific worker
-    prefix = ['work_logs_by_worker', filters.worker]
-    entries = db.list({ prefix })
+    query += " AND worker = ?"
+    params.push(filters.worker)
 
-    for await entry from entries
-      logId = entry.value
-      logKey = ['work_logs', logId]
-      log = await db.get(logKey)
-      if log.value
-        logs.push log.value
-  else
-    # Get all logs
-    prefix = ['work_logs']
-    entries = db.list({ prefix })
-
-    for await entry from entries
-      if entry.value?.worker  # Make sure it's a log entry, not an index
-        logs.push entry.value
-
-  # Apply additional filters
+  # Apply project filter
   if filters.project_id
-    logs = logs.filter (log) -> log.project_id is filters.project_id
+    query += " AND project_id = ?"
+    params.push(filters.project_id)
 
   # Sort by start time descending
-  logs.sort (a, b) -> new Date(b.start_time) - new Date(a.start_time)
+  query += " ORDER BY start_time DESC"
 
   # Apply limit
   if filters.limit
-    logs = logs.slice(0, parseInt(filters.limit))
+    query += " LIMIT ?"
+    params.push(parseInt(filters.limit))
+
+  # Execute query
+  logs = db.prepare(query).all(params...)
 
   return logs
 
 
 export getWorkLogById = (id) ->
-  key = ['work_logs', id]
-  result = await db.get(key)
-  return result.value
+  return db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)
 
 
 export updateWorkLog = (id, updates) ->
-  key = ['work_logs', id]
-  existing = await db.get(key)
+  existing = db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)
 
-  if not existing.value
+  if not existing
     throw new Error "Work log not found: #{id}"
 
-  updated = {
-    existing.value...
-    updates...
-    id: id  # Ensure ID doesn't change
-    updated_at: new Date().toISOString()
-  }
+  # Build update query dynamically based on provided updates
+  fields = []
+  values = []
 
-  await db.set key, updated
-  return updated
+  for key, value of updates
+    unless key is 'id'  # Never update the ID
+      fields.push "#{key} = ?"
+      values.push value
+
+  if fields.length is 0
+    return existing
+
+  # Execute update
+  query = "UPDATE work_logs SET #{fields.join(', ')} WHERE id = ?"
+  values.push id
+
+  db.prepare(query).run(values...)
+
+  # Return updated record
+  return db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)

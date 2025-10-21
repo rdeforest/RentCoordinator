@@ -27,7 +27,7 @@ export sendVerificationCode = (email, code) ->
   if not config.SMTP_HOST
     throw new Error 'SMTP not configured for production'
 
-  nodemailer = await import('npm:nodemailer@6.9.7')
+  nodemailer = await import('nodemailer')
 
   transporter = nodemailer.createTransport
     host:   config.SMTP_HOST

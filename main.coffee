@@ -38,7 +38,7 @@ server = app.listen config.PORT, ->
 
 # Graceful shutdown
 for signal in ['SIGINT', 'SIGTERM']
-  Deno.addSignalListener signal, ->
+  process.on signal, ->
     console.log "\nShutting down gracefully..."
     server.close()
-    Deno.exit(0)
+    process.exit(0)

@@ -2,11 +2,15 @@
 
 express        = (await import('express')).default
 cors           = (await import('cors')).default
-session        = (await import('npm:express-session@1.18.0')).default
+session        = (await import('express-session')).default
 config         = await import('./config.coffee')
 
 
 export setup = (app) ->
+  # Trust proxy (for ALB HTTPS termination)
+  # This allows secure cookies to work when behind a load balancer
+  app.set 'trust proxy', 1
+
   # CORS for potential future API clients
   app.use cors()
 
@@ -28,17 +32,17 @@ export setup = (app) ->
   app.get '/vendor/coffeescript.js', (req, res) ->
     res.type('application/javascript')
     res.sendFile 'coffeescript.js',
-      root: './static/vendor/'
+      root: "#{config.STATIC_DIR}/vendor/"
 
   # Static assets (CSS, JS, images, etc.) - but NOT HTML files
   # HTML files will be served through explicit routes with auth
-  app.use '/css',    express.static('static/css')
-  app.use '/js',     express.static('static/js')
-  app.use '/vendor', express.static('static/vendor')
-  app.use '/images', express.static('static/images')
+  app.use '/css',    express.static("#{config.STATIC_DIR}/css")
+  app.use '/js',     express.static("#{config.STATIC_DIR}/js")
+  app.use '/vendor', express.static("#{config.STATIC_DIR}/vendor")
+  app.use '/images', express.static("#{config.STATIC_DIR}/images")
 
   # Serve CoffeeScript files with correct MIME type
-  app.use '/coffee', express.static('static/coffee',
+  app.use '/coffee', express.static("#{config.STATIC_DIR}/coffee",
     setHeaders: (res, path) ->
       if path.endsWith('.coffee')
         res.set('Content-Type', 'text/coffeescript'))
