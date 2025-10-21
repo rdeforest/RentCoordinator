@@ -6,6 +6,8 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "npx coffee scripts/build.coffee",
+    "clean": "rm -rf dist/ static/js/ tenant-coordinator.db* node_modules/.cache/ && echo 'Clean complete'",
+    "clean:all": "npm run clean && rm -rf node_modules/ && echo 'Full clean complete - run npm install'",
     "dev": "npm run build && node dist/main.js",
     "start": "node dist/main.js",
     "test": "npm run build && node --test dist/tests/**/*_test.js",

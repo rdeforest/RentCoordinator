@@ -138,6 +138,13 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+# Project-specific
 tenant-coordinator*
 deno.lock
 backups/
+nohup.out
+
+# Compiled client-side JavaScript
+static/js/*.js
+static/js/*.js.map
+!static/js/.gitkeep
