@@ -1,10 +1,10 @@
 # lib/models/work_log.coffee
 
-{ v1 } = await import('uuid')
-db = (await import('../db/schema.coffee')).db
+{ v1 } = require 'uuid'
+{ db } = require '../db/schema.coffee'
 
 
-export createWorkLog = (data) ->
+createWorkLog = (data) ->
   id = v1()
   now = new Date().toISOString()
 
@@ -33,7 +33,7 @@ export createWorkLog = (data) ->
   return db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)
 
 
-export getWorkLogs = (filters = {}) ->
+getWorkLogs = (filters = {}) ->
   # Build base query
   query = "SELECT * FROM work_logs WHERE 1=1"
   params = []
@@ -62,11 +62,11 @@ export getWorkLogs = (filters = {}) ->
   return logs
 
 
-export getWorkLogById = (id) ->
+getWorkLogById = (id) ->
   return db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)
 
 
-export updateWorkLog = (id, updates) ->
+updateWorkLog = (id, updates) ->
   existing = db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)
 
   if not existing
@@ -92,3 +92,10 @@ export updateWorkLog = (id, updates) ->
 
   # Return updated record
   return db.prepare("SELECT * FROM work_logs WHERE id = ?").get(id)
+
+module.exports = {
+  createWorkLog
+  getWorkLogs
+  getWorkLogById
+  updateWorkLog
+}

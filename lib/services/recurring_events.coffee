@@ -1,9 +1,9 @@
 # lib/services/recurring_events.coffee
 
-recurringEventsModel = await import('../models/recurring_events.coffee')
-rentModel = await import('../models/rent.coffee')
-rentService = await import('./rent.coffee')
-config = await import('../config.coffee')
+recurringEventsModel = require '../models/recurring_events.coffee'
+rentModel            = require '../models/rent.coffee'
+rentService          = require './rent.coffee'
+config               = require '../config.coffee'
 
 
 # Calculate next due date for a recurring event
@@ -208,7 +208,7 @@ processGenericEvent = (recurringEvent, currentDate) ->
 
 
 # Process all due recurring events
-export processAllDueEvents = (currentDate = new Date()) ->
+processAllDueEvents = (currentDate = new Date()) ->
   try
     console.log "Checking for due recurring events at #{currentDate.toISOString()}"
     
@@ -232,7 +232,7 @@ export processAllDueEvents = (currentDate = new Date()) ->
 
 
 # Initialize recurring events processing
-export initializeRecurringEvents = ->
+initializeRecurringEvents = ->
   try
     console.log "Initializing recurring events system..."
     
@@ -260,7 +260,7 @@ export initializeRecurringEvents = ->
 
 
 # Schedule daily processing
-export scheduleDailyProcessing = ->
+scheduleDailyProcessing = ->
   # Calculate milliseconds until next midnight
   now = new Date()
   tomorrow = new Date(now)
@@ -284,6 +284,13 @@ export scheduleDailyProcessing = ->
 
 
 # Manual trigger for testing
-export triggerManualProcessing = ->
+triggerManualProcessing = ->
   console.log "Manual recurring events processing triggered"
   return await processAllDueEvents()
+
+module.exports = {
+  processAllDueEvents
+  initializeRecurringEvents
+  scheduleDailyProcessing
+  triggerManualProcessing
+}

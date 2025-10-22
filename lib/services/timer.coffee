@@ -1,14 +1,13 @@
 # lib/services/timer.coffee
 
-{ v1 } = await import('uuid')
+{ v1 }           = require 'uuid'
+{ db }           = require '../db/schema.coffee'
+config           = require '../config.coffee'
+workLogModel     = require '../models/work_log.coffee'
+workSessionModel = require '../models/work_session.coffee'
 
-db             = (await import('../db/schema.coffee')).db
-config         = await import('../config.coffee')
-workLogModel   = await import('../models/work_log.coffee')
-workSessionModel = await import('../models/work_session.coffee')
 
-
-export startTimer = (worker, project_id = null, task_id = null) ->
+startTimer = (worker, project_id = null, task_id = null) ->
   # Validate worker
   if worker not in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
@@ -30,7 +29,7 @@ export startTimer = (worker, project_id = null, task_id = null) ->
   }
 
 
-export pauseTimer = (worker) ->
+pauseTimer = (worker) ->
   # Validate worker
   if worker not in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
@@ -47,7 +46,7 @@ export pauseTimer = (worker) ->
   return await workSessionModel.getCurrentSession(worker)
 
 
-export resumeTimer = (worker, sessionId = null) ->
+resumeTimer = (worker, sessionId = null) ->
   # Validate worker
   if worker not in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
@@ -68,7 +67,7 @@ export resumeTimer = (worker, sessionId = null) ->
   }
 
 
-export stopTimer = (worker, completed = true) ->
+stopTimer = (worker, completed = true) ->
   # Validate worker
   if worker not in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
@@ -86,14 +85,13 @@ export stopTimer = (worker, completed = true) ->
   duration = await workSessionModel.calculateSessionDuration(currentSession.id)
 
   # Only create work log if completed and has meaningful duration
-  if completed and duration >= 60  # At least 1 minute
+  if completed and duration >= config.MIN_WORK_LOG_DURATION
     workLog = await workLogModel.createWorkLog(
       await workSessionModel.sessionToWorkLog(currentSession)
     )
 
     # Clear current session reference
-    currentKey = ['current_session', worker]
-    await db.delete(currentKey)
+    db.prepare("DELETE FROM current_sessions WHERE worker = ?").run(worker)
 
     return {
       session: currentSession
@@ -103,8 +101,7 @@ export stopTimer = (worker, completed = true) ->
     }
   else
     # Clear current session reference
-    currentKey = ['current_session', worker]
-    await db.delete(currentKey)
+    db.prepare("DELETE FROM current_sessions WHERE worker = ?").run(worker)
 
     return {
       session: currentSession
@@ -113,7 +110,7 @@ export stopTimer = (worker, completed = true) ->
     }
 
 
-export updateDescription = (worker, description) ->
+updateDescription = (worker, description) ->
   # Get current session
   currentSession = await workSessionModel.getCurrentSession(worker)
   if not currentSession
@@ -123,7 +120,7 @@ export updateDescription = (worker, description) ->
   return await workSessionModel.updateSessionDescription(currentSession.id, description)
 
 
-export getStatus = (worker) ->
+getStatus = (worker) ->
   if worker not in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
 
@@ -150,7 +147,7 @@ export getStatus = (worker) ->
   }
 
 
-export getAllSessions = (worker) ->
+getAllSessions = (worker) ->
   if worker not in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
 
@@ -175,3 +172,13 @@ formatDuration = (seconds) ->
   parts.push "#{secs}s"
 
   parts.join(' ')
+
+module.exports = {
+  startTimer
+  pauseTimer
+  resumeTimer
+  stopTimer
+  updateDescription
+  getStatus
+  getAllSessions
+}

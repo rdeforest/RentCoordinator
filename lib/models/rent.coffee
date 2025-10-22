@@ -1,12 +1,12 @@
 # lib/models/rent.coffee
 
-{ v1 } = await import('uuid')
-db     = (await import('../db/schema.coffee')).db
-config = await import('../config.coffee')
+{ v1 } = require 'uuid'
+{ db } = require '../db/schema.coffee'
+config = require '../config.coffee'
 
 
 # Rent period record
-export createRentPeriod = (data) ->
+createRentPeriod = (data) ->
   id  = v1()
   now = new Date().toISOString()
 
@@ -37,7 +37,7 @@ export createRentPeriod = (data) ->
   return db.prepare("SELECT * FROM rent_periods WHERE id = ?").get(id)
 
 
-export getRentPeriod = (year, month) ->
+getRentPeriod = (year, month) ->
   return db.prepare("""
     SELECT * FROM rent_periods
     WHERE year = ? AND month = ?
@@ -45,7 +45,7 @@ export getRentPeriod = (year, month) ->
 
 
 # Get or create rent period - ensures period exists before operations
-export getOrCreateRentPeriod = (year, month) ->
+getOrCreateRentPeriod = (year, month) ->
   existing = getRentPeriod(year, month)
   return existing if existing
 
@@ -57,7 +57,7 @@ export getOrCreateRentPeriod = (year, month) ->
   }
 
 
-export getAllRentPeriods = ->
+getAllRentPeriods = ->
   periods = db.prepare("""
     SELECT * FROM rent_periods
     ORDER BY year DESC, month DESC
@@ -66,7 +66,7 @@ export getAllRentPeriods = ->
   return periods
 
 
-export updateRentPeriod = (year, month, updates) ->
+updateRentPeriod = (year, month, updates) ->
   existing = getRentPeriod(year, month)
 
   if not existing
@@ -101,7 +101,7 @@ export updateRentPeriod = (year, month, updates) ->
 
 
 # Rent events for comprehensive tracking
-export createRentEvent = (data) ->
+createRentEvent = (data) ->
   id  = v1()
   now = new Date().toISOString()
 
@@ -140,7 +140,7 @@ export createRentEvent = (data) ->
   return db.prepare("SELECT * FROM rent_events WHERE id = ?").get(id)
 
 
-export getAllRentEvents = (includeDeleted = false) ->
+getAllRentEvents = (includeDeleted = false) ->
   # Note: SQLite version doesn't have soft delete in rent_events table
   # This is handled at the application layer if needed
   events = db.prepare("""
@@ -155,7 +155,7 @@ export getAllRentEvents = (includeDeleted = false) ->
   return events
 
 
-export getRentEvent = (id) ->
+getRentEvent = (id) ->
   event = db.prepare("SELECT * FROM rent_events WHERE id = ?").get(id)
 
   if event?.metadata
@@ -164,7 +164,7 @@ export getRentEvent = (id) ->
   return event
 
 
-export updateRentEvent = (id, updates) ->
+updateRentEvent = (id, updates) ->
   existing = getRentEvent(id)
 
   if not existing
@@ -207,7 +207,7 @@ export updateRentEvent = (id, updates) ->
   return getRentEvent(id)
 
 
-export deleteRentEvent = (id, deletedBy = 'user') ->
+deleteRentEvent = (id, deletedBy = 'user') ->
   existing = getRentEvent(id)
 
   if not existing
@@ -229,7 +229,7 @@ export deleteRentEvent = (id, deletedBy = 'user') ->
   return { deleted: true, id: id }
 
 
-export getRentEventsForPeriod = (year, month, includeDeleted = false) ->
+getRentEventsForPeriod = (year, month, includeDeleted = false) ->
   period = getRentPeriod(year, month)
 
   if not period
@@ -249,7 +249,7 @@ export getRentEventsForPeriod = (year, month, includeDeleted = false) ->
 
 
 # Audit log functionality
-export createAuditLog = (data) ->
+createAuditLog = (data) ->
   id  = v1()
   now = new Date().toISOString()
 
@@ -276,7 +276,7 @@ export createAuditLog = (data) ->
   return db.prepare("SELECT * FROM audit_logs WHERE id = ?").get(id)
 
 
-export getAuditLogs = (filters = {}) ->
+getAuditLogs = (filters = {}) ->
   # Build dynamic WHERE clause
   conditions = []
   values     = []
@@ -315,3 +315,19 @@ export getAuditLogs = (filters = {}) ->
     log.changes = JSON.parse(log.changes) if log.changes
 
   return logs
+
+module.exports = {
+  createRentPeriod
+  getRentPeriod
+  getOrCreateRentPeriod
+  getAllRentPeriods
+  updateRentPeriod
+  createRentEvent
+  getAllRentEvents
+  getRentEvent
+  updateRentEvent
+  deleteRentEvent
+  getRentEventsForPeriod
+  createAuditLog
+  getAuditLogs
+}

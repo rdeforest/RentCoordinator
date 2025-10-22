@@ -1,12 +1,12 @@
 # lib/models/recurring_events.coffee
 
-{ v1 } = await import('uuid')
-db = (await import('../db/schema.coffee')).db
-config = await import('../config.coffee')
+{ v1 } = require 'uuid'
+{ db } = require '../db/schema.coffee'
+config = require '../config.coffee'
 
 
 # Recurring Event Configuration
-export createRecurringEvent = (data) ->
+createRecurringEvent = (data) ->
   id = v1()
   now = new Date().toISOString()
 
@@ -51,7 +51,7 @@ export createRecurringEvent = (data) ->
   return db.prepare("SELECT * FROM recurring_events WHERE id = ?").get(id)
 
 
-export getAllRecurringEvents = ->
+getAllRecurringEvents = ->
   events = db.prepare("SELECT * FROM recurring_events").all()
 
   # Parse metadata JSON for each event
@@ -80,7 +80,7 @@ export getAllRecurringEvents = ->
   return events
 
 
-export getRecurringEvent = (id) ->
+getRecurringEvent = (id) ->
   event = db.prepare("SELECT * FROM recurring_events WHERE id = ?").get(id)
   return null unless event
 
@@ -107,7 +107,7 @@ export getRecurringEvent = (id) ->
   return event
 
 
-export updateRecurringEvent = (id, updates) ->
+updateRecurringEvent = (id, updates) ->
   existing = await getRecurringEvent(id)
 
   unless existing
@@ -167,7 +167,7 @@ export updateRecurringEvent = (id, updates) ->
   return await getRecurringEvent(id)
 
 
-export deleteRecurringEvent = (id) ->
+deleteRecurringEvent = (id) ->
   existing = await getRecurringEvent(id)
 
   unless existing
@@ -177,7 +177,7 @@ export deleteRecurringEvent = (id) ->
   return existing
 
 
-export getEnabledRecurringEvents = ->
+getEnabledRecurringEvents = ->
   events = db.prepare("SELECT * FROM recurring_events WHERE active = 1").all()
 
   # Parse metadata JSON for each event
@@ -205,7 +205,7 @@ export getEnabledRecurringEvents = ->
 
 
 # Event Processing Log
-export createProcessingLog = (data) ->
+createProcessingLog = (data) ->
   id = v1()
   now = new Date().toISOString()
 
@@ -246,7 +246,7 @@ export createProcessingLog = (data) ->
   }
 
 
-export getProcessingLogs = (recurring_event_id = null, limit = 50) ->
+getProcessingLogs = (recurring_event_id = null, limit = 50) ->
   logs = if recurring_event_id
     db.prepare("""
       SELECT * FROM recurring_event_logs
@@ -274,7 +274,7 @@ export getProcessingLogs = (recurring_event_id = null, limit = 50) ->
 
 
 # Initialize default recurring events
-export initializeDefaultRecurringEvents = ->
+initializeDefaultRecurringEvents = ->
   existing = await getAllRecurringEvents()
 
   # Check if monthly rent due event already exists
@@ -328,3 +328,15 @@ export initializeDefaultRecurringEvents = ->
           recurring: true
 
     console.log 'Created default monthly recalculation recurring event'
+
+module.exports = {
+  createRecurringEvent
+  getAllRecurringEvents
+  getRecurringEvent
+  updateRecurringEvent
+  deleteRecurringEvent
+  getEnabledRecurringEvents
+  createProcessingLog
+  getProcessingLogs
+  initializeDefaultRecurringEvents
+}

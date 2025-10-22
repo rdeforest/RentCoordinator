@@ -1,20 +1,39 @@
-# tests/timer-integration.test.coffee
+# test/integration/timer.coffee
 # Integration tests for the timer workflow
 
-{ describe, it, before, after } = await import('node:test')
-assert = await import('node:assert/strict')
-fs = await import('fs')
-{ execSync } = await import('child_process')
-{ waitForServer } = await import('./test-helper.js')
+{ describe, it, before, after } = require 'node:test'
+assert = require 'node:assert/strict'
+fs   = require 'fs'
+path = require 'path'
+{ execSync } = require 'child_process'
+{ waitForServer } = require '../helper.coffee'
 
 # Test configuration
+TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
 TEST_PORT = 3999
-TEST_DB = './test-timer-integration.db'
+TEST_DB = path.join(TEST_TMP_DIR, 'test-timer-integration.db')
+TEST_LOG = path.join(TEST_TMP_DIR, 'integration.log')
 BASE_URL = "http://localhost:#{TEST_PORT}"
 
-# Server instance
-server = null
-serverProcess = null
+# Ensure test tmp directory exists and is clean
+prepareTestDirectory = ->
+  try
+    # Remove entire test directory if it exists
+    if fs.existsSync(TEST_TMP_DIR)
+      fs.rmSync(TEST_TMP_DIR, recursive: true, force: true)
+    # Create fresh test directory
+    fs.mkdirSync(TEST_TMP_DIR, recursive: true)
+  catch err
+    console.error "Failed to prepare test directory: #{err.message}"
+    throw err
+
+# Clean up test directory
+cleanupTestDirectory = ->
+  try
+    if fs.existsSync(TEST_TMP_DIR)
+      fs.rmSync(TEST_TMP_DIR, recursive: true, force: true)
+  catch err
+    # Ignore cleanup errors
 
 # Helper to kill any process on the test port
 killTestPort = ->
@@ -26,29 +45,20 @@ killTestPort = ->
   catch err
     # No process was using the port, which is fine
 
-# Helper to clean up test databases
-cleanTestDatabases = ->
-  try
-    files = fs.readdirSync('.')
-    for file in files when file.match(/^test.*\.db$/)
-      fs.unlinkSync(file)
-      console.log "Cleaned up: #{file}"
-  catch err
-    # Ignore cleanup errors
-
 describe 'Timer Integration Tests', ->
   before ->
     # Ensure clean environment before starting
+    prepareTestDirectory()
     await killTestPort()
-    cleanTestDatabases()
 
-    # Set test environment
-    process.env.PORT = TEST_PORT
-    process.env.DB_PATH = TEST_DB
-    process.env.NODE_ENV = 'test'
+    # Start server as a background process using coffee directly
+    # Log to tmp directory for debugging
+    execSync "PORT=#{TEST_PORT} DB_PATH=#{TEST_DB} NODE_ENV=test coffee main.coffee > #{TEST_LOG} 2>&1 &",
+      stdio: 'ignore'
+      shell: true
 
-    # Import server module to start it
-    main = await import('../main.js')
+    # Give server a moment to start
+    await new Promise (resolve) -> setTimeout(resolve, 1000)
 
     # Wait for server to be ready
     await waitForServer("#{BASE_URL}/health")
@@ -57,8 +67,8 @@ describe 'Timer Integration Tests', ->
     # Kill test server
     await killTestPort()
 
-    # Clean up database
-    cleanTestDatabases()
+    # Clean up test directory
+    cleanupTestDirectory()
 
     # Force exit after cleanup (server doesn't have clean shutdown yet)
     setTimeout ->
@@ -174,7 +184,7 @@ describe 'Timer Integration Tests', ->
     assert.equal stopData.event, 'cancelled'
     assert.equal stopData.work_log, undefined, 'Should not create work log on cancel'
 
-  it 'should handle sessions under 1 minute', ->
+  it 'should handle sessions under minimum duration', ->
     worker = 'robert'
 
     # Start a timer
@@ -185,7 +195,7 @@ describe 'Timer Integration Tests', ->
 
     assert.equal startResponse.status, 200
 
-    # Stop immediately (under 60 seconds)
+    # Stop immediately (under minimum threshold - 1 second in test mode)
     stopResponse = await fetch "#{BASE_URL}/timer/stop",
       method: 'POST'
       headers: 'Content-Type': 'application/json'

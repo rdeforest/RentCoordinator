@@ -1,12 +1,12 @@
 # lib/routes/work.coffee
 
-workLogModel = await import('../models/work_log.coffee')
-workSessionModel = await import('../models/work_session.coffee')
-rentService  = await import('../services/rent.coffee')
-config = await import('../config.coffee')
+workLogModel     = require '../models/work_log.coffee'
+workSessionModel = require '../models/work_session.coffee'
+rentService      = require '../services/rent.coffee'
+config           = require '../config.coffee'
 
 
-export setup = (app) ->
+setup = (app) ->
 
   # Get work logs (converts sessions to logs for backwards compatibility)
   app.get '/work-logs', (req, res) ->
@@ -155,3 +155,5 @@ export setup = (app) ->
       res.json { success: true, deleted: id }
     catch err
       res.status(500).json error: err.message
+
+module.exports = { setup }

@@ -1,9 +1,9 @@
-# tests/timer-start.test.coffee
+# test/integration/timer-start.coffee
 # Focused test for timer start functionality
 
-{ describe, it, before, after } = await import('node:test')
-assert = await import('node:assert/strict')
-{ startTestServer, stopTestServer, forceExit, DEFAULT_TEST_PORT } = await import('./test-server.js')
+{ describe, it, before, after } = require 'node:test'
+assert = require 'node:assert/strict'
+{ startTestServer, stopTestServer, forceExit, DEFAULT_TEST_PORT } = require '../server.coffee'
 
 BASE_URL = "http://localhost:#{DEFAULT_TEST_PORT}"
 serverConfig = null

@@ -1,17 +1,17 @@
 # lib/routing.coffee
 
-config                = await import('./config.coffee')
-timerService          = await import('./services/timer.coffee')
-workLogModel          = await import('./models/work_log.coffee')
-rentRoutes            = await import('./routes/rent.coffee')
-workRoutes            = await import('./routes/work.coffee')
-recurringEventsRoutes = await import('./routes/recurring_events.coffee')
-authRoutes            = await import('./routes/auth.coffee')
-paymentRoutes         = await import('./routes/payment.coffee')
-middleware            = await import('./middleware.coffee')
+config                = require './config.coffee'
+timerService          = require './services/timer.coffee'
+workLogModel          = require './models/work_log.coffee'
+rentRoutes            = require './routes/rent.coffee'
+workRoutes            = require './routes/work.coffee'
+recurringEventsRoutes = require './routes/recurring_events.coffee'
+authRoutes            = require './routes/auth.coffee'
+paymentRoutes         = require './routes/payment.coffee'
+middleware            = require './middleware.coffee'
 
 
-export setup = (app) ->
+setup = (app) ->
   # Health check (public)
   app.get '/health', (req, res) ->
     res.json
@@ -168,3 +168,5 @@ export setup = (app) ->
 
   # Set up payment routes
   paymentRoutes.setup(app)
+
+module.exports = { setup }

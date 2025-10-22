@@ -1,8 +1,8 @@
 # tests/services/rent_test.coffee
 # Tests for rent calculation logic
 
-{ test, describe } = await import('node:test')
-assert = await import('node:assert/strict')
+{ test, describe } = require 'node:test'
+assert             = require 'node:assert/strict'
 
 # Test the core rent calculation logic
 # Note: These tests verify the business rules in isolation

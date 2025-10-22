@@ -1,13 +1,13 @@
 # lib/models/auth.coffee
 
-{ v1 }      = await import('uuid')
-db          = (await import('../db/schema.coffee')).db
-config      = await import('../config.coffee')
-emailService = await import('../services/email.coffee')
+{ v1 }       = require 'uuid'
+{ db }       = require '../db/schema.coffee'
+config       = require '../config.coffee'
+emailService = require '../services/email.coffee'
 
 
 # Store verification code for email
-export storeVerificationCode = (email, code) ->
+storeVerificationCode = (email, code) ->
   id  = v1()
   now = new Date().toISOString()
   expiresAt = new Date(Date.now() + config.CODE_EXPIRY).toISOString()
@@ -21,7 +21,7 @@ export storeVerificationCode = (email, code) ->
 
 
 # Get verification code for email
-export getVerificationCode = (email) ->
+getVerificationCode = (email) ->
   result = db.prepare("""
     SELECT * FROM auth_sessions
     WHERE email = ? AND verified = 0
@@ -33,7 +33,7 @@ export getVerificationCode = (email) ->
 
 
 # Verify code for email
-export verifyCode = (email, code) ->
+verifyCode = (email, code) ->
   stored = await getVerificationCode(email)
 
   if not stored
@@ -57,7 +57,7 @@ export verifyCode = (email, code) ->
 
 
 # Delete verification code
-export deleteVerificationCode = (email) ->
+deleteVerificationCode = (email) ->
   db.prepare("""
     DELETE FROM auth_sessions
     WHERE email = ? AND verified = 0
@@ -65,14 +65,14 @@ export deleteVerificationCode = (email) ->
 
 
 # Check if email is allowed
-export isEmailAllowed = (email) ->
+isEmailAllowed = (email) ->
   normalized = email.toLowerCase().trim()
   allowed = config.ALLOWED_EMAILS.map (e) -> e.toLowerCase().trim()
   return normalized in allowed
 
 
 # Send verification code to email
-export sendVerificationCode = (email) ->
+sendVerificationCode = (email) ->
   if not isEmailAllowed(email)
     throw new Error 'Email not authorized'
 
@@ -81,3 +81,12 @@ export sendVerificationCode = (email) ->
   await emailService.sendVerificationCode(email, code)
 
   return success: true
+
+module.exports = {
+  storeVerificationCode
+  getVerificationCode
+  verifyCode
+  deleteVerificationCode
+  isEmailAllowed
+  sendVerificationCode
+}

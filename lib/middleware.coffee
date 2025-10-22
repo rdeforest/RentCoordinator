@@ -1,12 +1,12 @@
 # lib/middleware.coffee
 
-express        = (await import('express')).default
-cors           = (await import('cors')).default
-session        = (await import('express-session')).default
-config         = await import('./config.coffee')
+express = require 'express'
+cors    = require 'cors'
+session = require 'express-session'
+config  = require './config.coffee'
 
 
-export setup = (app) ->
+setup = (app) ->
   # Trust proxy (for ALB HTTPS termination)
   # This allows secure cookies to work when behind a load balancer
   app.set 'trust proxy', 1
@@ -37,7 +37,7 @@ export setup = (app) ->
   # Static assets (CSS, JS, images, etc.) - but NOT HTML files
   # HTML files will be served through explicit routes with auth
   app.use '/css',    express.static("#{config.STATIC_DIR}/css")
-  app.use '/js',     express.static("#{config.STATIC_DIR}/js")
+  app.use '/js',     express.static('./dist/static/js')  # Compiled from static/coffee
   app.use '/vendor', express.static("#{config.STATIC_DIR}/vendor")
   app.use '/images', express.static("#{config.STATIC_DIR}/images")
 
@@ -68,7 +68,7 @@ export setup = (app) ->
 
 
 # Authentication middleware - checks if user is authenticated
-export requireAuth = (req, res, next) ->
+requireAuth = (req, res, next) ->
   # Bypass auth in test mode for integration tests
   if config.NODE_ENV is 'test'
     return next()
@@ -84,3 +84,5 @@ export requireAuth = (req, res, next) ->
       res.status(401).json
         error: 'Authentication required'
         redirect: '/login.html'
+
+module.exports = { setup, requireAuth }

@@ -1,8 +1,8 @@
 # lib/services/rent.coffee
 
-rentModel    = await import('../models/rent.coffee')
-workLogModel = await import('../models/work_log.coffee')
-config       = await import('../config.coffee')
+rentModel    = require '../models/rent.coffee'
+workLogModel = require '../models/work_log.coffee'
+config       = require '../config.coffee'
 
 
 BASE_RENT     = config.BASE_RENT or 1600
@@ -11,7 +11,7 @@ MAX_MONTHLY_HOURS = config.MAX_MONTHLY_HOURS or 8
 
 
 # Calculate rent for a specific month
-export calculateRent = (year, month) ->
+calculateRent = (year, month) ->
   # Get work logs for this month
   startDate = new Date(year, month - 1, 1)
   endDate = new Date(year, month, 0, 23, 59, 59)
@@ -81,7 +81,7 @@ export calculateRent = (year, month) ->
 
 
 # Recalculate all rent periods with retroactive adjustments
-export recalculateAllRent = ->
+recalculateAllRent = ->
   # Get all work logs for Lyndzie
   allLogs = await workLogModel.getWorkLogs({ worker: 'lyndzie' })
 
@@ -176,7 +176,7 @@ export recalculateAllRent = ->
 
 
 # Create or update rent period
-export createOrUpdateRentPeriod = (year, month) ->
+createOrUpdateRentPeriod = (year, month) ->
   calculation = await calculateRent(year, month)
 
   existing = await rentModel.getRentPeriod(year, month)
@@ -198,7 +198,7 @@ export createOrUpdateRentPeriod = (year, month) ->
 
 
 # Get rent summary
-export getRentSummary = ->
+getRentSummary = ->
   periods = await rentModel.getAllRentPeriods()
 
   totalDue = 0
@@ -219,3 +219,10 @@ export getRentSummary = ->
     outstanding_balance: totalDue - totalPaid
     periods: periods
   }
+
+module.exports = {
+  calculateRent
+  recalculateAllRent
+  createOrUpdateRentPeriod
+  getRentSummary
+}

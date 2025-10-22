@@ -1,15 +1,15 @@
 # lib/services/email.coffee
 
-config = await import('../config.coffee')
+config = require '../config.coffee'
 
 
 # Generate a 6-digit verification code
-export generateCode = ->
+generateCode = ->
   Math.floor(100000 + Math.random() * 900000).toString()
 
 
 # Send verification code via email
-export sendVerificationCode = (email, code) ->
+sendVerificationCode = (email, code) ->
   if config.NODE_ENV is 'development'
     # In development, just log to console
     console.log """
@@ -27,7 +27,7 @@ export sendVerificationCode = (email, code) ->
   if not config.SMTP_HOST
     throw new Error 'SMTP not configured for production'
 
-  nodemailer = await import('nodemailer')
+  nodemailer = require 'nodemailer'
 
   transporter = nodemailer.createTransport
     host:   config.SMTP_HOST
@@ -58,3 +58,5 @@ export sendVerificationCode = (email, code) ->
 
   await transporter.sendMail(mailOptions)
   return success: true
+
+module.exports = { generateCode, sendVerificationCode }

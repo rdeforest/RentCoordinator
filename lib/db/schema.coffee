@@ -1,8 +1,8 @@
 # lib/db/schema.coffee
 # SQLite database schema and initialization
 
-{ DatabaseSync } = await import('node:sqlite')
-config           = await import('../config.coffee')
+{ DatabaseSync } = require 'node:sqlite'
+config           = require '../config.coffee'
 
 # Open database connection
 db = new DatabaseSync(config.DB_PATH)
@@ -168,7 +168,7 @@ SCHEMA = """
 """
 
 
-export initialize = ->
+initialize = ->
   console.log "Initializing SQLite database at #{config.DB_PATH}"
 
   # Execute schema
@@ -186,8 +186,8 @@ export initialize = ->
   console.log "Database initialized successfully"
 
   # Initialize recurring events system
-  recurringEventsService = await import('../services/recurring_events.coffee')
+  recurringEventsService = require '../services/recurring_events.coffee'
   await recurringEventsService.initializeRecurringEvents()
 
 
-export { db }
+module.exports = { db, initialize }

@@ -1,9 +1,9 @@
 # lib/services/backup.coffee
 
-import { db }        from '../db/schema.coffee'
-import * as config   from '../config.coffee'
-import { join }      from 'node:path'
-import { existsSync} from 'node:fs'
+{ db }        = require('../db/schema.coffee')
+config        = require('../config.coffee')
+{ join }      = require('node:path')
+{ existsSync} = require('node:fs')
 
 BACKUP_VERSION = '1.0.0'
 
@@ -26,7 +26,7 @@ KEY_PREFIXES = [
 
 
 # Export all data from Deno KV to JSON structure
-export exportBackup = ->
+exportBackup = ->
   console.log 'Starting backup export...'
 
   backup =
@@ -78,7 +78,7 @@ export exportBackup = ->
 
 
 # Import data from JSON structure back to Deno KV
-export importBackup = (backup, options = {}) ->
+importBackup = (backup, options = {}) ->
   { overwrite = true, dryRun = false } = options
 
   unless backup.version
@@ -141,7 +141,7 @@ export importBackup = (backup, options = {}) ->
 
 
 # Save backup to file
-export saveBackupToFile = (backup, filepath) ->
+saveBackupToFile = (backup, filepath) ->
   json = JSON.stringify backup, null, 2
   await Deno.writeTextFile filepath, json
   console.log "Backup saved to: #{filepath}"
@@ -149,7 +149,7 @@ export saveBackupToFile = (backup, filepath) ->
 
 
 # Load backup from file
-export loadBackupFromFile = (filepath) ->
+loadBackupFromFile = (filepath) ->
   unless existsSync filepath
     throw new Error "Backup file not found: #{filepath}"
 
@@ -164,7 +164,7 @@ export loadBackupFromFile = (filepath) ->
 
 
 # Create backup directory if it doesn't exist
-export ensureBackupDir = (dir) ->
+ensureBackupDir = (dir) ->
   unless existsSync dir
     await Deno.mkdir dir, recursive: true
     console.log "Created backup directory: #{dir}"
@@ -172,7 +172,7 @@ export ensureBackupDir = (dir) ->
 
 
 # Generate backup filename with timestamp
-export generateBackupFilename = (timestamp = new Date()) ->
+generateBackupFilename = (timestamp = new Date()) ->
   # Format: backup-2025-10-20T12-30-45.json
   isoString = timestamp.toISOString()
   dateStr = isoString.replace(/:/g, '-').split('.')[0]
@@ -180,7 +180,7 @@ export generateBackupFilename = (timestamp = new Date()) ->
 
 
 # Full backup operation: export and save to file
-export createBackup = (backupDir = './backups') ->
+createBackup = (backupDir = './backups') ->
   await ensureBackupDir backupDir
 
   backup = await exportBackup()
@@ -193,8 +193,19 @@ export createBackup = (backupDir = './backups') ->
 
 
 # Full restore operation: load from file and import
-export restoreBackup = (filepath, options = {}) ->
+restoreBackup = (filepath, options = {}) ->
   backup = await loadBackupFromFile filepath
   stats = await importBackup backup, options
 
   { backup, stats }
+
+module.exports = {
+  exportBackup
+  importBackup
+  saveBackupToFile
+  loadBackupFromFile
+  ensureBackupDir
+  generateBackupFilename
+  createBackup
+  restoreBackup
+}

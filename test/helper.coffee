@@ -1,7 +1,7 @@
 # tests/test-helper.coffee
 # Helper to wait for server to be ready
 
-export waitForServer = (url, maxAttempts = 30, delayMs = 100) ->
+waitForServer = (url, maxAttempts = 30, delayMs = 100) ->
   for attempt in [1..maxAttempts]
     try
       response = await fetch url
@@ -16,3 +16,5 @@ export waitForServer = (url, maxAttempts = 30, delayMs = 100) ->
         throw new Error "Server did not become ready after #{maxAttempts} attempts"
 
   return false
+
+module.exports = { waitForServer }

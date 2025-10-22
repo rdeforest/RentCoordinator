@@ -1,3 +1,5 @@
+#!/usr/bin/env coffee
+
 # scripts/check-env.coffee
 # Audits the development environment for known issues
 
@@ -26,12 +28,38 @@ checkPort 3000, 'dev server'
 checkPort 3001, 'alternate dev'
 checkPort 3999, 'test server'
 
-# Check for stray test databases
+# Check for stray test databases and their state
 try
   files = fs.readdirSync('.')
   testDbs = files.filter (f) -> f.match(/^test.*\.db$/)
   if testDbs.length > 0
     warnings.push "Found #{testDbs.length} test database(s): #{testDbs.join(', ')}"
+
+    # Check database state
+    try
+      { DatabaseSync } = await import('node:sqlite')
+      for dbFile in testDbs
+        try
+          db = new DatabaseSync(dbFile)
+
+          # Check for active sessions
+          currentSessions = db.prepare('SELECT * FROM current_sessions').all()
+          if currentSessions.length > 0
+            issues.push "Test database #{dbFile} has #{currentSessions.length} active session(s)"
+            for session in currentSessions
+              issues.push "  Worker '#{session.worker}' has session: #{session.session_id}"
+
+          # Check for active timers
+          activeSessions = db.prepare("SELECT * FROM work_sessions WHERE status = 'active'").all()
+          if activeSessions.length > 0
+            issues.push "Test database #{dbFile} has #{activeSessions.length} active work session(s)"
+
+          db.close()
+        catch dbErr
+          # Skip databases that can't be opened or don't have expected schema
+    catch importErr
+      # SQLite not available, skip state check
+
     warnings.push "  Fix: rm -f test-*.db"
 catch err
   # Directory read error
@@ -54,7 +82,7 @@ checkUnexpectedJs = (dir) ->
 
 checkUnexpectedJs 'lib'
 checkUnexpectedJs 'scripts'
-checkUnexpectedJs 'tests'
+checkUnexpectedJs 'test'
 
 # Check for background bash processes from this project
 try

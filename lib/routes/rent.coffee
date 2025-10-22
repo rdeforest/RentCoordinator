@@ -1,10 +1,10 @@
 # lib/routes/rent.coffee
 
-rentService = await import('../services/rent.coffee')
-rentModel   = await import('../models/rent.coffee')
+rentService = require '../services/rent.coffee'
+rentModel   = require '../models/rent.coffee'
 
 
-export setup = (app) ->
+setup = (app) ->
 
   # Calculate rent for current month
   app.get '/rent/calculate', (req, res) ->
@@ -220,3 +220,5 @@ export setup = (app) ->
       res.json logs
     catch err
       res.status(500).json error: err.message
+
+module.exports = { setup }

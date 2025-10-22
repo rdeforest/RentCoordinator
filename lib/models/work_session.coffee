@@ -1,11 +1,11 @@
 # lib/models/work_session.coffee
 
-{ v1 } = await import('uuid')
-db = (await import('../db/schema.coffee')).db
+{ v1 } = require 'uuid'
+{ db } = require '../db/schema.coffee'
 
 
 # Create a new work session
-export createWorkSession = (worker) ->
+createWorkSession = (worker) ->
   id = v1()
   now = new Date().toISOString()
 
@@ -29,7 +29,7 @@ export createWorkSession = (worker) ->
 
 
 # Create a work event (start/pause/resume/stop/cancel)
-export createWorkEvent = (sessionId, eventType, timestamp = null) ->
+createWorkEvent = (sessionId, eventType, timestamp = null) ->
   id = v1()
   timestamp ?= new Date().toISOString()
 
@@ -64,7 +64,7 @@ updateSessionStatus = (sessionId, eventType) ->
 
 
 # Update work session description
-export updateSessionDescription = (sessionId, description) ->
+updateSessionDescription = (sessionId, description) ->
   db.prepare("""
     UPDATE work_sessions
     SET description = ?, updated_at = ?
@@ -75,7 +75,7 @@ export updateSessionDescription = (sessionId, description) ->
 
 
 # Get current session for a worker
-export getCurrentSession = (worker) ->
+getCurrentSession = (worker) ->
   result = db.prepare("""
     SELECT s.* FROM work_sessions s
     JOIN current_sessions cs ON cs.session_id = s.id
@@ -86,7 +86,7 @@ export getCurrentSession = (worker) ->
 
 
 # Calculate total duration for a session
-export calculateSessionDuration = (sessionId) ->
+calculateSessionDuration = (sessionId) ->
   # Get all events for this session
   events = db.prepare("""
     SELECT * FROM work_events
@@ -116,7 +116,7 @@ export calculateSessionDuration = (sessionId) ->
 
 
 # Get all sessions with calculated durations
-export getAllSessions = (worker = null) ->
+getAllSessions = (worker = null) ->
   query = if worker
     db.prepare("SELECT * FROM work_sessions WHERE worker = ?")
   else
@@ -132,7 +132,7 @@ export getAllSessions = (worker = null) ->
 
 
 # Pause all active sessions for a worker
-export pauseActiveSessions = (worker) ->
+pauseActiveSessions = (worker) ->
   sessions = await getAllSessions(worker)
 
   for session in sessions
@@ -141,7 +141,7 @@ export pauseActiveSessions = (worker) ->
 
 
 # Resume a session (pauses others first)
-export resumeSession = (sessionId, worker) ->
+resumeSession = (sessionId, worker) ->
   # Pause any active sessions
   await pauseActiveSessions(worker)
 
@@ -158,7 +158,7 @@ export resumeSession = (sessionId, worker) ->
 
 
 # Convert session to work log entry (for backwards compatibility)
-export sessionToWorkLog = (session) ->
+sessionToWorkLog = (session) ->
   # Get first and last events
   events = db.prepare("""
     SELECT * FROM work_events
@@ -182,3 +182,15 @@ export sessionToWorkLog = (session) ->
     submitted: false
     created_at: session.created_at
   }
+
+module.exports = {
+  createWorkSession
+  createWorkEvent
+  updateSessionDescription
+  getCurrentSession
+  calculateSessionDuration
+  getAllSessions
+  pauseActiveSessions
+  resumeSession
+  sessionToWorkLog
+}

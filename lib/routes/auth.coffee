@@ -1,9 +1,9 @@
 # lib/routes/auth.coffee
 
-authModel = await import('../models/auth.coffee')
+authModel = require '../models/auth.coffee'
 
 
-export setup = (app) ->
+setup = (app) ->
   # Send verification code to email
   app.post '/auth/send-code', (req, res) ->
     { email } = req.body
@@ -63,3 +63,5 @@ export setup = (app) ->
         return res.status(500).json error: 'Logout failed'
 
       res.json success: true
+
+module.exports = { setup }

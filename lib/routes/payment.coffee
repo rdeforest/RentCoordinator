@@ -1,11 +1,11 @@
 # lib/routes/payment.coffee
 
-paymentService = await import('../services/payment.coffee')
-rentModel      = await import('../models/rent.coffee')
-config         = await import('../config.coffee')
+paymentService = require '../services/payment.coffee'
+rentModel      = require '../models/rent.coffee'
+config         = require '../config.coffee'
 
 
-export setup = (app) ->
+setup = (app) ->
   # Note: /payment/config is set up as a public route in routing.coffee
   # since the publishable key is safe to expose publicly
 
@@ -93,3 +93,5 @@ export setup = (app) ->
     catch err
       console.error 'Create setup intent error:', err
       res.status(500).json error: err.message
+
+module.exports = { setup }

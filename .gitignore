@@ -140,11 +140,9 @@ dist
 .pnp.*
 # Project-specific
 tenant-coordinator*
+test-*.db
+test-*.log
 deno.lock
 backups/
 nohup.out
 
-# Compiled client-side JavaScript
-static/js/*.js
-static/js/*.js.map
-!static/js/.gitkeep

@@ -1,10 +1,10 @@
 # lib/routes/recurring_events.coffee
 
-recurringEventsModel = await import('../models/recurring_events.coffee')
-recurringEventsService = await import('../services/recurring_events.coffee')
+recurringEventsModel = require '../models/recurring_events.coffee'
+recurringEventsService = require '../services/recurring_events.coffee'
 
 
-export setup = (app) ->
+setup = (app) ->
 
   # Get all recurring events
   app.get '/recurring-events', (req, res) ->
@@ -127,3 +127,5 @@ export setup = (app) ->
       res.json schedule
     catch err
       res.status(500).json error: err.message
+
+module.exports = { setup }
