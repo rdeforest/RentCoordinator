@@ -4,6 +4,7 @@
 { describe, it, before, after } = await import('node:test')
 assert = await import('node:assert/strict')
 fs = await import('fs')
+{ waitForServer } = await import('./test-helper.js')
 
 # Test configuration
 TEST_PORT = 3999
@@ -12,6 +13,7 @@ BASE_URL = "http://localhost:#{TEST_PORT}"
 
 # Server instance
 server = null
+serverProcess = null
 
 describe 'Timer Integration Tests', ->
   before ->
@@ -24,16 +26,21 @@ describe 'Timer Integration Tests', ->
     process.env.DB_PATH = TEST_DB
     process.env.NODE_ENV = 'test'
 
-    # Import and start server
-    main = await import('../dist/main.js')
+    # Import server module to start it
+    main = await import('../main.js')
 
-    # Give server time to start
-    await new Promise (resolve) -> setTimeout(resolve, 500)
+    # Wait for server to be ready
+    await waitForServer("#{BASE_URL}/health")
 
   after ->
-    # Clean up
+    # Clean up database
     if fs.existsSync(TEST_DB)
       fs.unlinkSync(TEST_DB)
+
+    # Force exit after cleanup (server doesn't have clean shutdown yet)
+    setTimeout ->
+      process.exit(0)
+    , 100
 
   it 'should complete a full work session workflow', ->
     worker = 'robert'
