@@ -3,7 +3,7 @@
   //!/usr/bin/env node
   // scripts/build.coffee
   // Build script: compile CoffeeScript and fix import paths
-  var build, exec, execAsync, fixImportPaths, fs, path, promisify;
+  var build, copyDir, exec, execAsync, fixImportPaths, fs, path, promisify;
 
   ({exec} = require('child_process'));
 
@@ -44,6 +44,28 @@
     return results;
   };
 
+  copyDir = function(src, dest) {
+    var destPath, i, item, len, ref, results, srcPath;
+    fs.mkdirSync(dest, {
+      recursive: true
+    });
+    ref = fs.readdirSync(src, {
+      withFileTypes: true
+    });
+    results = [];
+    for (i = 0, len = ref.length; i < len; i++) {
+      item = ref[i];
+      srcPath = path.join(src, item.name);
+      destPath = path.join(dest, item.name);
+      if (item.isDirectory()) {
+        results.push(copyDir(srcPath, destPath));
+      } else {
+        results.push(fs.copyFileSync(srcPath, destPath));
+      }
+    }
+    return results;
+  };
+
   build = async function() {
     var error;
     console.log('Building RentCoordinator...');
@@ -57,6 +79,9 @@
       // Compile client-side CoffeeScript to static/js
       console.log('Compiling client-side CoffeeScript...');
       await execAsync('npx coffee -b -c -M -o static/js static/coffee');
+      // Copy static assets to dist/static/
+      console.log('Copying static assets...');
+      copyDir('static', 'dist/static');
       return console.log('✓ Build complete!');
     } catch (error1) {
       error = error1;

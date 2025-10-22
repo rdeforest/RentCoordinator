@@ -27,6 +27,18 @@ fixImportPaths = (dir) ->
 
       fs.writeFileSync(filePath, content, 'utf8')
 
+copyDir = (src, dest) ->
+  fs.mkdirSync(dest, { recursive: true })
+
+  for item in fs.readdirSync(src, { withFileTypes: true })
+    srcPath = path.join(src, item.name)
+    destPath = path.join(dest, item.name)
+
+    if item.isDirectory()
+      copyDir(srcPath, destPath)
+    else
+      fs.copyFileSync(srcPath, destPath)
+
 build = ->
   console.log 'Building RentCoordinator...'
 
@@ -42,6 +54,10 @@ build = ->
     # Compile client-side CoffeeScript to static/js
     console.log 'Compiling client-side CoffeeScript...'
     await execAsync 'npx coffee -b -c -M -o static/js static/coffee'
+
+    # Copy static assets to dist/static/
+    console.log 'Copying static assets...'
+    copyDir('static', 'dist/static')
 
     console.log '✓ Build complete!'
   catch error
