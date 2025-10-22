@@ -62,6 +62,14 @@ export getAllRecurringEvents = ->
       catch e
         event.metadata = {}
 
+    # Extract event_template from metadata to top level
+    if event.metadata?.event_template
+      event.event_template = event.metadata.event_template
+
+    # Extract next_due from metadata to top level
+    if event.metadata?.next_due
+      event.next_due = event.metadata.next_due
+
     # Add legacy field mappings for backwards compatibility
     event.name = event.description
     event.event_type = event.type
@@ -82,6 +90,14 @@ export getRecurringEvent = (id) ->
       event.metadata = JSON.parse(event.metadata)
     catch e
       event.metadata = {}
+
+  # Extract event_template from metadata to top level
+  if event.metadata?.event_template
+    event.event_template = event.metadata.event_template
+
+  # Extract next_due from metadata to top level
+  if event.metadata?.next_due
+    event.next_due = event.metadata.next_due
 
   # Add legacy field mappings for backwards compatibility
   event.name = event.description
@@ -171,6 +187,14 @@ export getEnabledRecurringEvents = ->
         event.metadata = JSON.parse(event.metadata)
       catch e
         event.metadata = {}
+
+    # Extract event_template from metadata to top level
+    if event.metadata?.event_template
+      event.event_template = event.metadata.event_template
+
+    # Extract next_due from metadata to top level
+    if event.metadata?.next_due
+      event.next_due = event.metadata.next_due
 
     # Add legacy field mappings
     event.name = event.description
