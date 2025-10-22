@@ -44,8 +44,8 @@ else
     print_success "Service user already exists"
 fi
 
-# Install Deno for service user
-install_deno "$SERVICE_USER" || exit 1
+# Verify Node.js is available
+verify_node || exit 1
 
 # Create installation directory
 print_info "Creating installation directory..."
@@ -58,22 +58,21 @@ cp -r "$DEPLOY_TMP/dist" "$INSTALL_DIR/" || {
     exit 1
 }
 
-# Copy Deno configuration files
-cp "$DEPLOY_TMP/deno.json" "$INSTALL_DIR/" 2>/dev/null || true
-cp "$DEPLOY_TMP/package.json" "$INSTALL_DIR/" 2>/dev/null || true
+# Copy package.json
+cp "$DEPLOY_TMP/package.json" "$INSTALL_DIR/" || {
+    print_error "Failed to copy package.json"
+    exit 1
+}
 
 # Create subdirectories
 mkdir -p "$INSTALL_DIR/backups"
 mkdir -p "$INSTALL_DIR/logs"
-mkdir -p "$INSTALL_DIR/node_modules"
 
 # Create default config if it doesn't exist
 if [ ! -f "$INSTALL_DIR/config.sh" ]; then
     print_info "Creating default configuration..."
     # Generate a random session secret
     SESSION_SECRET=$(openssl rand -hex 32)
-    # Get the actual Deno install path for the service user
-    DENO_INSTALL_PATH=$(get_deno_install_path "$SERVICE_USER")
 
     # Note: systemd's EnvironmentFile doesn't support "export" keyword
     # Use simple KEY=VALUE format
@@ -98,10 +97,6 @@ SESSION_SECRET=$SESSION_SECRET
 # SMTP_USER=your-smtp-username
 # SMTP_PASS=your-smtp-password
 # EMAIL_FROM=noreply@thatsnice.org
-
-# Deno configuration (set by install script)
-DENO_INSTALL=$DENO_INSTALL_PATH
-PATH=$DENO_INSTALL_PATH/bin:/usr/local/bin:/usr/bin:/bin
 EOF
     print_success "Configuration created at $INSTALL_DIR/config.sh"
     print_success "Generated random SESSION_SECRET"
@@ -125,13 +120,14 @@ run_as_root chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" || {
 }
 print_success "Ownership set to $SERVICE_USER"
 
+# Install Node.js dependencies
+install_node_dependencies "$INSTALL_DIR" "$SERVICE_USER" || exit 1
+
 # Create service configuration for init-manager
-DENO_INSTALL_PATH=$(get_deno_install_path "$SERVICE_USER")
 cat > /tmp/rent-coordinator-service-config.sh <<EOF
 SERVICE_NAME=$SERVICE_NAME
 APP_USER=$SERVICE_USER
 PREFIX=$INSTALL_DIR
-DENO_INSTALL=$DENO_INSTALL_PATH
 LOG_DIR=$INSTALL_DIR/logs
 SERVICE_DESCRIPTION="RentCoordinator - Tenant work tracking and rent coordination"
 SERVICE_DOCUMENTATION=""

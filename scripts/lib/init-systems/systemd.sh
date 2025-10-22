@@ -31,10 +31,8 @@ Documentation=$SERVICE_DOCUMENTATION
 Type=simple
 User=$APP_USER
 WorkingDirectory=$PREFIX
-Environment="DENO_INSTALL=$DENO_INSTALL"
-Environment="PATH=$DENO_INSTALL/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=$PREFIX/config.sh
-ExecStart=$DENO_INSTALL/bin/deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv $PREFIX/dist/main.js
+ExecStart=/usr/bin/node $PREFIX/dist/main.js
 Restart=on-failure
 RestartSec=10
 StandardOutput=append:$LOG_DIR/app.log
@@ -43,8 +41,6 @@ StandardError=append:$LOG_DIR/app.log
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
-#ProtectSystem=strict
-#ReadWritePaths=$PREFIX $LOG_DIR $(dirname "$DB_PATH")
 
 [Install]
 WantedBy=multi-user.target

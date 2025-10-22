@@ -341,6 +341,66 @@ install_deno() {
     return 0
 }
 
+verify_node() {
+    local min_version="18"
+
+    print_info "Verifying Node.js installation..."
+
+    if ! command_exists node; then
+        print_error "Node.js not found"
+        print_info "Please install Node.js >= v${min_version}.0.0"
+        return 1
+    fi
+
+    local node_version=$(node --version | sed 's/v//')
+    local major_version=$(echo "$node_version" | cut -d. -f1)
+
+    if [ "$major_version" -lt "$min_version" ]; then
+        print_error "Node.js version too old: v$node_version (need >= v${min_version}.0.0)"
+        return 1
+    fi
+
+    print_success "Node.js v$node_version verified"
+
+    # Verify npm is also available
+    if ! command_exists npm; then
+        print_error "npm not found (required for dependency installation)"
+        return 1
+    fi
+
+    local npm_version=$(npm --version)
+    print_success "npm v$npm_version verified"
+
+    return 0
+}
+
+install_node_dependencies() {
+    local install_dir="$1"
+    local user="$2"
+
+    print_info "Installing Node.js dependencies..."
+
+    if [ ! -f "$install_dir/package.json" ]; then
+        print_error "package.json not found at $install_dir"
+        return 1
+    fi
+
+    if [ "$(get_current_user)" = "$user" ]; then
+        (cd "$install_dir" && npm install --production) || {
+            print_error "npm install failed"
+            return 1
+        }
+    else
+        sudo -u "$user" sh -c "cd '$install_dir' && npm install --production" || {
+            print_error "npm install failed"
+            return 1
+        }
+    fi
+
+    print_success "Node.js dependencies installed"
+    return 0
+}
+
 
 confirm() {
     local prompt="$1"
@@ -360,6 +420,7 @@ export -f detect_os check_root is_root run_as_root
 export -f get_user_home get_deno_install_path get_current_user
 export -f user_exists create_user remove_user
 export -f command_exists require_command directory_writable create_directory
+export -f verify_node install_node_dependencies
 export -f find_processes process_running stop_process stop_processes_matching
 export -f safe_remove set_ownership
 export -f install_deno

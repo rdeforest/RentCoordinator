@@ -38,35 +38,18 @@ if [ -f "$INSTALL_DIR/.deployed" ]; then
     print_info "Installed: ${INSTALLED:-unknown}"
 fi
 
-# Backup database
+# Backup database (SQLite file-based backup)
 print_info "Backing up database..."
 BACKUP_DIR="$INSTALL_DIR/backups"
 mkdir -p "$BACKUP_DIR"
-BACKUP_FILE="$BACKUP_DIR/backup-$(date +%Y-%m-%d_%H-%M-%S).json"
+BACKUP_FILE="$BACKUP_DIR/tenant-coordinator-$(date +%Y-%m-%d_%H-%M-%S).db"
 
 if [ -f "$INSTALL_DIR/tenant-coordinator.db" ]; then
-    # Source config to get DENO_INSTALL path
-    if [ -f "$INSTALL_DIR/config.sh" ]; then
-        source "$INSTALL_DIR/config.sh"
-    fi
-
-    DENO_PATH=$(get_deno_install_path "$SERVICE_USER")/bin/deno
-
-    # Create backup using Deno task if available
-    if [ -f "$INSTALL_DIR/dist/scripts/backup.ts" ]; then
-        cd "$INSTALL_DIR"
-        sudo -u "$SERVICE_USER" "$DENO_PATH" run --allow-read --allow-env --unstable-kv \
-            dist/scripts/backup.ts > "$BACKUP_FILE" 2>/dev/null || {
-            print_warning "Backup script failed, but continuing..."
-        }
-        if [ -s "$BACKUP_FILE" ]; then
-            print_success "Database backed up to $BACKUP_FILE"
-        else
-            rm -f "$BACKUP_FILE"
-            print_warning "Backup file empty, skipping"
-        fi
-    else
-        print_warning "Backup script not found, skipping database backup"
+    sudo -u "$SERVICE_USER" cp "$INSTALL_DIR/tenant-coordinator.db" "$BACKUP_FILE" || {
+        print_warning "Database backup failed, but continuing..."
+    }
+    if [ -f "$BACKUP_FILE" ]; then
+        print_success "Database backed up to $BACKUP_FILE"
     fi
 else
     print_warning "No database file found, skipping backup"
@@ -117,13 +100,20 @@ sudo -u "$SERVICE_USER" cp -r "$DEPLOY_TMP/dist" "$INSTALL_DIR/dist.new" || {
     exit 1
 }
 
-# Also copy deno.json and package.json if they exist
-if [ -f "$DEPLOY_TMP/deno.json" ]; then
-    sudo -u "$SERVICE_USER" cp "$DEPLOY_TMP/deno.json" "$INSTALL_DIR/" 2>/dev/null || true
-fi
+# Copy package.json
 if [ -f "$DEPLOY_TMP/package.json" ]; then
-    sudo -u "$SERVICE_USER" cp "$DEPLOY_TMP/package.json" "$INSTALL_DIR/" 2>/dev/null || true
+    sudo -u "$SERVICE_USER" cp "$DEPLOY_TMP/package.json" "$INSTALL_DIR/" || {
+        print_error "Failed to copy package.json"
+        exit 1
+    }
 fi
+
+# Install/update Node.js dependencies
+print_info "Installing Node.js dependencies..."
+install_node_dependencies "$INSTALL_DIR" "$SERVICE_USER" || {
+    print_error "Failed to install Node.js dependencies"
+    exit 1
+}
 
 # Atomic swap: dist -> dist.old, dist.new -> dist
 print_info "Swapping to new version..."

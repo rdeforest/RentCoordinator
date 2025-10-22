@@ -202,9 +202,12 @@ create_deploy_package() {
         exit 1
     }
 
-    # Copy package files
-    cp "$project_dir/package.json" "$package_dir/" 2>/dev/null || true
-    cp "$project_dir/deno.json" "$package_dir/" 2>/dev/null || true
+    # Copy package.json (required for Node.js)
+    cp "$project_dir/package.json" "$package_dir/" || {
+        print_error "Cannot copy package.json" >&2
+        rm -rf "$package_dir"
+        exit 1
+    }
 
     print_success "Deployment package created" >&2
     # Only output the path to stdout
