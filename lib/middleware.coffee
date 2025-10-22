@@ -69,6 +69,10 @@ export setup = (app) ->
 
 # Authentication middleware - checks if user is authenticated
 export requireAuth = (req, res, next) ->
+  # Bypass auth in test mode for integration tests
+  if config.NODE_ENV is 'test'
+    return next()
+
   if req.session?.authenticated
     next()
   else

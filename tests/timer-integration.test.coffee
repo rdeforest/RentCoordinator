@@ -51,7 +51,7 @@ describe 'Timer Integration Tests', ->
       headers: 'Content-Type': 'application/json'
       body: JSON.stringify { worker }
 
-    assert.equal startResponse.status, 200
+    assert.equal startResponse.status, 200, "Expected 200, got #{startResponse.status}"
     startData = await startResponse.json()
     assert.ok startData.id, 'Should return session ID'
     assert.equal startData.status, 'active'
