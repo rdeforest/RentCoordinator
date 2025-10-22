@@ -112,26 +112,74 @@ sudo -u rent-coordinator sed -i '/^STRIPE_SECRET_KEY=/d' "$CONFIG_FILE"
 sudo -u rent-coordinator sed -i '/^STRIPE_PUBLISHABLE_KEY=/d' "$CONFIG_FILE"
 
 # Append new secrets
-sudo -u rent-coordinator tee -a "$CONFIG_FILE" > /dev/null <<EOF
-
-# Secrets from AWS Secrets Manager (restored $(date))
-SESSION_SECRET=$SESSION_SECRET
-SMTP_HOST=$SMTP_HOST
-SMTP_PORT=$SMTP_PORT
-SMTP_USER=$SMTP_USER
-SMTP_PASS=$SMTP_PASS
-EMAIL_FROM=$EMAIL_FROM
-STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY
-STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY
-EOF
+{
+  echo ""
+  echo "# Secrets from AWS Secrets Manager (restored $(date))"
+  echo "SESSION_SECRET=$SESSION_SECRET"
+  echo "SMTP_HOST=$SMTP_HOST"
+  echo "SMTP_PORT=$SMTP_PORT"
+  echo "SMTP_USER=$SMTP_USER"
+  echo "SMTP_PASS=$SMTP_PASS"
+  echo "EMAIL_FROM=$EMAIL_FROM"
+  echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY"
+  echo "STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY"
+} | sudo -u rent-coordinator tee -a "$CONFIG_FILE" > /dev/null
 
 echo "Secrets configured successfully"
 EOFREMOTE
 )
 
-# Execute on remote server
-if ! echo -e "$SESSION_SECRET\n$SMTP_HOST\n$SMTP_PORT\n$SMTP_USER\n$SMTP_PASS\n$EMAIL_FROM\n$STRIPE_SECRET_KEY\n$STRIPE_PUBLISHABLE_KEY" | \
-   ssh "$SERVER" "bash -s" <<< "$REMOTE_SCRIPT"; then
+# Execute on remote server - send secrets as environment variables
+if ! ssh "$SERVER" \
+  SESSION_SECRET="$SESSION_SECRET" \
+  SMTP_HOST="$SMTP_HOST" \
+  SMTP_PORT="$SMTP_PORT" \
+  SMTP_USER="$SMTP_USER" \
+  SMTP_PASS="$SMTP_PASS" \
+  EMAIL_FROM="$EMAIL_FROM" \
+  STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
+  STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
+  bash -s <<'EOFREMOTE2'
+#!/bin/bash
+set -euo pipefail
+
+# Check if config.sh exists
+CONFIG_FILE="/home/admin/rent-coordinator/config.sh"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "Error: $CONFIG_FILE not found"
+  exit 1
+fi
+
+# Backup existing config
+sudo -u rent-coordinator cp "$CONFIG_FILE" "$CONFIG_FILE.backup-$(date +%Y%m%d-%H%M%S)"
+
+# Remove old secret lines if they exist
+sudo -u rent-coordinator sed -i '/^SESSION_SECRET=/d' "$CONFIG_FILE"
+sudo -u rent-coordinator sed -i '/^SMTP_HOST=/d' "$CONFIG_FILE"
+sudo -u rent-coordinator sed -i '/^SMTP_PORT=/d' "$CONFIG_FILE"
+sudo -u rent-coordinator sed -i '/^SMTP_USER=/d' "$CONFIG_FILE"
+sudo -u rent-coordinator sed -i '/^SMTP_PASS=/d' "$CONFIG_FILE"
+sudo -u rent-coordinator sed -i '/^EMAIL_FROM=/d' "$CONFIG_FILE"
+sudo -u rent-coordinator sed -i '/^STRIPE_SECRET_KEY=/d' "$CONFIG_FILE"
+sudo -u rent-coordinator sed -i '/^STRIPE_PUBLISHABLE_KEY=/d' "$CONFIG_FILE"
+
+# Append new secrets
+{
+  echo ""
+  echo "# Secrets from AWS Secrets Manager (restored $(date))"
+  echo "SESSION_SECRET=$SESSION_SECRET"
+  echo "SMTP_HOST=$SMTP_HOST"
+  echo "SMTP_PORT=$SMTP_PORT"
+  echo "SMTP_USER=$SMTP_USER"
+  echo "SMTP_PASS=$SMTP_PASS"
+  echo "EMAIL_FROM=$EMAIL_FROM"
+  echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY"
+  echo "STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY"
+} | sudo -u rent-coordinator tee -a "$CONFIG_FILE" > /dev/null
+
+echo "Secrets configured successfully"
+EOFREMOTE2
+then
   error "Failed to deploy secrets to $SERVER"
   exit 1
 fi
