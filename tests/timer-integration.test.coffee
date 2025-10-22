@@ -4,6 +4,7 @@
 { describe, it, before, after } = await import('node:test')
 assert = await import('node:assert/strict')
 fs = await import('fs')
+{ execSync } = await import('child_process')
 { waitForServer } = await import('./test-helper.js')
 
 # Test configuration
@@ -15,11 +16,31 @@ BASE_URL = "http://localhost:#{TEST_PORT}"
 server = null
 serverProcess = null
 
+# Helper to kill any process on the test port
+killTestPort = ->
+  try
+    # Find and kill any process on TEST_PORT
+    execSync("lsof -ti :#{TEST_PORT} | xargs -r kill -9", stdio: 'ignore')
+    # Small delay to ensure port is released
+    await new Promise (resolve) -> setTimeout(resolve, 100)
+  catch err
+    # No process was using the port, which is fine
+
+# Helper to clean up test databases
+cleanTestDatabases = ->
+  try
+    files = fs.readdirSync('.')
+    for file in files when file.match(/^test.*\.db$/)
+      fs.unlinkSync(file)
+      console.log "Cleaned up: #{file}"
+  catch err
+    # Ignore cleanup errors
+
 describe 'Timer Integration Tests', ->
   before ->
-    # Clean up test database
-    if fs.existsSync(TEST_DB)
-      fs.unlinkSync(TEST_DB)
+    # Ensure clean environment before starting
+    await killTestPort()
+    cleanTestDatabases()
 
     # Set test environment
     process.env.PORT = TEST_PORT
@@ -33,9 +54,11 @@ describe 'Timer Integration Tests', ->
     await waitForServer("#{BASE_URL}/health")
 
   after ->
+    # Kill test server
+    await killTestPort()
+
     # Clean up database
-    if fs.existsSync(TEST_DB)
-      fs.unlinkSync(TEST_DB)
+    cleanTestDatabases()
 
     # Force exit after cleanup (server doesn't have clean shutdown yet)
     setTimeout ->
@@ -46,12 +69,19 @@ describe 'Timer Integration Tests', ->
     worker = 'robert'
 
     # 1. Start a timer
+    requestBody = { worker }
+    console.log "Sending request:", JSON.stringify(requestBody)
+
     startResponse = await fetch "#{BASE_URL}/timer/start",
       method: 'POST'
       headers: 'Content-Type': 'application/json'
-      body: JSON.stringify { worker }
+      body: JSON.stringify requestBody
 
-    assert.equal startResponse.status, 200, "Expected 200, got #{startResponse.status}"
+    if startResponse.status isnt 200
+      errorBody = await startResponse.text()
+      console.log "Error response (#{startResponse.status}):", errorBody
+      assert.equal startResponse.status, 200, "Expected 200, got #{startResponse.status}: #{errorBody}"
+
     startData = await startResponse.json()
     assert.ok startData.id, 'Should return session ID'
     assert.equal startData.status, 'active'
