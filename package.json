@@ -11,6 +11,7 @@
     "dev": "npm run build && node dist/main.js",
     "start": "node dist/main.js",
     "test": "npm run build && node --test dist/tests/**/*_test.js",
+    "test:integration": "npm run build && node --test dist/tests/**/*.test.js",
     "lint": "echo 'Linting skipped - configure if needed'"
   },
   "dependencies": {

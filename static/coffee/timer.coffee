@@ -3,7 +3,6 @@
 # State
 currentWorker = null
 currentSession = null
-updateInterval = null
 serverInterval = null
 sessions = []
 sortColumn = 'stopped'
@@ -52,13 +51,8 @@ startButton.addEventListener 'click', ->
       body: JSON.stringify worker: currentWorker
 
     if response.ok
-      result = await response.json()
-      currentSession = result
-      # Track when we got this data for client-side timer updates
-      currentSession.last_server_time = new Date().toISOString()
-      showActiveSession()
-      startUpdateTimer()
-      loadSessions()
+      # Reload state from server to get fresh elapsed time
+      loadWorkerState()
     else
       error = await response.json()
       alert error.error
@@ -74,9 +68,8 @@ pauseButton.addEventListener 'click', ->
       body: JSON.stringify worker: currentWorker
 
     if response.ok
-      currentSession = await response.json()
-      updateActiveSession()
-      loadSessions()
+      # Reload state from server to get fresh data
+      loadWorkerState()
     else
       error = await response.json()
       alert error.error
@@ -94,10 +87,8 @@ resumeButton.addEventListener 'click', ->
         session_id: currentSession?.id
 
     if response.ok
-      result = await response.json()
-      currentSession = result
-      updateActiveSession()
-      loadSessions()
+      # Reload state from server to get fresh data
+      loadWorkerState()
     else
       error = await response.json()
       alert error.error
@@ -168,13 +159,8 @@ startNewButton.addEventListener 'click', ->
       body: JSON.stringify worker: currentWorker
 
     if response.ok
-      result = await response.json()
-      currentSession = result
-      # Track when we got this data for client-side timer updates
-      currentSession.last_server_time = new Date().toISOString()
-      showActiveSession()
-      startUpdateTimer()
-      loadSessions()
+      # Reload state from server to get fresh data
+      loadWorkerState()
     else
       error = await response.json()
       alert error.error
@@ -216,8 +202,8 @@ loadWorkerState = ->
 
     if status.current_session
       currentSession = status.current_session
-      # Track when we got this data for client-side timer updates
-      currentSession.last_server_time = new Date().toISOString()
+      # Store the server's calculated duration
+      currentSession.total_duration = status.elapsed or 0
       showActiveSession()
       startUpdateTimer()
     else
@@ -329,13 +315,8 @@ window.resumeSession = (sessionId) ->
         session_id: sessionId
 
     if response.ok
-      result = await response.json()
-      currentSession = result
-      # Track when we got this data for client-side timer updates
-      currentSession.last_server_time = new Date().toISOString()
-      showActiveSession()
-      startUpdateTimer()
-      loadSessions()
+      # Reload state from server to get fresh data
+      loadWorkerState()
     else
       error = await response.json()
       alert error.error
@@ -384,24 +365,9 @@ updateActiveSession = ->
 updateTimerDisplay = ->
   return unless currentSession
 
-  if currentSession.status is 'active'
-    # Calculate elapsed time since session became active
-    # Server provides total_duration (time from previous events)
-    # We add client-side elapsed time since session went active
-    baseDuration = currentSession.total_duration or 0
-
-    # Calculate time since last server update
-    if currentSession.last_server_time
-      serverTime = new Date(currentSession.last_server_time)
-      now = new Date()
-      elapsedSinceUpdate = Math.floor((now - serverTime) / 1000)
-      totalDuration = baseDuration + elapsedSinceUpdate
-    else
-      totalDuration = baseDuration
-
-    activeTimer.textContent = formatDuration(totalDuration)
-  else
-    activeTimer.textContent = formatDuration(currentSession.total_duration or 0)
+  # Just display the server's calculated duration
+  # Server updates every 5 seconds with fresh calculation
+  activeTimer.textContent = formatDuration(currentSession.total_duration or 0)
 
 # Start update timer
 startUpdateTimer = ->
@@ -410,21 +376,14 @@ startUpdateTimer = ->
   # Update display immediately
   updateTimerDisplay()
 
-  # Update display every second (for smooth timer)
-  updateInterval = setInterval ->
-    updateTimerDisplay()
-  , 1000
-
-  # Reload from server every 5 seconds (to stay in sync)
+  # Reload from server every 5 seconds to get fresh duration
   serverInterval = setInterval ->
     loadWorkerState()
   , 5000
 
 # Stop update timer
 stopUpdateTimer = ->
-  clearInterval updateInterval if updateInterval
   clearInterval serverInterval if serverInterval
-  updateInterval = null
   serverInterval = null
 
 # Format duration

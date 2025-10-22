@@ -176,6 +176,8 @@ export sessionToWorkLog = (session) ->
     end_time: lastEvent?.timestamp or new Date().toISOString()
     duration: Math.round(session.total_duration / 60)  # Convert to minutes
     description: session.description
+    project_id: session.project_id or null
+    task_id: session.task_id or null
     billable: session.billable
     submitted: false
     created_at: session.created_at
