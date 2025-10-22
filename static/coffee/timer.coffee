@@ -54,6 +54,8 @@ startButton.addEventListener 'click', ->
     if response.ok
       result = await response.json()
       currentSession = result
+      # Track when we got this data for client-side timer updates
+      currentSession.last_server_time = new Date().toISOString()
       showActiveSession()
       startUpdateTimer()
       loadSessions()
@@ -168,6 +170,8 @@ startNewButton.addEventListener 'click', ->
     if response.ok
       result = await response.json()
       currentSession = result
+      # Track when we got this data for client-side timer updates
+      currentSession.last_server_time = new Date().toISOString()
       showActiveSession()
       startUpdateTimer()
       loadSessions()
@@ -327,6 +331,8 @@ window.resumeSession = (sessionId) ->
     if response.ok
       result = await response.json()
       currentSession = result
+      # Track when we got this data for client-side timer updates
+      currentSession.last_server_time = new Date().toISOString()
       showActiveSession()
       startUpdateTimer()
       loadSessions()
@@ -379,13 +385,21 @@ updateTimerDisplay = ->
   return unless currentSession
 
   if currentSession.status is 'active'
-    # Calculate current duration
-    events = [] # Would need to fetch events or track locally
-    duration = currentSession.total_duration or 0
+    # Calculate elapsed time since session became active
+    # Server provides total_duration (time from previous events)
+    # We add client-side elapsed time since session went active
+    baseDuration = currentSession.total_duration or 0
 
-    # Add time since last update
-    # This is approximate - server has authoritative time
-    activeTimer.textContent = formatDuration(Math.round(duration))
+    # Calculate time since last server update
+    if currentSession.last_server_time
+      serverTime = new Date(currentSession.last_server_time)
+      now = new Date()
+      elapsedSinceUpdate = Math.floor((now - serverTime) / 1000)
+      totalDuration = baseDuration + elapsedSinceUpdate
+    else
+      totalDuration = baseDuration
+
+    activeTimer.textContent = formatDuration(totalDuration)
   else
     activeTimer.textContent = formatDuration(currentSession.total_duration or 0)
 
