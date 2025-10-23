@@ -1,12 +1,11 @@
-# test/integration/timer-start.coffee
-# Focused test for timer start functionality
-
 { describe, it, before, after } = require 'node:test'
-assert = require 'node:assert/strict'
+assert                          = require 'node:assert/strict'
 { startTestServer, stopTestServer, DEFAULT_TEST_PORT } = require '../server.coffee'
 
-BASE_URL = "http://localhost:#{DEFAULT_TEST_PORT}"
+
+BASE_URL     = "http://localhost:#{DEFAULT_TEST_PORT}"
 serverConfig = null
+
 
 describe 'Timer Start', ->
   before ->
@@ -14,15 +13,16 @@ describe 'Timer Start', ->
     console.log "Test server started on port #{serverConfig.port}"
 
   after ->
-    await stopTestServer(serverConfig)
+    await stopTestServer serverConfig
+
 
   it 'should start a timer for robert', ->
     console.log '\n=== Testing /timer/start ==='
 
     response = await fetch "#{BASE_URL}/timer/start",
-      method: 'POST'
+      method:  'POST'
       headers: 'Content-Type': 'application/json'
-      body: JSON.stringify { worker: 'robert' }
+      body:    JSON.stringify { worker: 'robert' }
 
     console.log "Response status: #{response.status}"
 
@@ -33,27 +33,28 @@ describe 'Timer Start', ->
     assert.equal response.status, 200, "Expected 200 but got #{response.status}"
 
     data = await response.json()
-    console.log "Response data:", JSON.stringify(data, null, 2)
+    console.log "Response data:", JSON.stringify data, null, 2
 
-    assert.ok data.id, 'Should return session ID'
+    assert.ok    data.id
     assert.equal data.worker, 'robert'
     assert.equal data.status, 'active'
     assert.equal data.event, 'started'
 
     console.log '✓ Timer started successfully'
 
+
   it 'should start a timer for lyndzie', ->
     console.log '\n=== Testing /timer/start for lyndzie ==='
 
     response = await fetch "#{BASE_URL}/timer/start",
-      method: 'POST'
+      method:  'POST'
       headers: 'Content-Type': 'application/json'
-      body: JSON.stringify { worker: 'lyndzie' }
-
-    assert.equal response.status, 200
+      body:    JSON.stringify { worker: 'lyndzie' }
 
     data = await response.json()
-    assert.ok data.id
+
+    assert.equal response.status, 200
+    assert.ok    data.id
     assert.equal data.worker, 'lyndzie'
     assert.equal data.status, 'active'
 

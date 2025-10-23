@@ -1,5 +1,3 @@
-# lib/middleware.coffee
-
 express = require 'express'
 cors    = require 'cors'
 session = require 'express-session'
@@ -7,18 +5,12 @@ config  = require './config.coffee'
 
 
 setup = (app) ->
-  # Trust proxy (for ALB HTTPS termination)
-  # This allows secure cookies to work when behind a load balancer
   app.set 'trust proxy', 1
 
-  # CORS for potential future API clients
   app.use cors()
-
-  # Body parsing
   app.use express.json()
-  app.use express.urlencoded(extended: true)
+  app.use express.urlencoded extended: true
 
-  # Session management
   app.use session
     secret:            config.SESSION_SECRET
     resave:            false
@@ -28,61 +20,50 @@ setup = (app) ->
       httpOnly: true
       maxAge:   config.SESSION_MAX_AGE
 
-  # Serve CoffeeScript browser compiler from static/vendor
   app.get '/vendor/coffeescript.js', (req, res) ->
-    res.type('application/javascript')
-    res.sendFile 'coffeescript.js',
-      root: "#{config.STATIC_DIR}/vendor/"
+    res.type 'application/javascript'
+    res.sendFile 'coffeescript.js', root: "#{config.STATIC_DIR}/vendor/"
 
-  # Static assets (CSS, JS, images, etc.) - but NOT HTML files
-  # HTML files will be served through explicit routes with auth
-  app.use '/css',    express.static("#{config.STATIC_DIR}/css")
-  app.use '/js',     express.static('./dist/static/js')  # Compiled from static/coffee
-  app.use '/vendor', express.static("#{config.STATIC_DIR}/vendor")
-  app.use '/images', express.static("#{config.STATIC_DIR}/images")
+  app.use '/css',    express.static "#{config.STATIC_DIR}/css"
+  app.use '/js',     express.static './dist/static/js'
+  app.use '/vendor', express.static "#{config.STATIC_DIR}/vendor"
+  app.use '/images', express.static "#{config.STATIC_DIR}/images"
 
-  # Serve CoffeeScript files with correct MIME type
-  app.use '/coffee', express.static("#{config.STATIC_DIR}/coffee",
+  app.use '/coffee', express.static "#{config.STATIC_DIR}/coffee",
     setHeaders: (res, path) ->
-      if path.endsWith('.coffee')
-        res.set('Content-Type', 'text/coffeescript'))
+      if path.endsWith '.coffee'
+        res.set 'Content-Type', 'text/coffeescript'
 
-  # Request logging in development
   if config.NODE_ENV is 'development'
     app.use (req, res, next) ->
       console.log "#{new Date().toISOString()} #{req.method} #{req.path}"
       next()
 
-  # Always log health checks to debug ALB
   app.use (req, res, next) ->
     if req.path is '/health'
       console.log "Health check from #{req.ip}"
     next()
 
-  # Error handling
   app.use (err, req, res, next) ->
     console.error 'Error:', err.stack
     res.status(500).json
-      error: 'Internal server error'
+      error:   'Internal server error'
       message: if config.NODE_ENV is 'development' then err.message else undefined
 
 
-# Authentication middleware - checks if user is authenticated
 requireAuth = (req, res, next) ->
-  # Bypass auth in test mode for integration tests
   if config.NODE_ENV is 'test'
     return next()
 
   if req.session?.authenticated
     next()
   else
-    # For browser requests (HTML pages), redirect to login
-    # For API requests (JSON), return 401
-    if req.accepts('html')
-      res.redirect(302, '/login.html')
+    if req.accepts 'html'
+      res.redirect 302, '/login.html'
     else
       res.status(401).json
-        error: 'Authentication required'
+        error:    'Authentication required'
         redirect: '/login.html'
+
 
 module.exports = { setup, requireAuth }
