@@ -33,11 +33,11 @@ window.SharedUtils =
       data     = await response.json() if response.headers.get('content-type')?.includes 'application/json'
 
       if response.ok
-        return ok: true, data
+        return { ok: true, data }
       else
-        return ok: false, error: data?.error or "Request failed: #{response.status}"
+        return { ok: false, error: data?.error or "Request failed: #{response.status}" }
     catch err
-      return ok: false, error: err.message
+      return { ok: false, error: err.message }
 
   debounce: (func, wait) ->
     timeout = null

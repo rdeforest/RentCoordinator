@@ -9,10 +9,11 @@ db         = require './lib/db/schema.coffee'
 startServer = ->
   await db.initialize()
 
-  app = express()
+  app    = express()
+  server = null
 
   middleware.setup app
-  routing   .setup app
+  routing   .setup app, -> server
 
   server = app.listen config.PORT, ->
     console.log """

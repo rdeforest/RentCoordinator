@@ -34,10 +34,13 @@ findFreePort = (startPort = DEFAULT_TEST_PORT) ->
     port++
   throw new Error "No free ports found in range #{startPort}-#{startPort + 100}"
 
-killPort = (port) ->
+shutdownServer = (baseUrl) ->
   try
-    execSync "lsof -ti :#{port} | xargs -r kill -9", stdio: 'ignore'
-    await new Promise (resolve) -> setTimeout resolve, 100
+    response = await fetch "#{baseUrl}/v1/shutdown", method: 'POST'
+    await new Promise (resolve) -> setTimeout resolve, 200
+    true
+  catch err
+    false
 
 
 startTestServer = (options = {}) ->
@@ -58,7 +61,7 @@ startTestServer = (options = {}) ->
   { port, dbPath, baseUrl, logPath }
 
 stopTestServer = (config) ->
-  await killPort config.port
+  await shutdownServer config.baseUrl
   cleanupTestDirectory()
 
 
@@ -70,7 +73,7 @@ module.exports = {
   cleanupTestDirectory
   isPortFree
   findFreePort
-  killPort
+  shutdownServer
   startTestServer
   stopTestServer
 }

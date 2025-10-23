@@ -1,8 +1,8 @@
 #!/usr/bin/env coffee
 
-{ execSync } = await import 'child_process'
-fs           = await import 'fs'
-path         = await import 'path'
+{ execSync } = require 'child_process'
+fs           = require 'fs'
+path         = require 'path'
 
 
 console.log 'Integration Test Runner'
@@ -52,19 +52,13 @@ checkPort = (port) ->
 
 console.log 'Pre-flight checks...'
 prepareTestDirectory()
-
-unless checkPort 3999
-  console.error ''
-  console.error 'Environment check failed. Please fix issues above.'
-  process.exit 1
-
 console.log '✓ Environment is clean'
 console.log ''
 
 
 console.log 'Building client-side JavaScript...'
 try
-  execSync 'coffee -b -c -o static/js static/coffee', stdio: 'inherit'
+  execSync 'coffee -b -c -M -o dist/static/js static/coffee', stdio: 'inherit'
 catch err
   console.error 'Build failed!'
   process.exit 1

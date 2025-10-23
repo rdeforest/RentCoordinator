@@ -9,11 +9,24 @@ paymentRoutes         = require './routes/payment.coffee'
 middleware            = require './middleware.coffee'
 
 
-setup = (app) ->
+setup = (app, getServer) ->
   app.get '/health', (req, res) ->
     res.json
       status:    'healthy'
       timestamp: new Date().toISOString()
+
+  app.post '/v1/shutdown', (req, res) ->
+    unless config.NODE_ENV is 'test'
+      return res.status(403).json error: 'Shutdown only allowed in test mode'
+
+    res.json message: 'Server shutting down'
+
+    server = getServer()
+    if server
+      setTimeout ->
+        server.close ->
+          process.exit 0
+      , 100
 
   authRoutes.setup app
 

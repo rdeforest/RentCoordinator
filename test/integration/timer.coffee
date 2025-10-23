@@ -4,7 +4,7 @@ fs                              = require 'fs'
 path                            = require 'path'
 { execSync }                    = require 'child_process'
 { waitForServer }               = require '../helper.coffee'
-{ findFreePort, killPort }      = require '../server.coffee'
+{ findFreePort, shutdownServer }= require '../server.coffee'
 
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
@@ -42,7 +42,7 @@ describe 'Timer Integration Tests', ->
     testConfig = { port, dbPath, baseUrl, logPath }
 
   after ->
-    await killPort testConfig.port if testConfig
+    await shutdownServer testConfig.baseUrl if testConfig
     cleanupTestDirectory()
 
 
