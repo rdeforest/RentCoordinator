@@ -1,16 +1,14 @@
 #!/usr/bin/env coffee
 
-# scripts/check-env.coffee
-# Audits the development environment for known issues
+{ execSync } = await import 'child_process'
+fs           = await import 'fs'
+path         = await import 'path'
 
-{ execSync } = await import('child_process')
-fs = await import('fs')
-path = await import('path')
 
-issues = []
+issues   = []
 warnings = []
 
-# Check for processes on known ports
+
 checkPort = (port, description) ->
   try
     output = execSync("lsof -ti :#{port}", encoding: 'utf8').trim()
@@ -19,72 +17,67 @@ checkPort = (port, description) ->
       issues.push "Port #{port} (#{description}) is in use by PIDs: #{pids.join(', ')}"
       issues.push "  Fix: kill -9 #{pids.join(' ')}"
   catch err
-    # Port is free (lsof returns non-zero if nothing found)
 
 console.log 'Checking development environment...\n'
 
-# Check development/test ports
+
 checkPort 3000, 'dev server'
 checkPort 3001, 'alternate dev'
 checkPort 3999, 'test server'
 
-# Check for stray test databases and their state
 try
-  files = fs.readdirSync('.')
-  testDbs = files.filter (f) -> f.match(/^test.*\.db$/)
+  files   = fs.readdirSync '.'
+  testDbs = files.filter (f) -> f.match /^test.*\.db$/
+
   if testDbs.length > 0
     warnings.push "Found #{testDbs.length} test database(s): #{testDbs.join(', ')}"
+    warnings.push "  Fix: rm -f test-*.db"
 
-    # Check database state
     try
-      { DatabaseSync } = await import('node:sqlite')
+      { DatabaseSync } = await import 'node:sqlite'
+
       for dbFile in testDbs
         try
-          db = new DatabaseSync(dbFile)
-
-          # Check for active sessions
+          db              = new DatabaseSync dbFile
           currentSessions = db.prepare('SELECT * FROM current_sessions').all()
+          activeSessions  = db.prepare("SELECT * FROM work_sessions WHERE status = 'active'").all()
+
           if currentSessions.length > 0
             issues.push "Test database #{dbFile} has #{currentSessions.length} active session(s)"
             for session in currentSessions
               issues.push "  Worker '#{session.worker}' has session: #{session.session_id}"
 
-          # Check for active timers
-          activeSessions = db.prepare("SELECT * FROM work_sessions WHERE status = 'active'").all()
           if activeSessions.length > 0
             issues.push "Test database #{dbFile} has #{activeSessions.length} active work session(s)"
 
           db.close()
         catch dbErr
-          # Skip databases that can't be opened or don't have expected schema
+
     catch importErr
-      # SQLite not available, skip state check
 
-    warnings.push "  Fix: rm -f test-*.db"
 catch err
-  # Directory read error
 
-# Check for unexpected .js files in source directories
+
 checkUnexpectedJs = (dir) ->
-  return unless fs.existsSync(dir)
+  return unless fs.existsSync dir
+
   try
-    files = fs.readdirSync(dir, withFileTypes: true)
+    files = fs.readdirSync dir, withFileTypes: true
     for file in files
       if file.isDirectory()
-        checkUnexpectedJs path.join(dir, file.name)
+        checkUnexpectedJs path.join dir, file.name
       else if file.name.endsWith('.js') and not file.name.endsWith('.test.js')
-        # Check if there's a corresponding .coffee file
-        coffeePath = path.join(dir, file.name.replace(/\.js$/, '.coffee'))
-        if fs.existsSync(coffeePath)
+        coffeePath = path.join dir, file.name.replace /\.js$/, '.coffee'
+        if fs.existsSync coffeePath
           warnings.push "Stray .js file with .coffee source: #{path.join(dir, file.name)}"
   catch err
-    # Ignore errors
+
 
 checkUnexpectedJs 'lib'
 checkUnexpectedJs 'scripts'
 checkUnexpectedJs 'test'
 
-# Check for background bash processes from this project
+
 try
   output = execSync('ps aux | grep -E "npm.*run.*(dev|start)|node.*main.js" | grep -v grep', encoding: 'utf8').trim()
   if output
@@ -92,14 +85,12 @@ try
     if lines.length > 0
       warnings.push "Found #{lines.length} Node.js process(es) that might be from this project:"
       for line in lines
-        # Extract PID (second field)
         pid = line.split(/\s+/)[1]
         cmd = line.split(/\s+/).slice(10).join(' ').substring(0, 80)
         warnings.push "  PID #{pid}: #{cmd}"
 catch err
-  # No processes found or grep failed
 
-# Report results
+
 console.log '\n=== ISSUES (must fix) ==='
 if issues.length is 0
   console.log '✓ No issues found'
