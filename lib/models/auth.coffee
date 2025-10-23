@@ -1,84 +1,75 @@
-# lib/models/auth.coffee
-
 { v1 }       = require 'uuid'
 { db }       = require '../db/schema.coffee'
 config       = require '../config.coffee'
 emailService = require '../services/email.coffee'
 
 
-# Store verification code for email
 storeVerificationCode = (email, code) ->
-  id  = v1()
-  now = new Date().toISOString()
+  id        = v1()
+  now       = new Date().toISOString()
   expiresAt = new Date(Date.now() + config.CODE_EXPIRY).toISOString()
 
   db.prepare("""
     INSERT INTO auth_sessions (id, email, code, expires_at, verified, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  """).run(id, email, code, expiresAt, 0, now)
+  """).run id, email, code, expiresAt, 0, now
 
-  return db.prepare("SELECT * FROM auth_sessions WHERE id = ?").get(id)
+  return db.prepare("SELECT * FROM auth_sessions WHERE id = ?").get id
 
 
-# Get verification code for email
 getVerificationCode = (email) ->
   result = db.prepare("""
     SELECT * FROM auth_sessions
     WHERE email = ? AND verified = 0
     ORDER BY created_at DESC
     LIMIT 1
-  """).get(email)
+  """).get email
 
   return result or null
 
 
-# Verify code for email
 verifyCode = (email, code) ->
-  stored = await getVerificationCode(email)
+  stored = await getVerificationCode email
 
-  if not stored
+  unless stored
     return success: false, error: 'No verification code found'
 
   if Date.now() > new Date(stored.expires_at).getTime()
-    await deleteVerificationCode(email)
+    await deleteVerificationCode email
     return success: false, error: 'Verification code expired'
 
-  if stored.code isnt code
+  unless stored.code is code
     return success: false, error: 'Invalid verification code'
 
-  # Code is valid, mark as verified
   db.prepare("""
     UPDATE auth_sessions
     SET verified = 1
     WHERE id = ?
-  """).run(stored.id)
+  """).run stored.id
 
   return success: true
 
 
-# Delete verification code
 deleteVerificationCode = (email) ->
   db.prepare("""
     DELETE FROM auth_sessions
     WHERE email = ? AND verified = 0
-  """).run(email)
+  """).run email
 
 
-# Check if email is allowed
 isEmailAllowed = (email) ->
   normalized = email.toLowerCase().trim()
-  allowed = config.ALLOWED_EMAILS.map (e) -> e.toLowerCase().trim()
+  allowed    = config.ALLOWED_EMAILS.map (e) -> e.toLowerCase().trim()
   return normalized in allowed
 
 
-# Send verification code to email
 sendVerificationCode = (email) ->
-  if not isEmailAllowed(email)
+  unless isEmailAllowed email
     throw new Error 'Email not authorized'
 
   code = emailService.generateCode()
-  await storeVerificationCode(email, code)
-  await emailService.sendVerificationCode(email, code)
+  await storeVerificationCode email, code
+  await emailService.sendVerificationCode email, code
 
   return success: true
 

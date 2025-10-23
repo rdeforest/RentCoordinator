@@ -1,37 +1,31 @@
-# lib/routes/auth.coffee
-
 authModel = require '../models/auth.coffee'
 
 
 setup = (app) ->
-  # Send verification code to email
   app.post '/auth/send-code', (req, res) ->
     { email } = req.body
 
-    if not email
+    unless email
       return res.status(400).json error: 'Email required'
 
     try
-      result = await authModel.sendVerificationCode(email)
+      result = await authModel.sendVerificationCode email
       res.json result
     catch err
       console.error 'Send code error:', err
       res.status(400).json error: err.message
 
-
-  # Verify code and create session
   app.post '/auth/verify-code', (req, res) ->
     { email, code } = req.body
 
-    if not email or not code
+    unless email and code
       return res.status(400).json error: 'Email and code required'
 
     try
-      result = await authModel.verifyCode(email, code)
+      result = await authModel.verifyCode email, code
 
       if result.success
-        # Set session
-        req.session.email = email
+        req.session.email         = email
         req.session.authenticated = true
 
         res.json
@@ -43,8 +37,6 @@ setup = (app) ->
       console.error 'Verify code error:', err
       res.status(500).json error: 'Verification failed'
 
-
-  # Check authentication status
   app.get '/auth/status', (req, res) ->
     if req.session?.authenticated
       res.json
@@ -54,8 +46,6 @@ setup = (app) ->
       res.json
         authenticated: false
 
-
-  # Logout
   app.post '/auth/logout', (req, res) ->
     req.session.destroy (err) ->
       if err

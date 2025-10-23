@@ -1,17 +1,10 @@
-# lib/db/schema.coffee
-# SQLite database schema and initialization
-
 { DatabaseSync } = require 'node:sqlite'
 config           = require '../config.coffee'
 
-# Open database connection
-db = new DatabaseSync(config.DB_PATH)
+db = new DatabaseSync config.DB_PATH
 
-# Enable foreign keys
-db.exec('PRAGMA foreign_keys = ON')
+db.exec 'PRAGMA foreign_keys = ON'
 
-
-# Schema definition
 SCHEMA = """
   CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
@@ -171,21 +164,18 @@ SCHEMA = """
 initialize = ->
   console.log "Initializing SQLite database at #{config.DB_PATH}"
 
-  # Execute schema
-  db.exec(SCHEMA)
+  db.exec SCHEMA
 
-  # Initialize timer states for each worker
-  initTimerState = db.prepare("""
+  initTimerState = db.prepare """
     INSERT OR IGNORE INTO timer_state (worker, status, session_id, start_time, project_id, task_id)
     VALUES (?, 'stopped', NULL, NULL, NULL, NULL)
-  """)
+  """
 
   for worker in config.WORKERS
-    initTimerState.run(worker)
+    initTimerState.run worker
 
   console.log "Database initialized successfully"
 
-  # Initialize recurring events system
   recurringEventsService = require '../services/recurring_events.coffee'
   await recurringEventsService.initializeRecurringEvents()
 

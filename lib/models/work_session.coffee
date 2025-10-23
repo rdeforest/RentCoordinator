@@ -1,57 +1,46 @@
-# lib/models/work_session.coffee
-
 { v1 } = require 'uuid'
 { db } = require '../db/schema.coffee'
 
 
-# Create a new work session
 createWorkSession = (worker) ->
-  id = v1()
+  id  = v1()
   now = new Date().toISOString()
 
-  # Insert session
   db.prepare("""
     INSERT INTO work_sessions (id, worker, description, status, total_duration, billable, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  """).run(id, worker, '', 'active', 0, 1, now, now)
+  """).run id, worker, '', 'active', 0, 1, now, now
 
-  # Set current session
   db.prepare("""
     INSERT OR REPLACE INTO current_sessions (worker, session_id)
     VALUES (?, ?)
-  """).run(worker, id)
+  """).run worker, id
 
-  # Create initial start event
   await createWorkEvent id, 'start', now
 
-  # Return the session
-  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get(id)
+  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get id
 
 
-# Create a work event (start/pause/resume/stop/cancel)
 createWorkEvent = (sessionId, eventType, timestamp = null) ->
-  id = v1()
+  id        = v1()
   timestamp ?= new Date().toISOString()
 
-  # Insert event
   db.prepare("""
     INSERT INTO work_events (id, session_id, event_type, timestamp, created_at)
     VALUES (?, ?, ?, ?, ?)
-  """).run(id, sessionId, eventType, timestamp, new Date().toISOString())
+  """).run id, sessionId, eventType, timestamp, new Date().toISOString()
 
-  # Update session status based on event
   await updateSessionStatus sessionId, eventType
 
-  return db.prepare("SELECT * FROM work_events WHERE id = ?").get(id)
+  return db.prepare("SELECT * FROM work_events WHERE id = ?").get id
 
 
-# Update session status based on event
 updateSessionStatus = (sessionId, eventType) ->
   newStatus = switch eventType
     when 'start', 'resume' then 'active'
-    when 'pause' then 'paused'
-    when 'stop' then 'completed'
-    when 'cancel' then 'cancelled'
+    when 'pause'           then 'paused'
+    when 'stop'            then 'completed'
+    when 'cancel'          then 'cancelled'
     else null
 
   return unless newStatus
@@ -60,39 +49,35 @@ updateSessionStatus = (sessionId, eventType) ->
     UPDATE work_sessions
     SET status = ?, updated_at = ?
     WHERE id = ?
-  """).run(newStatus, new Date().toISOString(), sessionId)
+  """).run newStatus, new Date().toISOString(), sessionId
 
 
-# Update work session description
 updateSessionDescription = (sessionId, description) ->
   db.prepare("""
     UPDATE work_sessions
     SET description = ?, updated_at = ?
     WHERE id = ?
-  """).run(description, new Date().toISOString(), sessionId)
+  """).run description, new Date().toISOString(), sessionId
 
-  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get(sessionId)
+  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get sessionId
 
 
-# Get current session for a worker
 getCurrentSession = (worker) ->
   result = db.prepare("""
     SELECT s.* FROM work_sessions s
     JOIN current_sessions cs ON cs.session_id = s.id
     WHERE cs.worker = ?
-  """).get(worker)
+  """).get worker
 
   return result or null
 
 
-# Calculate total duration for a session
 calculateSessionDuration = (sessionId) ->
-  # Get all events for this session
   events = db.prepare("""
     SELECT * FROM work_events
     WHERE session_id = ?
     ORDER BY timestamp ASC
-  """).all(sessionId)
+  """).all sessionId
 
   totalDuration = 0
   lastStartTime = null
@@ -100,88 +85,77 @@ calculateSessionDuration = (sessionId) ->
   for event in events
     switch event.event_type
       when 'start', 'resume'
-        lastStartTime = new Date(event.timestamp)
+        lastStartTime = new Date event.timestamp
       when 'pause', 'stop', 'cancel'
         if lastStartTime
-          duration = (new Date(event.timestamp) - lastStartTime) / 1000  # seconds
+          duration       = (new Date(event.timestamp) - lastStartTime) / 1000
           totalDuration += duration
-          lastStartTime = null
+          lastStartTime  = null
 
-  # If still running, add time since last start
   if lastStartTime
-    duration = (new Date() - lastStartTime) / 1000
+    duration       = (new Date() - lastStartTime) / 1000
     totalDuration += duration
 
-  return Math.round(totalDuration)
+  return Math.round totalDuration
 
 
-# Get all sessions with calculated durations
 getAllSessions = (worker = null) ->
   query = if worker
-    db.prepare("SELECT * FROM work_sessions WHERE worker = ?")
+    db.prepare "SELECT * FROM work_sessions WHERE worker = ?"
   else
-    db.prepare("SELECT * FROM work_sessions")
+    db.prepare "SELECT * FROM work_sessions"
 
-  sessions = if worker then query.all(worker) else query.all()
+  sessions = if worker then query.all worker else query.all()
 
-  # Calculate current duration for each session
   for session in sessions
-    session.total_duration = await calculateSessionDuration(session.id)
+    session.total_duration = await calculateSessionDuration session.id
 
   return sessions
 
 
-# Pause all active sessions for a worker
 pauseActiveSessions = (worker) ->
-  sessions = await getAllSessions(worker)
+  sessions = await getAllSessions worker
 
   for session in sessions
     if session.status is 'active'
       await createWorkEvent session.id, 'pause'
 
 
-# Resume a session (pauses others first)
 resumeSession = (sessionId, worker) ->
-  # Pause any active sessions
-  await pauseActiveSessions(worker)
+  await pauseActiveSessions worker
 
-  # Resume this session
   await createWorkEvent sessionId, 'resume'
 
-  # Update current session reference
   db.prepare("""
     INSERT OR REPLACE INTO current_sessions (worker, session_id)
     VALUES (?, ?)
-  """).run(worker, sessionId)
+  """).run worker, sessionId
 
-  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get(sessionId)
+  return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get sessionId
 
 
-# Convert session to work log entry (for backwards compatibility)
 sessionToWorkLog = (session) ->
-  # Get first and last events
   events = db.prepare("""
     SELECT * FROM work_events
     WHERE session_id = ?
     ORDER BY timestamp ASC
-  """).all(session.id)
+  """).all session.id
 
   firstEvent = events[0]
-  lastEvent = events[events.length - 1]
+  lastEvent  = events[events.length - 1]
 
-  return {
-    id: session.id
-    worker: session.worker
-    start_time: firstEvent?.timestamp or session.created_at
-    end_time: lastEvent?.timestamp or new Date().toISOString()
-    duration: Math.round(session.total_duration / 60)  # Convert to minutes
+  return
+    id:          session.id
+    worker:      session.worker
+    start_time:  firstEvent?.timestamp or session.created_at
+    end_time:    lastEvent?.timestamp or new Date().toISOString()
+    duration:    Math.round session.total_duration / 60
     description: session.description
-    project_id: session.project_id or null
-    task_id: session.task_id or null
-    billable: session.billable
-    submitted: false
-    created_at: session.created_at
-  }
+    project_id:  session.project_id or null
+    task_id:     session.task_id or null
+    billable:    session.billable
+    submitted:   false
+    created_at:  session.created_at
 
 module.exports = {
   createWorkSession

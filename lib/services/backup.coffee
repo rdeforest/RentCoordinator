@@ -1,13 +1,14 @@
-# lib/services/backup.coffee
+# XXX: This backup service was designed for Deno KV but the system now uses SQLite.
+# XXX: Needs to be updated to use SQLite export/import methods instead.
+# XXX: For now, use direct SQLite .dump/.restore commands or sqlite3 CLI tools.
 
-{ db }        = require('../db/schema.coffee')
-config        = require('../config.coffee')
-{ join }      = require('node:path')
-{ existsSync} = require('node:fs')
+{ db }        = require '../db/schema.coffee'
+config        = require '../config.coffee'
+{ join }      = require 'node:path'
+{ existsSync} = require 'node:fs'
 
 BACKUP_VERSION = '1.0.0'
 
-# All KV key prefixes used in the system
 KEY_PREFIXES = [
   ['timer_state']
   ['work_sessions']
@@ -25,7 +26,6 @@ KEY_PREFIXES = [
 ]
 
 
-# Export all data from Deno KV to JSON structure
 exportBackup = ->
   console.log 'Starting backup export...'
 
@@ -34,9 +34,8 @@ exportBackup = ->
     timestamp: new Date().toISOString()
     db_path:   config.DB_PATH
     data:      {}
-    config:    {}  # Configuration and environment
+    config:    {}
 
-  # Export environment configuration (for disaster recovery)
   console.log '  Exporting configuration...'
   backup.config =
     port:                 config.PORT
@@ -50,14 +49,11 @@ exportBackup = ->
     allowed_emails:       config.ALLOWED_EMAILS
     session_max_age:      config.SESSION_MAX_AGE
     code_expiry:          config.CODE_EXPIRY
-    # Note: Secrets like SESSION_SECRET, SMTP credentials, and Stripe keys
-    # should be stored separately in a secure location (password manager)
-    # and restored manually during disaster recovery
 
   totalEntries = 0
 
   for prefix in KEY_PREFIXES
-    prefixKey = prefix.join('/')
+    prefixKey              = prefix.join '/'
     backup.data[prefixKey] = []
 
     console.log "  Exporting #{prefixKey}..."
@@ -77,7 +73,6 @@ exportBackup = ->
   backup
 
 
-# Import data from JSON structure back to Deno KV
 importBackup = (backup, options = {}) ->
   { overwrite = true, dryRun = false } = options
 
@@ -93,11 +88,11 @@ importBackup = (backup, options = {}) ->
   console.log "Overwrite: #{overwrite}"
 
   stats =
-    total:    0
-    created:  0
-    updated:  0
-    skipped:  0
-    errors:   0
+    total:   0
+    created: 0
+    updated: 0
+    skipped: 0
+    errors:  0
 
   for prefixKey, entries of backup.data
     console.log "  Restoring #{prefixKey} (#{entries.length} entries)..."
@@ -106,18 +101,16 @@ importBackup = (backup, options = {}) ->
       stats.total++
 
       try
-        unless Array.isArray(entry.key)
-          throw new Error "Invalid key format: #{JSON.stringify(entry.key)}"
+        unless Array.isArray entry.key
+          throw new Error "Invalid key format: #{JSON.stringify entry.key}"
 
-        # Check if entry exists
-        existing = await db.get(entry.key)
+        existing = await db.get entry.key
 
         if existing.value and not overwrite
           stats.skipped++
-          console.log "    Skipped existing: #{JSON.stringify(entry.key)}"
+          console.log "    Skipped existing: #{JSON.stringify entry.key}"
           continue
 
-        # Write entry
         unless dryRun
           await db.set entry.key, entry.value
 
@@ -128,7 +121,7 @@ importBackup = (backup, options = {}) ->
 
       catch err
         stats.errors++
-        console.error "    Error restoring #{JSON.stringify(entry.key)}: #{err.message}"
+        console.error "    Error restoring #{JSON.stringify entry.key}: #{err.message}"
 
   console.log '\nRestore summary:'
   console.log "  Total entries:   #{stats.total}"
@@ -140,7 +133,6 @@ importBackup = (backup, options = {}) ->
   stats
 
 
-# Save backup to file
 saveBackupToFile = (backup, filepath) ->
   json = JSON.stringify backup, null, 2
   await Deno.writeTextFile filepath, json
@@ -148,12 +140,11 @@ saveBackupToFile = (backup, filepath) ->
   filepath
 
 
-# Load backup from file
 loadBackupFromFile = (filepath) ->
   unless existsSync filepath
     throw new Error "Backup file not found: #{filepath}"
 
-  json = await Deno.readTextFile filepath
+  json   = await Deno.readTextFile filepath
   backup = JSON.parse json
 
   console.log "Loaded backup from: #{filepath}"
@@ -163,7 +154,6 @@ loadBackupFromFile = (filepath) ->
   backup
 
 
-# Create backup directory if it doesn't exist
 ensureBackupDir = (dir) ->
   unless existsSync dir
     await Deno.mkdir dir, recursive: true
@@ -171,19 +161,16 @@ ensureBackupDir = (dir) ->
   dir
 
 
-# Generate backup filename with timestamp
 generateBackupFilename = (timestamp = new Date()) ->
-  # Format: backup-2025-10-20T12-30-45.json
   isoString = timestamp.toISOString()
-  dateStr = isoString.replace(/:/g, '-').split('.')[0]
+  dateStr   = isoString.replace(/:/g, '-').split('.')[0]
   "backup-#{dateStr}.json"
 
 
-# Full backup operation: export and save to file
 createBackup = (backupDir = './backups') ->
   await ensureBackupDir backupDir
 
-  backup = await exportBackup()
+  backup   = await exportBackup()
   filename = generateBackupFilename()
   filepath = join backupDir, filename
 
@@ -192,10 +179,9 @@ createBackup = (backupDir = './backups') ->
   { filepath, backup }
 
 
-# Full restore operation: load from file and import
 restoreBackup = (filepath, options = {}) ->
   backup = await loadBackupFromFile filepath
-  stats = await importBackup backup, options
+  stats  = await importBackup backup, options
 
   { backup, stats }
 

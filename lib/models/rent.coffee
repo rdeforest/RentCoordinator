@@ -1,11 +1,8 @@
-# lib/models/rent.coffee
-
 { v1 } = require 'uuid'
 { db } = require '../db/schema.coffee'
 config = require '../config.coffee'
 
 
-# Rent period record
 createRentPeriod = (data) ->
   id  = v1()
   now = new Date().toISOString()
@@ -34,27 +31,24 @@ createRentPeriod = (data) ->
     now
   )
 
-  return db.prepare("SELECT * FROM rent_periods WHERE id = ?").get(id)
+  return db.prepare("SELECT * FROM rent_periods WHERE id = ?").get id
 
 
 getRentPeriod = (year, month) ->
   return db.prepare("""
     SELECT * FROM rent_periods
     WHERE year = ? AND month = ?
-  """).get(year, month)
+  """).get year, month
 
 
-# Get or create rent period - ensures period exists before operations
 getOrCreateRentPeriod = (year, month) ->
-  existing = getRentPeriod(year, month)
+  existing = getRentPeriod year, month
   return existing if existing
 
-  # Create new period with default values
-  return await createRentPeriod {
-    year:        year
-    month:       month
-    amount_due:  config.BASE_RENT or 1600  # Will be recalculated later
-  }
+  return await createRentPeriod
+    year:       year
+    month:      month
+    amount_due: config.BASE_RENT or 1600
 
 
 getAllRentPeriods = ->
@@ -67,51 +61,45 @@ getAllRentPeriods = ->
 
 
 updateRentPeriod = (year, month, updates) ->
-  existing = getRentPeriod(year, month)
+  existing = getRentPeriod year, month
 
-  if not existing
+  unless existing
     throw new Error "Rent period not found: #{year}-#{month}"
 
-  # Build dynamic update query based on provided fields
   fields = []
   values = []
 
   for key, value of updates
-    # Skip non-column fields
     continue if key in ['id', 'created_at']
     fields.push "#{key} = ?"
     values.push value
 
-  # Always update updated_at
   fields.push "updated_at = ?"
   values.push new Date().toISOString()
 
-  # Add WHERE clause values
   values.push year, month
 
   query = """
     UPDATE rent_periods
-    SET #{fields.join(', ')}
+    SET #{fields.join ', '}
     WHERE year = ? AND month = ?
   """
 
-  db.prepare(query).run(values...)
+  db.prepare(query).run values...
 
-  return getRentPeriod(year, month)
+  return getRentPeriod year, month
 
 
-# Rent events for comprehensive tracking
 createRentEvent = (data) ->
   id  = v1()
   now = new Date().toISOString()
 
-  # Get period_id from year/month if not provided
   period_id = data.period_id
-  if not period_id and data.year and data.month
-    period = getRentPeriod(data.year, data.month)
+  unless period_id or (data.year and data.month)
+    period    = getRentPeriod data.year, data.month
     period_id = period?.id
 
-  if not period_id
+  unless period_id
     throw new Error "Cannot create rent event: period not found for #{data.year}-#{data.month}"
 
   db.prepare("""
@@ -127,50 +115,44 @@ createRentEvent = (data) ->
     now
   )
 
-  # Add audit log entry
-  await createAuditLog {
+  await createAuditLog
     action:      'create'
     entity_type: 'rent_event'
     entity_id:   id
     old_value:   null
     new_value:   data
     user:        data.created_by or 'user'
-  }
 
-  return db.prepare("SELECT * FROM rent_events WHERE id = ?").get(id)
+  return db.prepare("SELECT * FROM rent_events WHERE id = ?").get id
 
 
 getAllRentEvents = (includeDeleted = false) ->
-  # Note: SQLite version doesn't have soft delete in rent_events table
-  # This is handled at the application layer if needed
   events = db.prepare("""
     SELECT * FROM rent_events
     ORDER BY created_at DESC
   """).all()
 
-  # Parse metadata JSON
   for event in events
-    event.metadata = JSON.parse(event.metadata) if event.metadata
+    event.metadata = JSON.parse event.metadata if event.metadata
 
   return events
 
 
 getRentEvent = (id) ->
-  event = db.prepare("SELECT * FROM rent_events WHERE id = ?").get(id)
+  event = db.prepare("SELECT * FROM rent_events WHERE id = ?").get id
 
   if event?.metadata
-    event.metadata = JSON.parse(event.metadata)
+    event.metadata = JSON.parse event.metadata
 
   return event
 
 
 updateRentEvent = (id, updates) ->
-  existing = getRentEvent(id)
+  existing = getRentEvent id
 
-  if not existing
+  unless existing
     throw new Error "Rent event not found: #{id}"
 
-  # Build dynamic update query
   fields = []
   values = []
 
@@ -178,87 +160,77 @@ updateRentEvent = (id, updates) ->
     continue if key in ['id', 'created_at', 'updated_by']
     if key is 'metadata'
       fields.push "metadata = ?"
-      values.push JSON.stringify(value)
+      values.push JSON.stringify value
     else
       fields.push "#{key} = ?"
       values.push value
 
-  # Add WHERE clause value
   values.push id
 
   query = """
     UPDATE rent_events
-    SET #{fields.join(', ')}
+    SET #{fields.join ', '}
     WHERE id = ?
   """
 
-  db.prepare(query).run(values...)
+  db.prepare(query).run values...
 
-  # Add audit log entry
-  await createAuditLog {
+  await createAuditLog
     action:      'update'
     entity_type: 'rent_event'
     entity_id:   id
     old_value:   existing
     new_value:   updates
     user:        updates.updated_by or 'user'
-  }
 
-  return getRentEvent(id)
+  return getRentEvent id
 
 
 deleteRentEvent = (id, deletedBy = 'user') ->
-  existing = getRentEvent(id)
+  existing = getRentEvent id
 
-  if not existing
+  unless existing
     throw new Error "Rent event not found: #{id}"
 
-  # Hard delete in SQLite version - soft delete would require schema change
-  db.prepare("DELETE FROM rent_events WHERE id = ?").run(id)
+  db.prepare("DELETE FROM rent_events WHERE id = ?").run id
 
-  # Add audit log entry
-  await createAuditLog {
+  await createAuditLog
     action:      'delete'
     entity_type: 'rent_event'
     entity_id:   id
     old_value:   existing
     new_value:   null
     user:        deletedBy
-  }
 
-  return { deleted: true, id: id }
+  return deleted: true, id: id
 
 
 getRentEventsForPeriod = (year, month, includeDeleted = false) ->
-  period = getRentPeriod(year, month)
+  period = getRentPeriod year, month
 
-  if not period
+  unless period
     return []
 
   events = db.prepare("""
     SELECT * FROM rent_events
     WHERE period_id = ?
     ORDER BY created_at DESC
-  """).all(period.id)
+  """).all period.id
 
-  # Parse metadata JSON
   for event in events
-    event.metadata = JSON.parse(event.metadata) if event.metadata
+    event.metadata = JSON.parse event.metadata if event.metadata
 
   return events
 
 
-# Audit log functionality
 createAuditLog = (data) ->
   id  = v1()
   now = new Date().toISOString()
 
-  # Prepare changes object
-  changes = {
+  changes =
     old_value: data.old_value or null
     new_value: data.new_value or null
     metadata:  data.metadata or {}
-  }
 
   db.prepare("""
     INSERT INTO audit_logs (id, action, entity_type, entity_id, user, changes, created_at)
@@ -273,11 +245,10 @@ createAuditLog = (data) ->
     now
   )
 
-  return db.prepare("SELECT * FROM audit_logs WHERE id = ?").get(id)
+  return db.prepare("SELECT * FROM audit_logs WHERE id = ?").get id
 
 
 getAuditLogs = (filters = {}) ->
-  # Build dynamic WHERE clause
   conditions = []
   values     = []
 
@@ -298,7 +269,7 @@ getAuditLogs = (filters = {}) ->
     values.push filters.user
 
   whereClause = if conditions.length > 0
-    "WHERE #{conditions.join(' AND ')}"
+    "WHERE #{conditions.join ' AND '}"
   else
     ""
 
@@ -308,11 +279,10 @@ getAuditLogs = (filters = {}) ->
     ORDER BY created_at DESC
   """
 
-  logs = db.prepare(query).all(values...)
+  logs = db.prepare(query).all values...
 
-  # Parse changes JSON
   for log in logs
-    log.changes = JSON.parse(log.changes) if log.changes
+    log.changes = JSON.parse log.changes if log.changes
 
   return logs
 
