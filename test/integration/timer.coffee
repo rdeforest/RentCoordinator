@@ -70,11 +70,6 @@ describe 'Timer Integration Tests', ->
     # Clean up test directory
     cleanupTestDirectory()
 
-    # Force exit after cleanup (server doesn't have clean shutdown yet)
-    setTimeout ->
-      process.exit(0)
-    , 100
-
   it 'should complete a full work session workflow', ->
     worker = 'robert'
 

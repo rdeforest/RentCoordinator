@@ -3,7 +3,7 @@
 
 { describe, it, before, after } = require 'node:test'
 assert = require 'node:assert/strict'
-{ startTestServer, stopTestServer, forceExit, DEFAULT_TEST_PORT } = require '../server.coffee'
+{ startTestServer, stopTestServer, DEFAULT_TEST_PORT } = require '../server.coffee'
 
 BASE_URL = "http://localhost:#{DEFAULT_TEST_PORT}"
 serverConfig = null
@@ -15,7 +15,6 @@ describe 'Timer Start', ->
 
   after ->
     await stopTestServer(serverConfig)
-    forceExit()
 
   it 'should start a timer for robert', ->
     console.log '\n=== Testing /timer/start ==='
