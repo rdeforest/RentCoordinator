@@ -4,13 +4,12 @@ fs                              = require 'fs'
 path                            = require 'path'
 { execSync }                    = require 'child_process'
 { waitForServer }               = require '../helper.coffee'
+{ findFreePort, killPort }      = require '../server.coffee'
 
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
-TEST_PORT    = 3999
-TEST_DB      = path.join TEST_TMP_DIR, 'test-timer-integration.db'
-TEST_LOG     = path.join TEST_TMP_DIR, 'integration.log'
-BASE_URL     = "http://localhost:#{TEST_PORT}"
+BASE_PORT    = 4000
+testConfig   = null
 
 
 prepareTestDirectory = ->
@@ -23,26 +22,27 @@ cleanupTestDirectory = ->
     if fs.existsSync TEST_TMP_DIR
       fs.rmSync TEST_TMP_DIR, recursive: true, force: true
 
-killTestPort = ->
-  try
-    execSync "lsof -ti :#{TEST_PORT} | xargs -r kill -9", stdio: 'ignore'
-    await new Promise (resolve) -> setTimeout resolve, 100
-
 
 describe 'Timer Integration Tests', ->
   before ->
     prepareTestDirectory()
-    await killTestPort()
 
-    execSync "PORT=#{TEST_PORT} DB_PATH=#{TEST_DB} NODE_ENV=test coffee main.coffee > #{TEST_LOG} 2>&1 &",
+    port    = findFreePort BASE_PORT
+    dbPath  = path.join TEST_TMP_DIR, "test-timer-#{port}.db"
+    logPath = path.join TEST_TMP_DIR, "timer-#{port}.log"
+    baseUrl = "http://localhost:#{port}"
+
+    execSync "PORT=#{port} DB_PATH=#{dbPath} NODE_ENV=test coffee main.coffee > #{logPath} 2>&1 &",
       stdio: 'ignore'
       shell: true
 
     await new Promise (resolve) -> setTimeout resolve, 1000
-    await waitForServer "#{BASE_URL}/health"
+    await waitForServer "#{baseUrl}/health"
+
+    testConfig = { port, dbPath, baseUrl, logPath }
 
   after ->
-    await killTestPort()
+    await killPort testConfig.port if testConfig
     cleanupTestDirectory()
 
 
@@ -51,7 +51,7 @@ describe 'Timer Integration Tests', ->
     requestBody = { worker }
     console.log "Sending request:", JSON.stringify requestBody
 
-    startResponse = await fetch "#{BASE_URL}/timer/start",
+    startResponse = await fetch "#{testConfig.baseUrl}/timer/start",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify requestBody
@@ -68,13 +68,13 @@ describe 'Timer Integration Tests', ->
 
     await new Promise (resolve) -> setTimeout resolve, 1100
 
-    statusResponse = await fetch "#{BASE_URL}/timer/status?worker=#{worker}"
+    statusResponse = await fetch "#{testConfig.baseUrl}/timer/status?worker=#{worker}"
     statusData     = await statusResponse.json()
     assert.equal statusResponse.status, 200
     assert.ok    statusData.current_session
     assert.ok    statusData.elapsed >= 1
 
-    descResponse = await fetch "#{BASE_URL}/timer/description",
+    descResponse = await fetch "#{testConfig.baseUrl}/timer/description",
       method:  'PUT'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify
@@ -82,7 +82,7 @@ describe 'Timer Integration Tests', ->
         description: 'Test work session'
     assert.equal descResponse.status, 200
 
-    pauseResponse = await fetch "#{BASE_URL}/timer/pause",
+    pauseResponse = await fetch "#{testConfig.baseUrl}/timer/pause",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { worker }
@@ -91,7 +91,7 @@ describe 'Timer Integration Tests', ->
     assert.equal pauseResponse.status, 200
     assert.equal pauseData.status, 'paused'
 
-    resumeResponse = await fetch "#{BASE_URL}/timer/resume",
+    resumeResponse = await fetch "#{testConfig.baseUrl}/timer/resume",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { worker, session_id: sessionId }
@@ -100,7 +100,7 @@ describe 'Timer Integration Tests', ->
     assert.equal resumeResponse.status, 200
     assert.equal resumeData.status, 'active'
 
-    stopResponse = await fetch "#{BASE_URL}/timer/stop",
+    stopResponse = await fetch "#{testConfig.baseUrl}/timer/stop",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify
@@ -112,7 +112,7 @@ describe 'Timer Integration Tests', ->
     assert.ok    stopData.work_log
     assert.ok    stopData.duration >= 1
 
-    logsResponse = await fetch "#{BASE_URL}/work-logs?worker=#{worker}&limit=1"
+    logsResponse = await fetch "#{testConfig.baseUrl}/work-logs?worker=#{worker}&limit=1"
     logsData     = await logsResponse.json()
     assert.equal logsResponse.status, 200
     assert.equal logsData.length, 1
@@ -122,7 +122,7 @@ describe 'Timer Integration Tests', ->
   it 'should handle cancellation without creating work log', ->
     worker = 'lyndzie'
 
-    startResponse = await fetch "#{BASE_URL}/timer/start",
+    startResponse = await fetch "#{testConfig.baseUrl}/timer/start",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { worker }
@@ -130,7 +130,7 @@ describe 'Timer Integration Tests', ->
 
     await new Promise (resolve) -> setTimeout resolve, 100
 
-    stopResponse = await fetch "#{BASE_URL}/timer/stop",
+    stopResponse = await fetch "#{testConfig.baseUrl}/timer/stop",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify
@@ -146,13 +146,13 @@ describe 'Timer Integration Tests', ->
   it 'should handle sessions under minimum duration', ->
     worker = 'robert'
 
-    startResponse = await fetch "#{BASE_URL}/timer/start",
+    startResponse = await fetch "#{testConfig.baseUrl}/timer/start",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { worker }
     assert.equal startResponse.status, 200
 
-    stopResponse = await fetch "#{BASE_URL}/timer/stop",
+    stopResponse = await fetch "#{testConfig.baseUrl}/timer/stop",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify
