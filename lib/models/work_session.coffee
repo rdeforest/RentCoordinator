@@ -145,7 +145,6 @@ sessionToWorkLog = (session) ->
   lastEvent  = events[events.length - 1]
 
   return
-    id:          session.id
     worker:      session.worker
     start_time:  firstEvent?.timestamp or session.created_at
     end_time:    lastEvent?.timestamp or new Date().toISOString()
@@ -154,8 +153,6 @@ sessionToWorkLog = (session) ->
     project_id:  session.project_id or null
     task_id:     session.task_id or null
     billable:    session.billable
-    submitted:   false
-    created_at:  session.created_at
 
 module.exports = {
   createWorkSession

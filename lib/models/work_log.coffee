@@ -6,25 +6,27 @@ createWorkLog = (data) ->
   id  = v1()
   now = new Date().toISOString()
 
+  params = [
+    id
+    data.worker
+    data.start_time
+    data.end_time
+    data.duration
+    data.description
+    data.project_id or null
+    data.task_id or null
+    if data.billable? then data.billable else true
+    false
+    now
+  ]
+
   db.prepare("""
     INSERT INTO work_logs (
       id, worker, start_time, end_time, duration, description,
       project_id, task_id, billable, submitted, created_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  """).run(
-    id,
-    data.worker,
-    data.start_time,
-    data.end_time,
-    data.duration,
-    data.description,
-    data.project_id or null,
-    data.task_id or null,
-    if data.billable? then data.billable else true,
-    false,
-    now
-  )
+  """).run params...
 
   return db.prepare("SELECT * FROM work_logs WHERE id = ?").get id
 

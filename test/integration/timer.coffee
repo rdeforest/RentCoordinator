@@ -108,12 +108,20 @@ describe 'Timer Integration Tests', ->
         completed: true
 
     stopData = await stopResponse.json()
+
+    if stopResponse.status isnt 200
+      console.log "Stop error (#{stopResponse.status}):", stopData
+
     assert.equal stopResponse.status, 200
     assert.ok    stopData.work_log
     assert.ok    stopData.duration >= 1
 
     logsResponse = await fetch "#{testConfig.baseUrl}/work-logs?worker=#{worker}&limit=1"
     logsData     = await logsResponse.json()
+
+    if logsResponse.status isnt 200
+      console.log "Work logs error (#{logsResponse.status}):", logsData
+
     assert.equal logsResponse.status, 200
     assert.equal logsData.length, 1
     assert.equal logsData[0].description, 'Test work session'
