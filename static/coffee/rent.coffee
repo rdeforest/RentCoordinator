@@ -1,41 +1,36 @@
-# static/coffee/rent.coffee
+now              = new Date()
+currentYear      = now.getFullYear()
+currentMonth     = now.getMonth() + 1
+currentFilters   = {}
+allEvents        = []
+eventToDelete    = null
+showingDeleted   = false
 
-# State
-now = new Date()
-currentYear = now.getFullYear()
-currentMonth = now.getMonth() + 1
-currentFilters = {}
-allEvents = []
-eventToDelete = null
-showingDeleted = false
-
-# DOM elements
-eventModal = document.getElementById 'event-modal'
-eventForm = document.getElementById 'event-form'
-addEventBtn = document.getElementById 'add-event-btn'
-cancelEventBtn = document.getElementById 'cancel-event'
-eventSubmitBtn = document.getElementById 'event-submit'
-eventModalTitle = document.getElementById 'event-modal-title'
+eventModal       = document.getElementById 'event-modal'
+eventForm        = document.getElementById 'event-form'
+addEventBtn      = document.getElementById 'add-event-btn'
+cancelEventBtn   = document.getElementById 'cancel-event'
+eventSubmitBtn   = document.getElementById 'event-submit'
+eventModalTitle  = document.getElementById 'event-modal-title'
 
 confirmDeleteModal = document.getElementById 'confirm-delete-modal'
-confirmDeleteBtn = document.getElementById 'confirm-delete-btn'
-cancelDeleteBtn = document.getElementById 'cancel-delete-btn'
+confirmDeleteBtn   = document.getElementById 'confirm-delete-btn'
+cancelDeleteBtn    = document.getElementById 'cancel-delete-btn'
 deleteEventDetails = document.getElementById 'delete-event-details'
 
 toggleFiltersBtn = document.getElementById 'toggle-filters-btn'
 toggleDeletedBtn = document.getElementById 'toggle-deleted-btn'
-eventFilters = document.getElementById 'event-filters'
-applyFiltersBtn = document.getElementById 'apply-filters-btn'
-clearFiltersBtn = document.getElementById 'clear-filters-btn'
+eventFilters     = document.getElementById 'event-filters'
+applyFiltersBtn  = document.getElementById 'apply-filters-btn'
+clearFiltersBtn  = document.getElementById 'clear-filters-btn'
 
 eventsTable = document.getElementById 'events-tbody'
 
-paymentModal = document.getElementById 'payment-modal'
+paymentModal     = document.getElementById 'payment-modal'
 recordPaymentBtn = document.getElementById 'record-payment-btn'
 cancelPaymentBtn = document.getElementById 'cancel-payment'
-paymentForm = document.getElementById 'payment-form'
+paymentForm      = document.getElementById 'payment-form'
 
-# Load data on page load
 window.addEventListener 'load', ->
   loadRentSummary()
   loadCurrentMonth()
@@ -43,52 +38,39 @@ window.addEventListener 'load', ->
   loadEvents()
   populateFilterYears()
 
-# Load rent summary
+
 loadRentSummary = ->
   try
     response = await fetch '/rent/summary'
-    summary = await response.json()
+    summary  = await response.json()
 
-    document.getElementById('outstanding-balance').textContent =
-      formatCurrency summary.outstanding_balance
-    document.getElementById('total-credits').textContent =
-      formatCurrency summary.total_discount_applied
-    document.getElementById('total-paid').textContent =
-      formatCurrency summary.total_amount_paid
-    document.getElementById('months-tracked').textContent =
-      summary.total_periods
+    document.getElementById('outstanding-balance').textContent = formatCurrency summary.outstanding_balance
+    document.getElementById('total-credits')       .textContent = formatCurrency summary.total_discount_applied
+    document.getElementById('total-paid')          .textContent = formatCurrency summary.total_amount_paid
+    document.getElementById('months-tracked')      .textContent = summary.total_periods
 
   catch err
     console.error 'Error loading rent summary:', err
     showError 'Failed to load rent summary'
 
-# Load current month details
 loadCurrentMonth = ->
   try
     response = await fetch "/rent/period/#{currentYear}/#{currentMonth}"
-    period = await response.json()
+    period   = await response.json()
 
-    document.getElementById('current-month-title').textContent =
-      formatMonthYear currentYear, currentMonth
+    document.getElementById('current-month-title').textContent = formatMonthYear currentYear, currentMonth
 
-    document.getElementById('hours-worked').textContent =
-      period.hours_worked.toFixed 2
-    document.getElementById('hours-previous').textContent =
-      (period.hours_from_previous or 0).toFixed 2
-    document.getElementById('hours-applied').textContent =
-      Math.min(period.hours_worked + (period.hours_from_previous or 0), 8).toFixed 2
-    document.getElementById('credit-applied').textContent =
-      formatCurrency period.discount_applied
-    document.getElementById('amount-due').textContent =
-      formatCurrency period.amount_due
-    document.getElementById('amount-paid').textContent =
-      formatCurrency period.amount_paid or 0
+    document.getElementById('hours-worked')  .textContent = period.hours_worked.toFixed 2
+    document.getElementById('hours-previous').textContent = (period.hours_from_previous or 0).toFixed 2
+    document.getElementById('hours-applied') .textContent = Math.min(period.hours_worked + (period.hours_from_previous or 0), 8).toFixed 2
+    document.getElementById('credit-applied').textContent = formatCurrency period.discount_applied
+    document.getElementById('amount-due')    .textContent = formatCurrency period.amount_due
+    document.getElementById('amount-paid')   .textContent = formatCurrency period.amount_paid or 0
+
     outstanding = period.amount_due - (period.amount_paid or 0)
-    document.getElementById('outstanding-balance-current').textContent =
-      formatCurrency outstanding
+    document.getElementById('outstanding-balance-current').textContent = formatCurrency outstanding
 
-    # Show "Pay Rent Online" button if there's an outstanding balance
-    payOnlineBtn = document.getElementById('pay-rent-online-btn')
+    payOnlineBtn = document.getElementById 'pay-rent-online-btn'
     if outstanding > 0
       payOnlineBtn.style.display = 'inline-block'
       payOnlineBtn.onclick = ->
@@ -471,14 +453,12 @@ paymentForm.addEventListener 'submit', (e) ->
 document.getElementById('recalculate-btn').addEventListener 'click', ->
   autoRecalculateAndReload()
 
-# Helper functions
 formatCurrency = (amount) ->
-  new Intl.NumberFormat('en-US',
-    style: 'currency'
-    currency: 'USD'
-  ).format amount
+  new Intl.NumberFormat 'en-US',
+    style    : 'currency'
+    currency : 'USD'
+  .format amount
 
-# Auto-recalculate and reload all data
 autoRecalculateAndReload = ->
   try
     response = await fetch '/rent/recalculate-all', method: 'POST'
@@ -493,22 +473,22 @@ autoRecalculateAndReload = ->
 formatDate = (dateStr) ->
   date = new Date dateStr
   date.toLocaleDateString 'en-US',
-    year: 'numeric'
-    month: 'short'
-    day: 'numeric'
+    year  : 'numeric'
+    month : 'short'
+    day   : 'numeric'
 
 formatMonthYear = (year, month) ->
   date = new Date year, month - 1
   date.toLocaleDateString 'en-US',
-    year: 'numeric'
-    month: 'long'
+    year  : 'numeric'
+    month : 'long'
 
 formatEventType = (type) ->
   switch type
-    when 'payment' then 'Payment'
-    when 'adjustment' then 'Rent Adjustment'
-    when 'work_value_change' then 'Work Value Change'
-    when 'manual' then 'Manual Entry'
+    when 'payment'            then 'Payment'
+    when 'adjustment'         then 'Rent Adjustment'
+    when 'work_value_change'  then 'Work Value Change'
+    when 'manual'             then 'Manual Entry'
     else type
 
 escapeHtml = (text) ->
@@ -517,17 +497,12 @@ escapeHtml = (text) ->
   return div.innerHTML
 
 getPaymentStatus = (period) ->
-  due = period.amount_due
+  due  = period.amount_due
   paid = period.amount_paid or 0
 
-  if paid >= due then 'PAID'
-  else if paid > 0 then 'PARTIAL'
-  else 'UNPAID'
+  if      paid >= due then 'PAID'
+  else if paid > 0    then 'PARTIAL'
+  else                     'UNPAID'
 
-showSuccess = (message) ->
-  # Simple alert for now - could be enhanced with toast notifications
-  alert message
-
-showError = (message) ->
-  # Simple alert for now - could be enhanced with toast notifications  
-  alert message
+showSuccess = (message) -> alert message
+showError   = (message) -> alert message

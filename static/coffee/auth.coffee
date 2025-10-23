@@ -1,13 +1,9 @@
-# static/coffee/auth.coffee
-# Shared authentication utilities for frontend
-
-# Check if user is authenticated, redirect to login if not
 window.requireAuth = ->
   try
-    response = await fetch('/auth/status')
-    data = await response.json()
+    response = await fetch '/auth/status'
+    data     = await response.json()
 
-    if not data.authenticated
+    unless data.authenticated
       window.location.href = '/login.html'
       return false
 
@@ -18,11 +14,10 @@ window.requireAuth = ->
     return false
 
 
-# Get current user info
 window.getCurrentUser = ->
   try
-    response = await fetch('/auth/status')
-    data = await response.json()
+    response = await fetch '/auth/status'
+    data     = await response.json()
 
     if data.authenticated
       return email: data.email
@@ -33,7 +28,6 @@ window.getCurrentUser = ->
     return null
 
 
-# Logout current user
 window.logout = ->
   try
     response = await fetch '/auth/logout',
@@ -50,32 +44,25 @@ window.logout = ->
     return false
 
 
-# Add logout button to page
 window.addLogoutButton = (containerSelector = 'header') ->
-  container = document.querySelector(containerSelector)
-  if not container
-    return
+  container = document.querySelector containerSelector
+  return unless container
+  return if document.getElementById 'logoutBtn'
 
-  # Check if logout button already exists
-  if document.getElementById('logoutBtn')
-    return
-
-  logoutBtn = document.createElement('button')
-  logoutBtn.id = 'logoutBtn'
+  logoutBtn           = document.createElement 'button'
+  logoutBtn.id        = 'logoutBtn'
   logoutBtn.className = 'btn btn-secondary'
   logoutBtn.textContent = 'Logout'
   logoutBtn.style.float = 'right'
+
   logoutBtn.addEventListener 'click', (e) ->
     e.preventDefault()
-    if confirm('Are you sure you want to logout?')
-      logout()
+    logout() if confirm 'Are you sure you want to logout?'
 
-  container.appendChild(logoutBtn)
+  container.appendChild logoutBtn
 
 
-# Auto-initialize auth check on page load
 document.addEventListener 'DOMContentLoaded', ->
-  # Only run on pages that are not login page
-  if window.location.pathname isnt '/login.html'
+  unless window.location.pathname is '/login.html'
     await requireAuth()
     addLogoutButton()

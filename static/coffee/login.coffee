@@ -1,70 +1,56 @@
-# static/coffee/login.coffee
-
-# DOM elements
-emailForm   = null
-verifyForm  = null
-emailStep   = null
-verifyStep  = null
-emailInput  = null
-codeInput   = null
-messageDiv  = null
-
+emailForm    = null
+verifyForm   = null
+emailStep    = null
+verifyStep   = null
+emailInput   = null
+codeInput    = null
+messageDiv   = null
 currentEmail = null
 
 
-# Initialize on DOM load
 document.addEventListener 'DOMContentLoaded', ->
-  emailForm  = document.getElementById('emailForm')
-  verifyForm = document.getElementById('verifyForm')
-  emailStep  = document.getElementById('emailStep')
-  verifyStep = document.getElementById('verifyStep')
-  emailInput = document.getElementById('email')
-  codeInput  = document.getElementById('code')
-  messageDiv = document.getElementById('message')
+  emailForm  = document.getElementById 'emailForm'
+  verifyForm = document.getElementById 'verifyForm'
+  emailStep  = document.getElementById 'emailStep'
+  verifyStep = document.getElementById 'verifyStep'
+  emailInput = document.getElementById 'email'
+  codeInput  = document.getElementById 'code'
+  messageDiv = document.getElementById 'message'
+  backLink   = document.getElementById 'backToEmail'
 
-  backLink = document.getElementById('backToEmail')
-
-  # Set up event listeners
-  emailForm.addEventListener  'submit', handleEmailSubmit
+  emailForm .addEventListener 'submit', handleEmailSubmit
   verifyForm.addEventListener 'submit', handleVerifySubmit
-  backLink.addEventListener   'click',  handleBackToEmail
+  backLink  .addEventListener 'click',  handleBackToEmail
 
-  # Check if already authenticated
   checkAuthStatus()
 
 
-# Check if user is already authenticated
 checkAuthStatus = ->
   try
-    response = await fetch('/auth/status')
-    data = await response.json()
+    response = await fetch '/auth/status'
+    data     = await response.json()
 
-    if data.authenticated
-      # Already logged in, redirect to home
-      window.location.href = '/'
+    window.location.href = '/' if data.authenticated
   catch err
     console.error 'Auth check failed:', err
 
 
-# Handle email form submission
 handleEmailSubmit = (e) ->
   e.preventDefault()
 
   email = emailInput.value.trim()
-  if not email
-    return showMessage 'Please enter your email address', 'error'
+  return showMessage 'Please enter your email address', 'error' unless email
 
   currentEmail = email
 
-  # Disable form
   emailForm.querySelector('button').disabled = true
   showMessage 'Sending verification code...', 'success'
 
   try
     response = await fetch '/auth/send-code',
-      method: 'POST'
-      headers: 'Content-Type': 'application/json'
-      body: JSON.stringify(email: email)
+      method  : 'POST'
+      headers : 'Content-Type': 'application/json'
+      body    : JSON.stringify email: email
 
     data = await response.json()
 
@@ -80,31 +66,27 @@ handleEmailSubmit = (e) ->
     emailForm.querySelector('button').disabled = false
 
 
-# Handle verification form submission
 handleVerifySubmit = (e) ->
   e.preventDefault()
 
   code = codeInput.value.trim()
-  if not code or code.length isnt 6
-    return showMessage 'Please enter the 6-digit code', 'error'
+  return showMessage 'Please enter the 6-digit code', 'error' unless code and code.length is 6
 
-  # Disable form
   verifyForm.querySelector('button').disabled = true
   showMessage 'Verifying code...', 'success'
 
   try
     response = await fetch '/auth/verify-code',
-      method: 'POST'
-      headers: 'Content-Type': 'application/json'
-      body: JSON.stringify
-        email: currentEmail
-        code:  code
+      method  : 'POST'
+      headers : 'Content-Type': 'application/json'
+      body    : JSON.stringify
+        email : currentEmail
+        code  : code
 
     data = await response.json()
 
     if response.ok
       showMessage 'Success! Redirecting...', 'success'
-      # Redirect to home page after a brief delay
       setTimeout (-> window.location.href = '/'), 1000
     else
       showMessage data.error or 'Invalid or expired code', 'error'
@@ -117,30 +99,27 @@ handleVerifySubmit = (e) ->
     verifyForm.querySelector('button').disabled = false
 
 
-# Show verify step
 showVerifyStep = ->
-  emailStep.style.display  = 'none'
+  emailStep .style.display = 'none'
   verifyStep.style.display = 'block'
   codeInput.value = ''
   codeInput.focus()
 
 
-# Back to email entry
 handleBackToEmail = (e) ->
   e.preventDefault()
-  emailStep.style.display  = 'block'
+  emailStep .style.display = 'block'
   verifyStep.style.display = 'none'
   emailForm.querySelector('button').disabled = false
   emailInput.focus()
   showMessage '', ''
 
 
-# Show message to user
 showMessage = (text, type) ->
-  if not text
+  unless text
     messageDiv.innerHTML = ''
     messageDiv.className = 'message'
     return
 
   messageDiv.textContent = text
-  messageDiv.className = "message #{type}"
+  messageDiv.className   = "message #{type}"

@@ -1,57 +1,48 @@
-# static/coffee/timer.coffee
-
-# State
-currentWorker = null
-currentSession = null
-serverInterval = null
-sessions = []
-sortColumn = 'stopped'
-sortDirection = 'desc'
+currentWorker      = null
+currentSession     = null
+serverInterval     = null
+sessions           = []
+sortColumn         = 'stopped'
+sortDirection      = 'desc'
 descriptionTimeout = null
 
-# DOM elements
-workerButtons = document.querySelectorAll '.worker-btn'
+workerButtons        = document.querySelectorAll '.worker-btn'
 currentWorkerSection = document.querySelector '.current-worker'
-currentWorkerName = document.getElementById 'current-worker-name'
-activeSection = document.getElementById 'active-session'
-startSection = document.getElementById 'start-work'
-sessionsSection = document.getElementById 'work-sessions'
-startButton = document.getElementById 'start-timer'
-pauseButton = document.getElementById 'pause-btn'
-resumeButton = document.getElementById 'resume-btn'
-doneButton = document.getElementById 'done-btn'
-cancelButton = document.getElementById 'cancel-btn'
-startNewButton = document.getElementById 'start-new-btn'
-activeTimer = document.getElementById 'active-timer'
-sessionStatus = document.getElementById 'session-status'
-activeDescription = document.getElementById 'active-description'
-sessionsTable = document.getElementById 'sessions-tbody'
+currentWorkerName    = document.getElementById 'current-worker-name'
+activeSection        = document.getElementById 'active-session'
+startSection         = document.getElementById 'start-work'
+sessionsSection      = document.getElementById 'work-sessions'
+startButton          = document.getElementById 'start-timer'
+pauseButton          = document.getElementById 'pause-btn'
+resumeButton         = document.getElementById 'resume-btn'
+doneButton           = document.getElementById 'done-btn'
+cancelButton         = document.getElementById 'cancel-btn'
+startNewButton       = document.getElementById 'start-new-btn'
+activeTimer          = document.getElementById 'active-timer'
+sessionStatus        = document.getElementById 'session-status'
+activeDescription    = document.getElementById 'active-description'
+sessionsTable        = document.getElementById 'sessions-tbody'
 
-# Worker selection
 workerButtons.forEach (btn) ->
   btn.addEventListener 'click', ->
     currentWorker = btn.dataset.worker
 
-    # Update UI
     workerButtons.forEach (b) -> b.classList.remove 'active'
     btn.classList.add 'active'
 
-    currentWorkerName.textContent = currentWorker.charAt(0).toUpperCase() + currentWorker.slice(1)
-    currentWorkerSection.style.display = 'block'
+    currentWorkerName.textContent           = currentWorker.charAt(0).toUpperCase() + currentWorker.slice 1
+    currentWorkerSection.style.display      = 'block'
 
-    # Load current state
     loadWorkerState()
 
-# Start new work
 startButton.addEventListener 'click', ->
   try
     response = await fetch '/timer/start',
-      method: 'POST'
-      headers: 'Content-Type': 'application/json'
-      body: JSON.stringify worker: currentWorker
+      method  : 'POST'
+      headers : 'Content-Type': 'application/json'
+      body    : JSON.stringify worker: currentWorker
 
     if response.ok
-      # Reload state from server to get fresh elapsed time
       loadWorkerState()
     else
       error = await response.json()
@@ -59,16 +50,14 @@ startButton.addEventListener 'click', ->
   catch err
     alert "Error starting timer: #{err.message}"
 
-# Pause work
 pauseButton.addEventListener 'click', ->
   try
     response = await fetch '/timer/pause',
-      method: 'POST'
-      headers: 'Content-Type': 'application/json'
-      body: JSON.stringify worker: currentWorker
+      method  : 'POST'
+      headers : 'Content-Type': 'application/json'
+      body    : JSON.stringify worker: currentWorker
 
     if response.ok
-      # Reload state from server to get fresh data
       loadWorkerState()
     else
       error = await response.json()
@@ -76,18 +65,17 @@ pauseButton.addEventListener 'click', ->
   catch err
     alert "Error pausing timer: #{err.message}"
 
-# Resume work
+
 resumeButton.addEventListener 'click', ->
   try
     response = await fetch '/timer/resume',
-      method: 'POST'
-      headers: 'Content-Type': 'application/json'
-      body: JSON.stringify
-        worker: currentWorker
-        session_id: currentSession?.id
+      method  : 'POST'
+      headers : 'Content-Type': 'application/json'
+      body    : JSON.stringify
+        worker     : currentWorker
+        session_id : currentSession?.id
 
     if response.ok
-      # Reload state from server to get fresh data
       loadWorkerState()
     else
       error = await response.json()
@@ -95,20 +83,18 @@ resumeButton.addEventListener 'click', ->
   catch err
     alert "Error resuming timer: #{err.message}"
 
-# Done with work
 doneButton.addEventListener 'click', ->
   try
     response = await fetch '/timer/stop',
-      method: 'POST'
-      headers: 'Content-Type': 'application/json'
-      body: JSON.stringify
-        worker: currentWorker
-        completed: true
+      method  : 'POST'
+      headers : 'Content-Type': 'application/json'
+      body    : JSON.stringify
+        worker    : currentWorker
+        completed : true
 
     if response.ok
       result = await response.json()
-      if result.event is 'completed_too_short'
-        alert "Work session was less than 1 minute and won't be saved"
+      alert "Work session was less than 1 minute and won't be saved" if result.event is 'completed_too_short'
       currentSession = null
       hideActiveSession()
       loadSessions()
@@ -118,16 +104,16 @@ doneButton.addEventListener 'click', ->
   catch err
     alert "Error stopping timer: #{err.message}"
 
-# Cancel work
+
 cancelButton.addEventListener 'click', ->
   if confirm "Cancel this work session? It will be marked as cancelled."
     try
       response = await fetch '/timer/stop',
-        method: 'POST'
-        headers: 'Content-Type': 'application/json'
-        body: JSON.stringify
-          worker: currentWorker
-          completed: false
+        method  : 'POST'
+        headers : 'Content-Type': 'application/json'
+        body    : JSON.stringify
+          worker    : currentWorker
+          completed : false
 
       if response.ok
         currentSession = null
@@ -167,42 +153,36 @@ startNewButton.addEventListener 'click', ->
   catch err
     alert "Error starting new timer: #{err.message}"
 
-# Auto-save description
 activeDescription.addEventListener 'input', ->
   clearTimeout descriptionTimeout if descriptionTimeout
 
-  descriptionTimeout = setTimeout ->
-    saveDescription()
-  , 1000  # Save after 1 second of no typing
+  descriptionTimeout = setTimeout saveDescription, 1000
+
 
 saveDescription = ->
   return unless currentSession
 
   try
     response = await fetch '/timer/description',
-      method: 'PUT'
-      headers: 'Content-Type': 'application/json'
-      body: JSON.stringify
-        worker: currentWorker
-        description: activeDescription.value
+      method  : 'PUT'
+      headers : 'Content-Type': 'application/json'
+      body    : JSON.stringify
+        worker      : currentWorker
+        description : activeDescription.value
 
-    if response.ok
-      currentSession = await response.json()
+    currentSession = await response.json() if response.ok
   catch err
     console.error "Error saving description:", err
 
-# Load worker state
 loadWorkerState = ->
   return unless currentWorker
 
   try
-    # Get current status
     response = await fetch "/timer/status?worker=#{currentWorker}"
-    status = await response.json()
+    status   = await response.json()
 
     if status.current_session
-      currentSession = status.current_session
-      # Store the server's calculated duration
+      currentSession                = status.current_session
       currentSession.total_duration = status.elapsed or 0
       showActiveSession()
       startUpdateTimer()
@@ -210,7 +190,6 @@ loadWorkerState = ->
       currentSession = null
       hideActiveSession()
 
-    # Load all sessions
     loadSessions()
 
   catch err
@@ -290,17 +269,16 @@ displaySessions = ->
     """
   ).join ''
 
-# Get sort value for session
 getSessionSortValue = (session, column) ->
   switch column
-    when 'status' then session.status
+    when 'status'      then session.status
     when 'description' then session.description or ''
-    when 'started' then session.created_at
+    when 'started'     then session.created_at
     when 'stopped'
       if session.status in ['completed', 'cancelled']
         session.updated_at
       else
-        '9999-12-31'  # Active/paused sessions sort last
+        '9999-12-31'
     when 'duration' then session.total_duration
     else session.updated_at
 
@@ -342,67 +320,51 @@ hideActiveSession = ->
   startSection.style.display = 'block'
   stopUpdateTimer()
 
-# Update active session display
 updateActiveSession = ->
   return unless currentSession
 
-  # Update status
   sessionStatus.textContent = currentSession.status
-  sessionStatus.className = "session-status #{currentSession.status}"
+  sessionStatus.className   = "session-status #{currentSession.status}"
 
-  # Update buttons
   if currentSession.status is 'active'
-    pauseButton.style.display = 'inline-block'
+    pauseButton .style.display = 'inline-block'
     resumeButton.style.display = 'none'
   else
-    pauseButton.style.display = 'none'
+    pauseButton .style.display = 'none'
     resumeButton.style.display = 'inline-block'
 
-  # Update timer display
   updateTimerDisplay()
 
-# Update timer display
+
 updateTimerDisplay = ->
   return unless currentSession
+  activeTimer.textContent = formatDuration currentSession.total_duration or 0
 
-  # Just display the server's calculated duration
-  # Server updates every 5 seconds with fresh calculation
-  activeTimer.textContent = formatDuration(currentSession.total_duration or 0)
 
-# Start update timer
 startUpdateTimer = ->
   stopUpdateTimer()
-
-  # Update display immediately
   updateTimerDisplay()
+  serverInterval = setInterval loadWorkerState, 5000
 
-  # Reload from server every 5 seconds to get fresh duration
-  serverInterval = setInterval ->
-    loadWorkerState()
-  , 5000
 
-# Stop update timer
 stopUpdateTimer = ->
   clearInterval serverInterval if serverInterval
   serverInterval = null
 
-# Format duration
 formatDuration = (seconds) ->
-  hours = Math.floor(seconds / 3600)
-  minutes = Math.floor((seconds % 3600) / 60)
-  secs = seconds % 60
+  hours   = Math.floor seconds / 3600
+  minutes = Math.floor (seconds % 3600) / 60
+  secs    = seconds % 60
 
   "#{hours}:#{String(minutes).padStart(2, '0')}:#{String(secs).padStart(2, '0')}"
 
-# Format date/time
 formatDateTime = (date) ->
   date.toLocaleString [],
-    month: 'short'
-    day: 'numeric'
-    hour: '2-digit'
-    minute: '2-digit'
+    month  : 'short'
+    day    : 'numeric'
+    hour   : '2-digit'
+    minute : '2-digit'
 
-# Escape HTML
 escapeHtml = (text) ->
   div = document.createElement 'div'
   div.textContent = text
@@ -428,15 +390,12 @@ document.querySelectorAll('.sortable').forEach (th) ->
     # Re-display
     displaySessions()
 
-# Check for active session on page load
 window.addEventListener 'load', ->
-  # Auto-select worker if returning to page
   lastWorker = localStorage.getItem 'lastWorker'
   if lastWorker
     workerBtn = document.querySelector "[data-worker=\"#{lastWorker}\"]"
     workerBtn?.click()
 
-# Save selected worker
+
 window.addEventListener 'beforeunload', ->
-  if currentWorker
-    localStorage.setItem 'lastWorker', currentWorker
+  localStorage.setItem 'lastWorker', currentWorker if currentWorker
