@@ -17,10 +17,9 @@ Create `/etc/sv/rentcoordinator/run`:
 ```bash
 #!/bin/sh
 exec 2>&1
+cd /opt/rentcoordinator
 exec chpst -u rentcoordinator:rentcoordinator \
-    /home/rentcoordinator/.deno/bin/deno run \
-    --allow-read --allow-write --allow-env --allow-net --unstable-kv \
-    /opt/rentcoordinator/dist/main.js
+    /usr/bin/npx coffee main.coffee
 ```
 
 Create `/etc/sv/rentcoordinator/log/run` (optional logging):

@@ -6,6 +6,7 @@ workRoutes            = require './routes/work.coffee'
 recurringEventsRoutes = require './routes/recurring_events.coffee'
 authRoutes            = require './routes/auth.coffee'
 paymentRoutes         = require './routes/payment.coffee'
+backupRoutes          = require './routes/backup.coffee'
 middleware            = require './middleware.coffee'
 
 
@@ -146,6 +147,7 @@ setup = (app, getServer) ->
   workRoutes           .setup app
   recurringEventsRoutes.setup app
   paymentRoutes        .setup app
+  backupRoutes         .setup app
 
 
 module.exports = { setup }

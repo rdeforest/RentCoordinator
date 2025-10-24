@@ -37,14 +37,14 @@ setgid rentcoordinator
 
 # Set environment
 env PORT=3000
-env DB_PATH=/var/lib/rentcoordinator/db.kv
-env PATH=/home/rentcoordinator/.deno/bin:/usr/bin:/bin
+env DB_PATH=/var/lib/rentcoordinator/tenant-coordinator.db
+env PATH=/usr/local/bin:/usr/bin:/bin
 
 # Change to app directory
 chdir /opt/rentcoordinator
 
 # Start the application
-exec /home/rentcoordinator/.deno/bin/deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js
+exec /usr/bin/npx coffee main.coffee
 
 # Log output
 console log

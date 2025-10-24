@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RentCoordinator is a Deno-based tenant coordination application for tracking work hours, calculating rent credits, and managing reimbursements between Robert and Lyndzie. Built with CoffeeScript on both server and client sides.
+RentCoordinator is a Node.js-based tenant coordination application for tracking work hours, calculating rent credits, and managing reimbursements between Robert and Lyndzie. Built with CoffeeScript on both server and client sides.
 
 ## Development Commands
 
@@ -12,18 +12,12 @@ RentCoordinator is a Deno-based tenant coordination application for tracking wor
 ```bash
 # Development (builds, watches files, runs server)
 npm run dev
-# or
-deno task dev
 
 # Build only (compiles CoffeeScript to dist/)
 npm run build
-# or
-deno task build
 
 # Start production server (requires prior build)
 npm run start
-# or
-deno task start
 
 # Local installation (current machine)
 ./scripts/install.sh
@@ -38,7 +32,32 @@ deno task start
 The build system (scripts/build.ts) compiles CoffeeScript files to JavaScript, handles import path rewriting (.coffee → .js), and copies static assets to dist/. Watch mode rebuilds on changes and restarts the server automatically.
 
 ### Deployment System
-RentCoordinator uses a **push-based remote deployment model**:
+
+RentCoordinator supports two deployment models:
+
+#### 1. AWS Infrastructure Automation (Recommended)
+**Automated cloud deployment** using AWS CloudFormation:
+
+**Features:**
+- Auto Scaling Group with automatic instance replacement
+- Zero-touch deployment from GitHub
+- IAM roles for secure Secrets Manager access
+- Auto-registration with Application Load Balancer
+- Health checks and automatic rollback
+- Scale up/down on demand
+
+**Quick Start:**
+```bash
+cd infrastructure
+cp cloudformation/parameters-example.json cloudformation/parameters.json
+# Edit parameters.json with your AWS settings
+./deploy.sh deploy
+```
+
+See `infrastructure/README.md` for complete AWS deployment guide.
+
+#### 2. Manual Remote Deployment (Legacy)
+**Push-based remote deployment** to individual servers:
 
 **Local Scripts** (run from dev machine):
 - `deploy-install.sh <host>` - First-time installation on remote server
@@ -69,17 +88,17 @@ RentCoordinator uses a **push-based remote deployment model**:
 └── backups/           # Automatic backups
 ```
 
-See `scripts/DEPLOYMENT.md` for complete deployment documentation.
+See `scripts/DEPLOYMENT.md` for complete manual deployment documentation.
 See `migrations/README.md` for database migration guide.
-See `DISASTER-RECOVERY.md` for complete disaster recovery procedures.
+See `docs/DISASTER-RECOVERY.md` for complete disaster recovery procedures.
 
 ## Technology Stack
 
-- **Runtime**: Deno with TypeScript/CoffeeScript hybrid
+- **Runtime**: Node.js 18+ with CoffeeScript
 - **Backend**: Express.js server with CoffeeScript source, compiled to JavaScript
 - **Frontend**: Compiled JavaScript (from CoffeeScript) - no longer browser-compiled
-- **Database**: Deno KV (key-value store), with schema designed for future SQLite migration
-- **Build**: Custom TypeScript build script that compiles CoffeeScript
+- **Database**: SQLite (using node:sqlite built-in module)
+- **Build**: CoffeeScript compiler for client-side code
 
 ## Architecture
 
@@ -127,7 +146,7 @@ backups/                  - Database backups (gitignored)
 ```
 
 ### Database Design
-Uses Deno KV with keys like `['timer_state', worker]`, `['work_session', session_id]`, and `['rent_events', id]`. Schema includes projects, tasks, work_logs, timer_state, and rent tracking designed for eventual SQLite migration.
+Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, work_events, work_logs, timer_state, rent_periods, rent_events, audit_logs, recurring_events, and auth_sessions. Designed with proper foreign key constraints and indexes for performance.
 
 ### Core Domains
 
@@ -161,7 +180,7 @@ Uses Deno KV with keys like `['timer_state', worker]`, `['work_session', session
 ### Environment Variables
 - `PORT` - Server port (default: 3000)
 - `NODE_ENV` - Environment mode (development/production)
-- `DB_PATH` - Deno KV database path (default: ./tenant-coordinator.db)
+- `DB_PATH` - SQLite database path (default: ./tenant-coordinator.db)
 - `SESSION_SECRET` - Secret for session encryption (required for production)
 - `SMTP_HOST` - SMTP server for sending verification emails (optional in dev)
 - `SMTP_PORT` - SMTP port (default: 587)
@@ -176,13 +195,13 @@ Uses Deno KV with keys like `['timer_state', worker]`, `['work_session', session
 **Automated Backups:**
 ```bash
 # Create database backup
-deno task backup
+npm run backup
 
 # Restore from backup
-deno task restore backups/backup-YYYY-MM-DD*.json
+npm run restore backups/backup-YYYY-MM-DD*.json
 
 # Backups include:
-# - All Deno KV database data
+# - All SQLite database data
 # - Non-sensitive configuration (port, business rules, etc.)
 # - Database schema version
 ```
@@ -216,8 +235,8 @@ See `DISASTER-RECOVERY.md` for complete restoration procedures.
 ## Development Notes
 
 - **Client-side**: CoffeeScript is now pre-compiled to JavaScript for better reliability
-- **Server-side**: All CoffeeScript must be compiled before running
-- **Database**: Uses Deno KV (requires `--unstable-kv` flag)
+- **Server-side**: CoffeeScript files run directly via coffee command (no compilation needed for server)
+- **Database**: Uses SQLite via Node.js built-in `node:sqlite` module (Node 18+)
 - **Workers**: Hardcoded as ['robert', 'lyndzie'] in config
 - **Frontend**: Loads compiled JavaScript, polls `/timer/status` every second for live updates
 - **Hot Reload**: Available in dev mode with file watching

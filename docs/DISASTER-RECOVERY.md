@@ -13,11 +13,11 @@ Backups are created automatically during upgrades and can be created manually:
 ```bash
 # On vault2
 cd ~/rent-coordinator
-deno task backup
+npm run backup
 ```
 
 Backups include:
-- All database data (Deno KV)
+- All database data (SQLite)
 - Non-sensitive configuration
 - Database schema version
 
@@ -77,8 +77,8 @@ Store these ARNs/IDs for reference:
 ```bash
 # Launch EC2 instance (or equivalent)
 # Recommended: Debian/Ubuntu, t3.small or larger
-# Install Deno:
-curl -fsSL https://deno.land/install.sh | sh
+# Node.js 18+ is typically pre-installed or available via:
+sudo apt update && sudo apt install -y nodejs npm
 ```
 
 ### 2. Deploy Application
@@ -133,7 +133,7 @@ scp backup-*.json <new-server>:~/
 # Restore on new server
 ssh <new-server>
 cd ~/rent-coordinator
-deno task restore ~/backup-*.json
+npm run restore ~/backup-*.json
 ```
 
 ### 5. Update DNS

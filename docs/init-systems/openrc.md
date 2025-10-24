@@ -16,9 +16,10 @@ Create `/etc/init.d/rentcoordinator`:
 name="RentCoordinator"
 description="RentCoordinator Application"
 
-command="/home/rentcoordinator/.deno/bin/deno"
-command_args="run --allow-read --allow-write --allow-env --allow-net --unstable-kv /opt/rentcoordinator/dist/main.js"
+command="/usr/bin/npx"
+command_args="coffee main.coffee"
 command_user="rentcoordinator:rentcoordinator"
+directory="/opt/rentcoordinator"
 command_background=true
 pidfile="/var/run/${RC_SVCNAME}.pid"
 output_log="/var/log/rentcoordinator/app.log"

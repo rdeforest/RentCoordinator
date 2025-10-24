@@ -21,10 +21,10 @@ Type=simple
 User=rentcoordinator
 Group=rentcoordinator
 WorkingDirectory=/opt/rentcoordinator
-Environment="PATH=/home/rentcoordinator/.deno/bin:/usr/bin:/bin"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 Environment="PORT=3000"
-Environment="DB_PATH=/var/lib/rentcoordinator/db.kv"
-ExecStart=/home/rentcoordinator/.deno/bin/deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv /opt/rentcoordinator/dist/main.js
+Environment="DB_PATH=/var/lib/rentcoordinator/tenant-coordinator.db"
+ExecStart=/usr/bin/npx coffee main.coffee
 Restart=always
 RestartSec=10
 

@@ -11,9 +11,6 @@
 ```bash
 # Install PM2 globally via npm
 npm install -g pm2
-
-# Or using Deno (if available)
-deno install --allow-read --allow-write --allow-env --allow-net --allow-run --allow-sys --name pm2 npm:pm2
 ```
 
 ## PM2 Ecosystem File
@@ -24,13 +21,13 @@ Create `/opt/rentcoordinator/ecosystem.config.js`:
 module.exports = {
   apps: [{
     name: 'rentcoordinator',
-    script: '/home/rentcoordinator/.deno/bin/deno',
-    args: 'run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js',
+    script: 'main.coffee',
     cwd: '/opt/rentcoordinator',
-    interpreter: 'none',
+    interpreter: 'npx',
+    interpreterArgs: 'coffee',
     env: {
       PORT: 3000,
-      DB_PATH: '/var/lib/rentcoordinator/db.kv',
+      DB_PATH: '/var/lib/rentcoordinator/tenant-coordinator.db',
       NODE_ENV: 'production'
     },
     error_file: '/var/log/rentcoordinator/pm2-error.log',
@@ -54,7 +51,7 @@ module.exports = {
 pm2 start ecosystem.config.js
 
 # Or directly
-pm2 start "deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js" --name rentcoordinator
+pm2 start main.coffee --name rentcoordinator --interpreter npx --interpreter-args coffee
 
 # List processes
 pm2 list

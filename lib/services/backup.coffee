@@ -1,197 +1,257 @@
-# XXX: This backup service was designed for Deno KV but the system now uses SQLite.
-# XXX: Needs to be updated to use SQLite export/import methods instead.
-# XXX: For now, use direct SQLite .dump/.restore commands or sqlite3 CLI tools.
+# SQLite Database Backup Service with S3 Sync
+#
+# This service handles database backups with optional S3 synchronization for
+# multi-instance deployments.
 
-{ db }        = require '../db/schema.coffee'
-config        = require '../config.coffee'
-{ join }      = require 'node:path'
-{ existsSync} = require 'node:fs'
+{ S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = require '@aws-sdk/client-s3'
+{ createReadStream, createWriteStream, copyFileSync, existsSync, mkdirSync } = require 'node:fs'
+{ readFile } = require 'node:fs/promises'
+{ join, dirname, basename } = require 'node:path'
+config = require '../config.coffee'
 
-BACKUP_VERSION = '1.0.0'
+BACKUP_VERSION = '2.0.0'  # SQLite-based backups
 
-KEY_PREFIXES = [
-  ['timer_state']
-  ['work_sessions']
-  ['work_events']
-  ['current_session']
-  ['work_logs']
-  ['work_logs_by_worker']
-  ['work_logs_by_date']
-  ['rent_periods']
-  ['rent_payments']
-  ['rent_events']
-  ['audit_logs']
-  ['recurring_events']
-  ['recurring_event_logs']
-]
+# S3 Configuration
+S3_BUCKET    = process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups'
+S3_PREFIX    = process.env.BACKUP_S3_PREFIX || 'database/'
+AWS_REGION   = process.env.AWS_REGION || 'us-west-2'
+S3_ENABLED   = process.env.S3_BACKUP_ENABLED isnt 'false'  # Enabled by default in production
+
+# Initialize S3 client
+s3Client = new S3Client { region: AWS_REGION }
 
 
-exportBackup = ->
-  console.log 'Starting backup export...'
-
-  backup =
-    version:   BACKUP_VERSION
-    timestamp: new Date().toISOString()
-    db_path:   config.DB_PATH
-    data:      {}
-    config:    {}
-
-  console.log '  Exporting configuration...'
-  backup.config =
-    port:                 config.PORT
-    node_env:             config.NODE_ENV
-    db_path:              config.DB_PATH
-    base_rent:            config.BASE_RENT
-    hourly_credit:        config.HOURLY_CREDIT
-    max_monthly_hours:    config.MAX_MONTHLY_HOURS
-    workers:              config.WORKERS
-    default_stakeholders: config.DEFAULT_STAKEHOLDERS
-    allowed_emails:       config.ALLOWED_EMAILS
-    session_max_age:      config.SESSION_MAX_AGE
-    code_expiry:          config.CODE_EXPIRY
-
-  totalEntries = 0
-
-  for prefix in KEY_PREFIXES
-    prefixKey              = prefix.join '/'
-    backup.data[prefixKey] = []
-
-    console.log "  Exporting #{prefixKey}..."
-    count = 0
-
-    entries = db.list prefix: prefix
-    for await entry from entries
-      backup.data[prefixKey].push
-        key:   entry.key
-        value: entry.value
-      count++
-      totalEntries++
-
-    console.log "    Found #{count} entries"
-
-  console.log "Total entries exported: #{totalEntries}"
-  backup
+# Generate backup filename with timestamp
+generateBackupFilename = (timestamp = new Date()) ->
+  isoString = timestamp.toISOString()
+  dateStr   = isoString.replace(/:/g, '-').replace(/\./g, '-')
+  "tenant-coordinator-#{dateStr}.db"
 
 
-importBackup = (backup, options = {}) ->
-  { overwrite = true, dryRun = false } = options
-
-  unless backup.version
-    throw new Error 'Invalid backup format: missing version'
-
-  unless backup.data
-    throw new Error 'Invalid backup format: missing data'
-
-  console.log "Starting backup restore (version #{backup.version})..."
-  console.log "Backup from: #{backup.timestamp}"
-  console.log "Dry run: #{dryRun}"
-  console.log "Overwrite: #{overwrite}"
-
-  stats =
-    total:   0
-    created: 0
-    updated: 0
-    skipped: 0
-    errors:  0
-
-  for prefixKey, entries of backup.data
-    console.log "  Restoring #{prefixKey} (#{entries.length} entries)..."
-
-    for entry in entries
-      stats.total++
-
-      try
-        unless Array.isArray entry.key
-          throw new Error "Invalid key format: #{JSON.stringify entry.key}"
-
-        existing = await db.get entry.key
-
-        if existing.value and not overwrite
-          stats.skipped++
-          console.log "    Skipped existing: #{JSON.stringify entry.key}"
-          continue
-
-        unless dryRun
-          await db.set entry.key, entry.value
-
-        if existing.value
-          stats.updated++
-        else
-          stats.created++
-
-      catch err
-        stats.errors++
-        console.error "    Error restoring #{JSON.stringify entry.key}: #{err.message}"
-
-  console.log '\nRestore summary:'
-  console.log "  Total entries:   #{stats.total}"
-  console.log "  Created:         #{stats.created}"
-  console.log "  Updated:         #{stats.updated}"
-  console.log "  Skipped:         #{stats.skipped}"
-  console.log "  Errors:          #{stats.errors}"
-
-  stats
-
-
-saveBackupToFile = (backup, filepath) ->
-  json = JSON.stringify backup, null, 2
-  await Deno.writeTextFile filepath, json
-  console.log "Backup saved to: #{filepath}"
-  filepath
-
-
-loadBackupFromFile = (filepath) ->
-  unless existsSync filepath
-    throw new Error "Backup file not found: #{filepath}"
-
-  json   = await Deno.readTextFile filepath
-  backup = JSON.parse json
-
-  console.log "Loaded backup from: #{filepath}"
-  console.log "  Version:   #{backup.version}"
-  console.log "  Timestamp: #{backup.timestamp}"
-
-  backup
-
-
+# Ensure backup directory exists
 ensureBackupDir = (dir) ->
   unless existsSync dir
-    await Deno.mkdir dir, recursive: true
+    mkdirSync dir, recursive: true
     console.log "Created backup directory: #{dir}"
   dir
 
 
-generateBackupFilename = (timestamp = new Date()) ->
-  isoString = timestamp.toISOString()
-  dateStr   = isoString.replace(/:/g, '-').split('.')[0]
-  "backup-#{dateStr}.json"
-
-
-createBackup = (backupDir = './backups') ->
+# Create local backup of SQLite database
+createLocalBackup = (backupDir = './backups') ->
   await ensureBackupDir backupDir
 
-  backup   = await exportBackup()
+  unless existsSync config.DB_PATH
+    throw new Error "Database file not found: #{config.DB_PATH}"
+
   filename = generateBackupFilename()
   filepath = join backupDir, filename
 
-  await saveBackupToFile backup, filepath
+  console.log "Creating backup: #{filepath}"
+  copyFileSync config.DB_PATH, filepath
 
-  { filepath, backup }
+  console.log "Backup created successfully"
+  { filepath, filename }
 
 
-restoreBackup = (filepath, options = {}) ->
-  backup = await loadBackupFromFile filepath
-  stats  = await importBackup backup, options
+# Upload backup to S3
+uploadBackupToS3 = (filepath) ->
+  unless S3_ENABLED
+    console.log "S3 sync disabled, skipping upload"
+    return null
 
-  { backup, stats }
+  filename = basename filepath
+  s3Key    = "#{S3_PREFIX}#{filename}"
+
+  console.log "Uploading backup to S3: s3://#{S3_BUCKET}/#{s3Key}"
+
+  try
+    fileContent = await readFile filepath
+
+    command = new PutObjectCommand
+      Bucket:      S3_BUCKET
+      Key:         s3Key
+      Body:        fileContent
+      ContentType: 'application/x-sqlite3'
+      Metadata:
+        'backup-version': BACKUP_VERSION
+        'db-path':        config.DB_PATH
+        'timestamp':      new Date().toISOString()
+
+    result = await s3Client.send command
+    console.log "Backup uploaded successfully to S3"
+
+    { bucket: S3_BUCKET, key: s3Key, etag: result.ETag }
+  catch error
+    console.error "Failed to upload backup to S3:", error.message
+    throw error
+
+
+# List backups in S3
+listS3Backups = ->
+  unless S3_ENABLED
+    console.log "S3 sync disabled"
+    return []
+
+  console.log "Listing backups in S3: s3://#{S3_BUCKET}/#{S3_PREFIX}"
+
+  try
+    command = new ListObjectsV2Command
+      Bucket: S3_BUCKET
+      Prefix: S3_PREFIX
+
+    result = await s3Client.send command
+
+    backups = (result.Contents || [])
+      .filter (obj) -> obj.Key.endsWith('.db')
+      .map (obj) ->
+        key:          obj.Key
+        size:         obj.Size
+        lastModified: obj.LastModified
+        filename:     basename obj.Key
+      .sort (a, b) -> b.lastModified - a.lastModified  # Most recent first
+
+    console.log "Found #{backups.length} backups in S3"
+    backups
+  catch error
+    console.error "Failed to list S3 backups:", error.message
+    throw error
+
+
+# Download backup from S3
+downloadBackupFromS3 = (s3Key, localPath) ->
+  unless S3_ENABLED
+    throw new Error "S3 sync is disabled"
+
+  console.log "Downloading backup from S3: s3://#{S3_BUCKET}/#{s3Key}"
+
+  try
+    command = new GetObjectCommand
+      Bucket: S3_BUCKET
+      Key:    s3Key
+
+    result      = await s3Client.send command
+    bodyStream  = result.Body
+    writeStream = createWriteStream localPath
+
+    # Stream the download
+    await new Promise (resolve, reject) ->
+      bodyStream.pipe writeStream
+      writeStream.on 'finish', resolve
+      writeStream.on 'error', reject
+
+    console.log "Backup downloaded successfully to: #{localPath}"
+    { localPath, metadata: result.Metadata }
+  catch error
+    console.error "Failed to download backup from S3:", error.message
+    throw error
+
+
+# Get latest backup from S3
+getLatestBackupFromS3 = ->
+  backups = await listS3Backups()
+
+  unless backups.length > 0
+    return null
+
+  backups[0]  # Most recent (already sorted)
+
+
+# Download and restore latest backup from S3
+restoreFromS3 = ->
+  unless S3_ENABLED
+    console.log "S3 sync disabled, skipping restore"
+    return null
+
+  console.log "Checking for latest backup in S3..."
+  latest = await getLatestBackupFromS3()
+
+  unless latest
+    console.log "No backups found in S3"
+    return null
+
+  console.log "Latest backup: #{latest.filename} (#{latest.lastModified})"
+
+  # Download to temporary location
+  tempPath = "#{config.DB_PATH}.restore-temp"
+  await downloadBackupFromS3 latest.key, tempPath
+
+  # Backup current database if it exists
+  if existsSync config.DB_PATH
+    backupPath = "#{config.DB_PATH}.before-restore"
+    console.log "Backing up current database to: #{backupPath}"
+    copyFileSync config.DB_PATH, backupPath
+
+  # Replace current database with downloaded backup
+  console.log "Restoring database from S3 backup"
+  copyFileSync tempPath, config.DB_PATH
+
+  # Clean up temp file
+  fs = require 'node:fs'
+  fs.unlinkSync tempPath
+
+  console.log "Database restored successfully from S3"
+  { restored: true, backup: latest }
+
+
+# Full backup workflow: local + S3
+createBackup = (backupDir = './backups') ->
+  console.log 'Starting backup...'
+
+  # Create local backup
+  { filepath, filename } = await createLocalBackup backupDir
+
+  result =
+    filepath:   filepath
+    filename:   filename
+    s3:         null
+    timestamp:  new Date()
+
+  # Upload to S3 if enabled
+  if S3_ENABLED
+    try
+      result.s3 = await uploadBackupToS3 filepath
+    catch error
+      console.error "S3 upload failed, backup is still available locally"
+      result.s3Error = error.message
+
+  console.log 'Backup complete'
+  result
+
+
+# Restore from local file
+restoreFromFile = (filepath) ->
+  unless existsSync filepath
+    throw new Error "Backup file not found: #{filepath}"
+
+  console.log "Restoring database from: #{filepath}"
+
+  # Backup current database
+  if existsSync config.DB_PATH
+    backupPath = "#{config.DB_PATH}.before-restore"
+    console.log "Backing up current database to: #{backupPath}"
+    copyFileSync config.DB_PATH, backupPath
+
+  # Restore from backup
+  copyFileSync filepath, config.DB_PATH
+
+  console.log "Database restored successfully"
+  { restored: true, source: filepath }
+
 
 module.exports = {
-  exportBackup
-  importBackup
-  saveBackupToFile
-  loadBackupFromFile
-  ensureBackupDir
-  generateBackupFilename
   createBackup
-  restoreBackup
+  createLocalBackup
+  uploadBackupToS3
+  listS3Backups
+  downloadBackupFromS3
+  getLatestBackupFromS3
+  restoreFromS3
+  restoreFromFile
+  generateBackupFilename
+  ensureBackupDir
+
+  # Config
+  S3_BUCKET
+  S3_PREFIX
+  S3_ENABLED
 }

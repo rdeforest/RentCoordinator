@@ -184,7 +184,7 @@ If the server is completely broken:
 ssh vault2 'sudo systemctl stop rent-coordinator'
 
 # 2. Backup database (if it exists and might be valuable)
-ssh vault2 'cd ~/rent-coordinator && deno task backup'
+ssh vault2 'cd ~/rent-coordinator && npm run backup'
 scp vault2:~/rent-coordinator/backups/*.json ./backups/
 
 # 3. Nuclear option

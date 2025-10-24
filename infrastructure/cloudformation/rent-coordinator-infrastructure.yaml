@@ -1,0 +1,437 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RentCoordinator Auto-Scaling Infrastructure with ALB Integration'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: Environment name
+
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+    Description: EC2 instance type
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair for SSH access
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where instances will be launched
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs for Auto Scaling Group (use multiple AZs for HA)
+
+  TargetGroupArn:
+    Type: String
+    Description: ARN of existing ALB Target Group
+    Default: arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106
+
+  SecretsManagerSecretArn:
+    Type: String
+    Description: ARN of Secrets Manager secret containing application configuration
+    Default: arn:aws:secretsmanager:us-west-2:822812818413:secret:rent-coordinator/config-zlAnNB
+
+  GitHubRepo:
+    Type: String
+    Default: https://github.com/rdeforest/RentCoordinator.git
+    Description: GitHub repository URL
+
+  GitBranch:
+    Type: String
+    Default: main
+    Description: Git branch to deploy
+
+  MinSize:
+    Type: Number
+    Default: 1
+    Description: Minimum number of instances in Auto Scaling Group
+
+  MaxSize:
+    Type: Number
+    Default: 3
+    Description: Maximum number of instances in Auto Scaling Group
+
+  DesiredCapacity:
+    Type: Number
+    Default: 1
+    Description: Desired number of instances in Auto Scaling Group
+
+Mappings:
+  # Latest Debian 12 AMIs by region (update periodically)
+  RegionMap:
+    us-west-2:
+      AMI: ami-0735c191cf914754d  # Debian 12 (bookworm)
+    us-east-1:
+      AMI: ami-058bd2d568351da34
+    us-east-2:
+      AMI: ami-0f30a9c3a48f3fa79
+
+Resources:
+  # S3 Bucket for Database Backups
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub rent-coordinator-backups-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldBackups
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpirationInDays: 7
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub RentCoordinator-Backups-${Environment}
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for EC2 instances
+  RentCoordinatorInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub RentCoordinator-Instance-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref SecretsManagerSecretArn
+        - PolicyName: S3BackupAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt BackupBucket.Arn
+                  - !Sub ${BackupBucket.Arn}/*
+      Tags:
+        - Key: Name
+          Value: !Sub RentCoordinator-Instance-Role-${Environment}
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Instance Profile
+  RentCoordinatorInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub RentCoordinator-Instance-Profile-${Environment}
+      Roles:
+        - !Ref RentCoordinatorInstanceRole
+
+  # Security Group
+  RentCoordinatorSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub RentCoordinator-${Environment}
+      GroupDescription: Security group for RentCoordinator instances
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Application port from ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub RentCoordinator-SG-${Environment}
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ALB Security Group (for reference/update)
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub RentCoordinator-ALB-${Environment}
+      GroupDescription: Security group for RentCoordinator ALB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from internet
+      Tags:
+        - Key: Name
+          Value: !Sub RentCoordinator-ALB-SG-${Environment}
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Launch Template
+  RentCoordinatorLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub RentCoordinator-${Environment}
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Arn: !GetAtt RentCoordinatorInstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref RentCoordinatorSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub RentCoordinator-${Environment}
+              - Key: Environment
+                Value: !Ref Environment
+              - Key: Application
+                Value: RentCoordinator
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -e
+
+            # Logging
+            exec > >(tee /var/log/user-data.log)
+            exec 2>&1
+            echo "Starting RentCoordinator bootstrap at $(date)"
+
+            # Update system
+            apt-get update
+            apt-get upgrade -y
+
+            # Install dependencies
+            apt-get install -y \
+              git \
+              curl \
+              jq \
+              awscli \
+              build-essential
+
+            # Install Node.js 18.x
+            curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+            apt-get install -y nodejs
+
+            # Verify installations
+            node --version
+            npm --version
+
+            # Create application user
+            useradd -r -m -s /bin/bash rent-coordinator || true
+
+            # Create application directory
+            mkdir -p /opt/rent-coordinator
+            chown rent-coordinator:rent-coordinator /opt/rent-coordinator
+
+            # Clone repository as application user
+            cd /opt/rent-coordinator
+            sudo -u rent-coordinator git clone ${GitHubRepo} .
+            sudo -u rent-coordinator git checkout ${GitBranch}
+
+            # Install Node.js dependencies
+            sudo -u rent-coordinator npm ci --only=production
+
+            # Build client-side assets
+            sudo -u rent-coordinator npm run build
+
+            # Retrieve secrets from AWS Secrets Manager
+            SECRET_JSON=$(aws secretsmanager get-secret-value \
+              --secret-id ${SecretsManagerSecretArn} \
+              --region ${AWS::Region} \
+              --query 'SecretString' \
+              --output text)
+
+            # Create environment file
+            cat > /opt/rent-coordinator/.env << 'ENVEOF'
+            NODE_ENV=production
+            PORT=3000
+            DB_PATH=/var/lib/rent-coordinator/tenant-coordinator.db
+            BACKUP_S3_BUCKET=${BackupBucket}
+            BACKUP_S3_PREFIX=database/
+            AWS_REGION=${AWS::Region}
+            S3_BACKUP_ENABLED=true
+            ENVEOF
+
+            # Add secrets to environment file
+            echo "$SECRET_JSON" | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' >> /opt/rent-coordinator/.env
+
+            # Secure the environment file
+            chown rent-coordinator:rent-coordinator /opt/rent-coordinator/.env
+            chmod 600 /opt/rent-coordinator/.env
+
+            # Create data directory
+            mkdir -p /var/lib/rent-coordinator
+            chown rent-coordinator:rent-coordinator /var/lib/rent-coordinator
+
+            # Try to restore latest database from S3
+            echo "Checking for latest database backup in S3..."
+            cd /opt/rent-coordinator
+
+            # Create a simple Node.js script to restore from S3
+            cat > /tmp/restore-s3.js << 'RESTORESCRIPT'
+            const backup = require('./lib/services/backup.coffee');
+
+            (async () => {
+              try {
+                const result = await backup.restoreFromS3();
+                if (result) {
+                  console.log('Database restored from S3:', result.backup.filename);
+                } else {
+                  console.log('No backup found in S3, starting with fresh database');
+                }
+              } catch (error) {
+                console.log('Failed to restore from S3 (continuing anyway):', error.message);
+              }
+            })();
+            RESTORESCRIPT
+
+            # Run restore as rent-coordinator user
+            sudo -u rent-coordinator node /tmp/restore-s3.js || echo "Restore failed, continuing with fresh database"
+            rm /tmp/restore-s3.js
+
+            # Create systemd service
+            cat > /etc/systemd/system/rent-coordinator.service << 'SERVICEEOF'
+            [Unit]
+            Description=RentCoordinator Application
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=rent-coordinator
+            Group=rent-coordinator
+            WorkingDirectory=/opt/rent-coordinator
+            EnvironmentFile=/opt/rent-coordinator/.env
+            ExecStart=/usr/bin/npx coffee main.coffee
+            Restart=always
+            RestartSec=10
+
+            # Security hardening
+            NoNewPrivileges=true
+            PrivateTmp=true
+
+            [Install]
+            WantedBy=multi-user.target
+            SERVICEEOF
+
+            # Reload systemd and start service
+            systemctl daemon-reload
+            systemctl enable rent-coordinator
+            systemctl start rent-coordinator
+
+            # Wait for application to be healthy
+            echo "Waiting for application to start..."
+            for i in {1..30}; do
+              if curl -f http://localhost:3000/health > /dev/null 2>&1; then
+                echo "Application is healthy!"
+                break
+              fi
+              echo "Attempt $i: Application not ready yet..."
+              sleep 2
+            done
+
+            echo "RentCoordinator bootstrap completed at $(date)"
+
+  # Auto Scaling Group
+  RentCoordinatorAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub RentCoordinator-${Environment}
+      VPCZoneIdentifier: !Ref SubnetIds
+      LaunchTemplate:
+        LaunchTemplateId: !Ref RentCoordinatorLaunchTemplate
+        Version: !GetAtt RentCoordinatorLaunchTemplate.LatestVersionNumber
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      TargetGroupARNs:
+        - !Ref TargetGroupArn
+      Tags:
+        - Key: Name
+          Value: !Sub RentCoordinator-${Environment}
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+
+  # Scaling Policies
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref RentCoordinatorAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70.0
+
+Outputs:
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling Group
+    Value: !Ref RentCoordinatorAutoScalingGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-ASG
+
+  LaunchTemplateId:
+    Description: ID of the Launch Template
+    Value: !Ref RentCoordinatorLaunchTemplate
+    Export:
+      Name: !Sub ${AWS::StackName}-LaunchTemplate
+
+  SecurityGroupId:
+    Description: ID of the Security Group
+    Value: !Ref RentCoordinatorSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-SecurityGroup
+
+  InstanceRoleArn:
+    Description: ARN of the IAM Role for instances
+    Value: !GetAtt RentCoordinatorInstanceRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-InstanceRole
+
+  BackupBucketName:
+    Description: Name of the S3 bucket for database backups
+    Value: !Ref BackupBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-BackupBucket

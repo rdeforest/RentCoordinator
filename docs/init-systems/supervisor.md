@@ -25,7 +25,7 @@ Create `/etc/supervisor/conf.d/rentcoordinator.conf`:
 
 ```ini
 [program:rentcoordinator]
-command=/home/rentcoordinator/.deno/bin/deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv /opt/rentcoordinator/dist/main.js
+command=/usr/bin/npx coffee main.coffee
 directory=/opt/rentcoordinator
 user=rentcoordinator
 autostart=true
@@ -33,7 +33,7 @@ autorestart=true
 startretries=3
 stderr_logfile=/var/log/rentcoordinator/supervisor-error.log
 stdout_logfile=/var/log/rentcoordinator/supervisor-output.log
-environment=PATH="/home/rentcoordinator/.deno/bin:/usr/bin:/bin",PORT="3000",DB_PATH="/var/lib/rentcoordinator/db.kv"
+environment=PATH="/usr/local/bin:/usr/bin:/bin",PORT="3000",DB_PATH="/var/lib/rentcoordinator/tenant-coordinator.db"
 stopsignal=QUIT
 stopasgroup=true
 killasgroup=true

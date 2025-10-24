@@ -27,7 +27,7 @@ APP_DIR="/opt/rentcoordinator"
 USER="rentcoordinator"
 PIDFILE="/var/run/rentcoordinator.pid"
 LOGFILE="/var/log/rentcoordinator/app.log"
-DENO="/home/$USER/.deno/bin/deno"
+COFFEE="/usr/bin/npx coffee"
 
 # Source function library
 . /lib/lsb/init-functions
@@ -39,7 +39,7 @@ start() {
     fi
     
     log_daemon_msg "Starting RentCoordinator"
-    su - $USER -c "cd $APP_DIR && nohup $DENO run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js > $LOGFILE 2>&1 & echo \$! > $PIDFILE"
+    su - $USER -c "cd $APP_DIR && nohup $COFFEE main.coffee > $LOGFILE 2>&1 & echo \$! > $PIDFILE"
     log_end_msg $?
 }
 

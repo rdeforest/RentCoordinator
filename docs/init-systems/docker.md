@@ -4,7 +4,7 @@
 
 - [Docker Official Documentation](https://docs.docker.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [Deno Docker Images](https://github.com/denoland/deno_docker)
+- [Node.js Docker Images](https://hub.docker.com/_/node)
 
 ## Dockerfile
 
@@ -12,30 +12,38 @@ Create `/opt/rentcoordinator/Dockerfile`:
 
 ```dockerfile
 # Build stage
-FROM denoland/deno:1.40.0 AS builder
+FROM node:18-alpine AS builder
 
 # Set working directory
 WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
 
 # Copy source files
 COPY . .
 
-# Build application
-RUN deno task build
+# Build client-side CoffeeScript
+RUN npm run build
 
 # Runtime stage
-FROM denoland/deno:1.40.0
+FROM node:18-alpine
 
 # Create non-root user
-RUN useradd -m -s /bin/bash rentcoordinator
+RUN adduser -D -s /bin/sh rentcoordinator
 
 # Set working directory
 WORKDIR /app
 
-# Copy built application from builder
-COPY --from=builder /app/dist ./dist
+# Copy dependencies and built application from builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/static ./static
-COPY --from=builder /app/deno.json ./deno.json
+COPY --from=builder /app/main.coffee ./main.coffee
 
 # Create directories for data and logs
 RUN mkdir -p /data /logs && \
@@ -49,10 +57,11 @@ EXPOSE 3000
 
 # Set environment variables
 ENV PORT=3000
-ENV DB_PATH=/data/db.kv
+ENV DB_PATH=/data/tenant-coordinator.db
+ENV NODE_ENV=production
 
 # Start application
-CMD ["deno", "run", "--allow-read", "--allow-write", "--allow-env", "--allow-net", "--unstable-kv", "dist/main.js"]
+CMD ["npx", "coffee", "main.coffee"]
 ```
 
 ## Docker Compose
@@ -74,7 +83,7 @@ services:
       - ./logs:/logs
     environment:
       - PORT=3000
-      - DB_PATH=/data/db.kv
+      - DB_PATH=/data/tenant-coordinator.db
       - NODE_ENV=production
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -158,7 +167,7 @@ services:
       - rentcoordinator-data:/data
     environment:
       - PORT=3000
-      - DB_PATH=/data/db.kv
+      - DB_PATH=/data/tenant-coordinator.db
       - NODE_ENV=production
     networks:
       - rentcoordinator-net

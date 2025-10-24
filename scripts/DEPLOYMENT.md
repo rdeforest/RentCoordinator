@@ -112,7 +112,7 @@ Production Server
 3. Creates deployment package
 4. Pushes to `~/rent-coordinator-deploy/` on remote
 5. Creates service user `rent-coordinator`
-6. Installs Deno for service user
+6. Installs Node.js for service user (if not already installed)
 7. Copies files to `~/rent-coordinator/`
 8. Creates default `config.sh`
 9. Installs and starts systemd service
@@ -187,9 +187,8 @@ export SESSION_SECRET="CHANGE_ME"
 # export SMTP_PASS="password"
 # export EMAIL_FROM="noreply@thatsnice.org"
 
-# Deno
-export DENO_INSTALL="/home/rent-coordinator/.deno"
-export PATH="$DENO_INSTALL/bin:$PATH"
+# Node.js (typically already in PATH on production systems)
+# export PATH="/usr/local/bin:$PATH"
 ```
 
 **After editing config:**
@@ -222,14 +221,12 @@ Backups are created automatically during upgrades and stored in `~/rent-coordina
 ```bash
 ssh vault2
 cd ~/rent-coordinator
-deno run --allow-read --allow-env --unstable-kv \
-  dist/scripts/backup.ts > backups/manual-backup.json
+npm run backup > backups/manual-backup.json
 ```
 
 **Restore from backup:**
 ```bash
-deno run --allow-read --allow-write --allow-env --unstable-kv \
-  dist/scripts/backup.ts --restore backups/backup-YYYY-MM-DD_HH-MM-SS.json
+npm run restore backups/backup-YYYY-MM-DD_HH-MM-SS.json
 ```
 
 **Set up automated backups via rsync:**
@@ -295,8 +292,8 @@ ssh vault2 'sudo journalctl -u rent-coordinator -n 50'
 # Check config
 ssh vault2 'cat ~/rent-coordinator/config.sh'
 
-# Verify Deno
-ssh vault2 'sudo -u rent-coordinator /home/rent-coordinator/.deno/bin/deno --version'
+# Verify Node.js
+ssh vault2 'sudo -u rent-coordinator node --version'
 ```
 
 ### Health Check Fails

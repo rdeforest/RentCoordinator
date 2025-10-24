@@ -74,7 +74,7 @@ sudo systemctl start rent-coordinator
 
 ### Create Manual Backup
 ```bash
-ssh vault2 'cd ~/rent-coordinator && deno run --allow-read --allow-env --unstable-kv dist/scripts/backup.ts > backups/manual-$(date +%Y%m%d).json'
+ssh vault2 'cd ~/rent-coordinator && npm run backup > backups/manual-$(date +%Y%m%d).json'
 ```
 
 ## SMTP Configuration (Before Go-Live!)

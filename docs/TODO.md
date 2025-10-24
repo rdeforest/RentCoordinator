@@ -8,7 +8,7 @@ Post-v1.0 improvements and technical debt.
 The scripts in `scripts/` contain **significant redundant code** that needs comprehensive refactoring:
 - `install.sh` and `uninstall.sh` duplicate: color functions, output helpers, user/path utilities, OS detection, process management
 - Init system handling duplicated within each script (systemd, openrc detection/setup)
-- Deno installation logic is complex and could be reusable
+- Node.js/npm verification logic could be reusable
 - Argument parsing patterns repeated across scripts
 - Path resolution and validation logic duplicated
 
@@ -28,7 +28,7 @@ Extract shared functionality from `install.sh` and `uninstall.sh`:
 
 - **Path and user utilities**
   - `get_user_home()` - Get actual home directory (not hardcoded `/home/`)
-  - `get_deno_install_path()` - Determine Deno installation location
+  - `get_node_path()` - Determine Node.js installation location
   - `detect_os()` - OS detection logic
 
 - **Permission and validation utilities**
@@ -166,7 +166,7 @@ main() {
     check_root
     create_user
     create_initial_directories
-    install_deno
+    verify_node_installation
     clone_repository
     create_additional_directories
     build_application
