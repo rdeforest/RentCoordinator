@@ -8,10 +8,10 @@
 When things don't work as expected, always start with a clean slate:
 
 ```bash
-# Clean build artifacts and test data
+:# Clean build artifacts and test data
 npm run clean
 
-# Full rebuild
+:# Full rebuild
 npm run build
 ```
 
@@ -19,13 +19,13 @@ npm run build
 If `npm run clean` doesn't fix it:
 
 ```bash
-# Remove everything including dependencies
+:# Remove everything including dependencies
 npm run clean:all
 
-# Fresh install
+:# Fresh install
 npm install
 
-# Rebuild
+:# Rebuild
 npm run build
 ```
 
@@ -63,10 +63,10 @@ This:
 **If upgrade fails immediately**, use the nuclear option:
 
 ```bash
-# Full uninstall (preserves database backups)
+:# Full uninstall (preserves database backups)
 ./scripts/deploy-uninstall.sh vault2
 
-# Fresh install
+:# Fresh install
 ./scripts/deploy-install.sh vault2
 ```
 
@@ -93,20 +93,20 @@ This:
 After any deployment or local change:
 
 ```bash
-# 1. Build succeeded?
+:# 1. Build succeeded?
 npm run build
-# Should show: "✓ Build complete!"
+:# Should show: "✓ Build complete!"
 
-# 2. Server starts?
+:# 2. Server starts?
 PORT=3002 timeout 5 npm start
-# Should show: "Tenant Coordinator Service Started"
+:# Should show: "Tenant Coordinator Service Started"
 
-# 3. No foreign key errors?
-# Check output - should see "Recurring events system initialized" with no errors
+:# 3. No foreign key errors?
+:# Check output - should see "Recurring events system initialized" with no errors
 
-# 4. Database created?
+:# 4. Database created?
 ls -la *.db*
-# Should show tenant-coordinator.db (and possibly .db-shm, .db-wal if running)
+:# Should show tenant-coordinator.db (and possibly .db-shm, .db-wal if running)
 ```
 
 
@@ -114,11 +114,11 @@ ls -la *.db*
 
 #### Check process state
 ```bash
-# On remote server
+:# On remote server
 sudo systemctl status rent-coordinator
 sudo journalctl -u rent-coordinator -n 50 --no-pager
 
-# Locally
+:# Locally
 ps aux | grep "node dist/main"
 ```
 
@@ -130,19 +130,19 @@ ls -la ~/rent-coordinator/*.db*
 
 #### Check port conflicts
 ```bash
-# Remote
+:# Remote
 sudo ss -tlnp | grep :8080
 
-# Local
+:# Local
 lsof -i :3000
 ```
 
 #### Check dependencies
 ```bash
-# Verify Node version (need v22.5.0+ for native SQLite)
+:# Verify Node version (need v22.5.0+ for native SQLite)
 node --version
 
-# Check installed packages
+:# Check installed packages
 npm list --depth=0
 ```
 
@@ -180,19 +180,19 @@ npm list --depth=0
 If the server is completely broken:
 
 ```bash
-# 1. Stop the service
+:# 1. Stop the service
 ssh vault2 'sudo systemctl stop rent-coordinator'
 
-# 2. Backup database (if it exists and might be valuable)
+:# 2. Backup database (if it exists and might be valuable)
 ssh vault2 'cd ~/rent-coordinator && npm run backup'
 scp vault2:~/rent-coordinator/backups/*.json ./backups/
 
-# 3. Nuclear option
+:# 3. Nuclear option
 ./scripts/deploy-uninstall.sh vault2
 ./scripts/deploy-install.sh vault2
 
-# 4. Restore data if needed
-# (See DISASTER-RECOVERY.md)
+:# 4. Restore data if needed
+:# (See disaster-recovery.md)
 ```
 
 

@@ -55,19 +55,19 @@ The installation script handles:
 
 Run with options:
 ```bash
-# Custom installation directory
+:# Custom installation directory
 ./install.sh --prefix /usr/local
 
-# Custom user
+:# Custom user
 ./install.sh --user myapp
 
-# Custom port
+:# Custom port
 ./install.sh --port 8080
 
-# Skip user creation (use current user)
+:# Skip user creation (use current user)
 ./install.sh --skip-user
 
-# All options
+:# All options
 ./install.sh --prefix /opt/apps --user webapp --port 8080
 ```
 
@@ -75,21 +75,21 @@ Run with options:
 
 ### 1. Create Application User (Optional but Recommended)
 ```bash
-# Create dedicated user
+:# Create dedicated user
 useradd -m -s /bin/bash rentcoordinator
 
-# Or on systems without useradd
+:# Or on systems without useradd
 adduser rentcoordinator
 ```
 
 ### 2. Create Directory Structure
 ```bash
-# Application directories
+:# Application directories
 mkdir -p /opt/rentcoordinator
 mkdir -p /var/log/rentcoordinator
 mkdir -p /var/lib/rentcoordinator
 
-# Set ownership (if using dedicated user)
+:# Set ownership (if using dedicated user)
 chown -R rentcoordinator:rentcoordinator /opt/rentcoordinator
 chown -R rentcoordinator:rentcoordinator /var/log/rentcoordinator
 chown -R rentcoordinator:rentcoordinator /var/lib/rentcoordinator
@@ -97,27 +97,27 @@ chown -R rentcoordinator:rentcoordinator /var/lib/rentcoordinator
 
 ### 3. Install Deno
 ```bash
-# As the application user
+:# As the application user
 su - rentcoordinator
 
-# Install Deno
+:# Install Deno
 curl -fsSL https://deno.land/install.sh | sh
 
-# Add to PATH (add to ~/.bashrc or ~/.profile for persistence)
+:# Add to PATH (add to ~/.bashrc or ~/.profile for persistence)
 export DENO_INSTALL="$HOME/.deno"
 export PATH="$DENO_INSTALL/bin:$PATH"
 
-# Verify
+:# Verify
 deno --version
 ```
 
 ### 4. Clone and Build
 ```bash
-# Clone repository
+:# Clone repository
 cd /opt/rentcoordinator
 git clone https://github.com/rdeforest/RentCoordinator.git .
 
-# Build application
+:# Build application
 deno task build
 ```
 
@@ -126,19 +126,19 @@ deno task build
 ### Environment Configuration
 Create `/opt/rentcoordinator/.env`:
 ```bash
-# Server Configuration
+:# Server Configuration
 PORT=3000
 HOST=0.0.0.0
 
-# Database Configuration
+:# Database Configuration
 DB_PATH=/var/lib/rentcoordinator/db.kv
 
-# Application Settings
+:# Application Settings
 NODE_ENV=production
 LOG_LEVEL=info
 
-# Optional: Custom workers
-# WORKERS=robert,lyndzie
+:# Optional: Custom workers
+:# WORKERS=robert,lyndzie
 ```
 
 ### Application Configuration
@@ -153,19 +153,19 @@ The application reads configuration from:
 ```bash
 cd /opt/rentcoordinator
 
-# Using deno task
+:# Using deno task
 deno task start
 
-# Or directly
+:# Or directly
 deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js
 ```
 
 ### Background Execution
 ```bash
-# Using nohup
+:# Using nohup
 nohup deno task start > /var/log/rentcoordinator/app.log 2>&1 &
 
-# Save PID for management
+:# Save PID for management
 echo $! > /var/run/rentcoordinator.pid
 ```
 
@@ -310,26 +310,26 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 DB_PATH="${DB_PATH:-/var/lib/rentcoordinator/db.kv}"
 PID_FILE="/var/run/rentcoordinator.pid"
 
-# Create backup directory
+:# Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Optional: Stop application for consistency
+:# Optional: Stop application for consistency
 if [ -f "$PID_FILE" ]; then
     echo "Stopping application for backup..."
     kill $(cat "$PID_FILE")
     sleep 2
 fi
 
-# Create backup
+:# Create backup
 cp -r "$DB_PATH" "$BACKUP_DIR/db_${TIMESTAMP}.kv"
 
-# Restart if it was running
+:# Restart if it was running
 if [ -f "$PID_FILE" ]; then
     echo "Restarting application..."
     /opt/rentcoordinator/bin/rentcoordinator start
 fi
 
-# Clean old backups (keep 30 days)
+:# Clean old backups (keep 30 days)
 find "$BACKUP_DIR" -name "db_*.kv" -mtime +30 -delete
 
 echo "Backup completed: $BACKUP_DIR/db_${TIMESTAMP}.kv"
@@ -353,16 +353,16 @@ if [ ! -f "$BACKUP_FILE" ]; then
     exit 1
 fi
 
-# Stop application
+:# Stop application
 /opt/rentcoordinator/bin/rentcoordinator stop
 
-# Backup current database
+:# Backup current database
 cp -r "$DB_PATH" "${DB_PATH}.before_restore"
 
-# Restore
+:# Restore
 cp -r "$BACKUP_FILE" "$DB_PATH"
 
-# Start application
+:# Start application
 /opt/rentcoordinator/bin/rentcoordinator start
 
 echo "Database restored from $BACKUP_FILE"
@@ -372,10 +372,10 @@ echo "Database restored from $BACKUP_FILE"
 
 ### Health Check
 ```bash
-# Basic health check
+:# Basic health check
 curl -f http://localhost:3000/health || echo "Service is down"
 
-# With timeout
+:# With timeout
 timeout 5 curl -f http://localhost:3000/health || echo "Service is down or slow"
 ```
 
@@ -388,7 +388,7 @@ LOG_DIR="/var/log/rentcoordinator"
 MAX_SIZE="100M"
 MAX_DAYS=14
 
-# Rotate if size exceeds limit
+:# Rotate if size exceeds limit
 for log in "$LOG_DIR"/*.log; do
     if [ -f "$log" ]; then
         size=$(du -h "$log" | cut -f1)
@@ -399,13 +399,13 @@ for log in "$LOG_DIR"/*.log; do
     fi
 done
 
-# Delete old logs
+:# Delete old logs
 find "$LOG_DIR" -name "*.log.*" -mtime +$MAX_DAYS -delete
 ```
 
 Add to crontab:
 ```bash
-# Daily log rotation at 2 AM
+:# Daily log rotation at 2 AM
 0 2 * * * /opt/rentcoordinator/scripts/rotate-logs.sh
 ```
 
@@ -418,20 +418,20 @@ URL="http://localhost:3000/health"
 ALERT_EMAIL="admin@example.com"
 PID_FILE="/var/run/rentcoordinator.pid"
 
-# Check if process is running
+:# Check if process is running
 if [ -f "$PID_FILE" ] && ! kill -0 $(cat "$PID_FILE") 2>/dev/null; then
     echo "Process is dead but PID file exists. Attempting restart..."
     /opt/rentcoordinator/bin/rentcoordinator restart
     sleep 5
 fi
 
-# Check HTTP endpoint
+:# Check HTTP endpoint
 if ! curl -f -m 10 "$URL" > /dev/null 2>&1; then
     echo "Health check failed. Attempting restart..."
     /opt/rentcoordinator/bin/rentcoordinator restart
 
-    # Optional: Send alert
-    # echo "RentCoordinator health check failed and was restarted" | mail -s "RentCoordinator Alert" "$ALERT_EMAIL"
+    :# Optional: Send alert
+    :# echo "RentCoordinator health check failed and was restarted" | mail -s "RentCoordinator Alert" "$ALERT_EMAIL"
 fi
 ```
 
@@ -447,7 +447,7 @@ Add to crontab for monitoring every 5 minutes:
 1. **Check if port is in use:**
 ```bash
 lsof -i :3000
-# or
+:# or
 netstat -tlnp | grep :3000
 ```
 
@@ -507,10 +507,10 @@ deno task build 2>&1 | tee build.log
 
 1. **Check resource usage:**
 ```bash
-# CPU and memory
+:# CPU and memory
 top -p $(cat /var/run/rentcoordinator.pid)
 
-# Open files
+:# Open files
 lsof -p $(cat /var/run/rentcoordinator.pid) | wc -l
 ```
 
@@ -521,7 +521,7 @@ tail -f /var/log/rentcoordinator/app.log
 
 3. **Increase memory limit if needed:**
 ```bash
-# Set V8 heap size
+:# Set V8 heap size
 export DENO_V8_FLAGS="--max-old-space-size=2048"
 ```
 
@@ -529,10 +529,10 @@ export DENO_V8_FLAGS="--max-old-space-size=2048"
 
 For detailed debugging:
 ```bash
-# Stop normal service
+:# Stop normal service
 /opt/rentcoordinator/bin/rentcoordinator stop
 
-# Run with debug output
+:# Run with debug output
 cd /opt/rentcoordinator
 DENO_LOG=debug deno run --allow-read --allow-write --allow-env --allow-net --unstable-kv dist/main.js
 ```

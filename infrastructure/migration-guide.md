@@ -36,30 +36,30 @@ This guide walks you through migrating from the manual vault2 deployment to auto
 
 #### 1. Backup vault2 Database
 ```bash
-# SSH to vault2 and create backup
+:# SSH to vault2 and create backup
 ssh vault2 'cd ~/rent-coordinator && npm run backup'
 
-# Download backup to local machine
+:# Download backup to local machine
 scp vault2:~/rent-coordinator/backups/*.json ./backups/
 
-# Keep this backup safe!
+:# Keep this backup safe!
 ```
 
 #### 2. Get AWS Resource IDs
 ```bash
-# Get VPC ID where vault2 runs
+:# Get VPC ID where vault2 runs
 aws ec2 describe-instances \
   --instance-ids i-06a914c47bf8e08da \
   --query 'Reservations[0].Instances[0].VpcId' \
   --output text
 
-# Get Subnet IDs (need at least 2 in different AZs)
+:# Get Subnet IDs (need at least 2 in different AZs)
 aws ec2 describe-subnets \
   --filters "Name=vpc-id,Values=<vpc-id>" \
   --query 'Subnets[*].[SubnetId,AvailabilityZone]' \
   --output table
 
-# Verify Target Group ARN
+:# Verify Target Group ARN
 aws elbv2 describe-target-groups \
   --names RentCoordinator \
   --query 'TargetGroups[0].TargetGroupArn' \
@@ -70,10 +70,10 @@ aws elbv2 describe-target-groups \
 ```bash
 cd infrastructure/cloudformation
 
-# Copy example parameters
+:# Copy example parameters
 cp parameters-example.json parameters.json
 
-# Edit with your values
+:# Edit with your values
 nano parameters.json
 ```
 
@@ -99,10 +99,10 @@ cd infrastructure
 
 #### 5. Deploy CloudFormation Stack
 ```bash
-# This creates rent01 automatically and adds it to the target group
+:# This creates rent01 automatically and adds it to the target group
 ./deploy.sh deploy
 
-# Monitor deployment (takes ~5-10 minutes)
+:# Monitor deployment (takes ~5-10 minutes)
 watch -n 10 './deploy.sh status'
 ```
 
@@ -118,26 +118,26 @@ watch -n 10 './deploy.sh status'
 
 #### 6. Verify rent01 is Healthy
 ```bash
-# Check instance status
+:# Check instance status
 ./deploy.sh instances
 
-# Get Target Group health
+:# Get Target Group health
 aws elbv2 describe-target-health \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106
 
-# Expected output: Both vault2 and rent01 should show "healthy"
+:# Expected output: Both vault2 and rent01 should show "healthy"
 ```
 
 #### 7. Test rent01 Directly
 ```bash
-# Get rent01 IP address
+:# Get rent01 IP address
 RENT01_IP=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 RENT01_IP=$(aws ec2 describe-instances --instance-ids $RENT01_IP --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
 
-# Test health endpoint
+:# Test health endpoint
 curl http://$RENT01_IP:3000/health
 
-# Test login page
+:# Test login page
 curl -I http://$RENT01_IP:3000/login.html
 ```
 
@@ -145,30 +145,30 @@ curl -I http://$RENT01_IP:3000/login.html
 
 #### 8. Monitor ALB Traffic Distribution
 ```bash
-# Both vault2 and rent01 are now serving traffic
-# ALB distributes evenly between them
+:# Both vault2 and rent01 are now serving traffic
+:# ALB distributes evenly between them
 
-# Watch target connections
+:# Watch target connections
 watch -n 5 'aws elbv2 describe-target-health \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106'
 ```
 
 #### 9. Remove vault2 from Target Group
 ```bash
-# This starts directing all traffic to rent01
+:# This starts directing all traffic to rent01
 aws elbv2 deregister-targets \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106 \
   --targets Id=i-06a914c47bf8e08da
 
-# Traffic now goes 100% to rent01
+:# Traffic now goes 100% to rent01
 ```
 
 #### 10. Verify Traffic to rent01
 ```bash
-# Test application is accessible
+:# Test application is accessible
 curl -I https://rentcoordinator.defore.st/health
 
-# Check application logs
+:# Check application logs
 RENT01_ID=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 ssh -i ~/.ssh/your-key.pem admin@$(aws ec2 describe-instances --instance-ids $RENT01_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
 sudo journalctl -u rent-coordinator -f
@@ -178,40 +178,40 @@ sudo journalctl -u rent-coordinator -f
 
 #### 11. Stop vault2 Service
 ```bash
-# Stop the application on vault2 (keep instance running for safety)
+:# Stop the application on vault2 (keep instance running for safety)
 ssh vault2 'sudo systemctl stop rent-coordinator'
 
-# Monitor for any issues over the next few hours
-# If problems arise, you can quickly re-add vault2 to target group
+:# Monitor for any issues over the next few hours
+:# If problems arise, you can quickly re-add vault2 to target group
 ```
 
 #### 12. Keep vault2 Running for 24-48 Hours
 ```bash
-# Leave vault2 instance running but stopped
-# This gives you quick rollback capability if needed
+:# Leave vault2 instance running but stopped
+:# This gives you quick rollback capability if needed
 
-# To rollback if issues arise:
-# 1. ssh vault2 'sudo systemctl start rent-coordinator'
-# 2. aws elbv2 register-targets --target-group-arn ... --targets Id=i-06a914c47bf8e08da
+:# To rollback if issues arise:
+:# 1. ssh vault2 'sudo systemctl start rent-coordinator'
+:# 2. aws elbv2 register-targets --target-group-arn ... --targets Id=i-06a914c47bf8e08da
 ```
 
 #### 13. Stop vault2 Instance
 ```bash
-# After 24-48 hours with no issues
+:# After 24-48 hours with no issues
 aws ec2 stop-instances --instance-ids i-06a914c47bf8e08da
 
-# This stops the instance but keeps the EBS volume
-# You can still start it again if needed
+:# This stops the instance but keeps the EBS volume
+:# You can still start it again if needed
 ```
 
 #### 14. Terminate vault2 (After 1 Week)
 ```bash
-# After 1 week of successful operation
-# Take final backup first
+:# After 1 week of successful operation
+:# Take final backup first
 ssh vault2 'cd ~/rent-coordinator && npm run backup'
 scp vault2:~/rent-coordinator/backups/*.json ./backups/
 
-# Terminate instance
+:# Terminate instance
 aws ec2 terminate-instances --instance-ids i-06a914c47bf8e08da
 ```
 
@@ -219,24 +219,24 @@ aws ec2 terminate-instances --instance-ids i-06a914c47bf8e08da
 
 ### Adding More Instances
 ```bash
-# Scale to 2 instances
+:# Scale to 2 instances
 cd infrastructure
 ./deploy.sh scale 2
 
-# New instance launches automatically, bootstraps from GitHub, and joins target group
+:# New instance launches automatically, bootstraps from GitHub, and joins target group
 ```
 
 ### Deploying Application Updates
 ```bash
-# Method 1: Just push to GitHub
+:# Method 1: Just push to GitHub
 git push origin main
 
-# Then force instance refresh (rolling update)
+:# Then force instance refresh (rolling update)
 cd infrastructure
 ./deploy.sh refresh
 
-# Method 2: Terminate instances one by one
-# Auto Scaling Group launches new ones with latest code
+:# Method 2: Terminate instances one by one
+:# Auto Scaling Group launches new ones with latest code
 ASG_NAME=$(./deploy.sh status | grep "Auto Scaling Group:" | awk '{print $5}')
 INSTANCE_ID=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 aws autoscaling terminate-instance-in-auto-scaling-group \
@@ -246,18 +246,18 @@ aws autoscaling terminate-instance-in-auto-scaling-group \
 
 ### Monitoring
 ```bash
-# Check status
+:# Check status
 cd infrastructure
 ./deploy.sh status
 
-# List instances
+:# List instances
 ./deploy.sh instances
 
-# Check target health
+:# Check target health
 aws elbv2 describe-target-health \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106
 
-# View logs on an instance
+:# View logs on an instance
 INSTANCE_ID=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 ssh -i ~/.ssh/your-key.pem admin@$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
 sudo journalctl -u rent-coordinator -f
@@ -267,21 +267,21 @@ sudo journalctl -u rent-coordinator -f
 
 ### Rollback to vault2 (Emergency)
 ```bash
-# 1. Start vault2 if stopped
+:# 1. Start vault2 if stopped
 aws ec2 start-instances --instance-ids i-06a914c47bf8e08da
 
-# 2. Wait for instance to be running
+:# 2. Wait for instance to be running
 aws ec2 wait instance-running --instance-ids i-06a914c47bf8e08da
 
-# 3. Start rent-coordinator service
+:# 3. Start rent-coordinator service
 ssh vault2 'sudo systemctl start rent-coordinator'
 
-# 4. Re-register with target group
+:# 4. Re-register with target group
 aws elbv2 register-targets \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106 \
   --targets Id=i-06a914c47bf8e08da
 
-# 5. Remove rent01 from target group
+:# 5. Remove rent01 from target group
 ./deploy.sh instances  # Get instance IDs
 aws elbv2 deregister-targets \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106 \
@@ -290,58 +290,58 @@ aws elbv2 deregister-targets \
 
 ### Complete Rollback (Remove Infrastructure)
 ```bash
-# Delete CloudFormation stack
+:# Delete CloudFormation stack
 cd infrastructure
 ./deploy.sh delete
 
-# This terminates all rent01 instances and removes infrastructure
-# Does NOT affect vault2 or the ALB/Target Group
+:# This terminates all rent01 instances and removes infrastructure
+:# Does NOT affect vault2 or the ALB/Target Group
 ```
 
 ## Troubleshooting
 
 ### Instance Won't Launch
 ```bash
-# Check CloudFormation events
+:# Check CloudFormation events
 aws cloudformation describe-stack-events \
   --stack-name rent-coordinator-production \
   --region us-west-2 \
   --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`]'
 
-# Common issues:
-# - Wrong subnet IDs
-# - Missing EC2 key pair
-# - IAM permissions for CloudFormation
+:# Common issues:
+:# - Wrong subnet IDs
+:# - Missing EC2 key pair
+:# - IAM permissions for CloudFormation
 ```
 
 ### Instance Not Joining Target Group
 ```bash
-# SSH to instance
+:# SSH to instance
 INSTANCE_ID=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 INSTANCE_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
 ssh -i ~/.ssh/your-key.pem admin@$INSTANCE_IP
 
-# Check bootstrap log
+:# Check bootstrap log
 sudo tail -f /var/log/user-data.log
 
-# Check application
+:# Check application
 sudo systemctl status rent-coordinator
 sudo journalctl -u rent-coordinator -n 100
 
-# Check health endpoint
+:# Check health endpoint
 curl http://localhost:3000/health
 ```
 
 ### Application Won't Start
 ```bash
-# Check if secrets were retrieved
+:# Check if secrets were retrieved
 ssh to instance
 sudo cat /opt/rent-coordinator/.env  # Should contain secrets
 
-# Check database
+:# Check database
 ls -la /var/lib/rent-coordinator/
 
-# Check application logs
+:# Check application logs
 sudo journalctl -u rent-coordinator -f
 ```
 
@@ -372,8 +372,8 @@ sudo journalctl -u rent-coordinator -f
 
 See:
 - `infrastructure/README.md` - Complete AWS deployment documentation
-- `docs/DISASTER-RECOVERY.md` - Recovery procedures
-- `docs/TROUBLESHOOTING.md` - Common issues and solutions
+- `docs/disaster-recovery.md` - Recovery procedures
+- `docs/troubleshooting.md` - Common issues and solutions
 
 **Support:**
 - Check application logs: `sudo journalctl -u rent-coordinator -f`

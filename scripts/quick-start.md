@@ -4,7 +4,7 @@
 
 ### 1. Configure SSH on Dev Machine
 ```bash
-# Add to ~/.ssh/config
+:# Add to ~/.ssh/config
 Host vault2
     HostName vault2.thatsnice.org
     User admin
@@ -15,7 +15,7 @@ Host vault2
 ```bash
 ssh vault2
 sudo visudo -f /etc/sudoers.d/admin
-# Add: admin ALL=(ALL) NOPASSWD: ALL
+:# Add: admin ALL=(ALL) NOPASSWD: ALL
 ```
 
 ## Deploy to Production
@@ -30,8 +30,8 @@ cd /path/to/RentCoordinator
 ```bash
 ssh vault2
 nano ~/rent-coordinator/config.sh
-# 1. Set SESSION_SECRET to random value
-# 2. Configure SMTP (when ready)
+:# 1. Set SESSION_SECRET to random value
+:# 2. Configure SMTP (when ready)
 sudo systemctl restart rent-coordinator
 ```
 
@@ -116,4 +116,4 @@ ssh vault2 'curl http://localhost:8080/health'
 
 ## Full Documentation
 
-See `scripts/DEPLOYMENT.md` for complete guide.
+See `scripts/deployment.md` for complete guide.

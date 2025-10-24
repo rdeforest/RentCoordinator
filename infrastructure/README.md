@@ -84,7 +84,7 @@ Copy and edit the parameters file:
 cd infrastructure/cloudformation
 cp parameters-example.json parameters.json
 
-# Edit parameters.json with your values
+:# Edit parameters.json with your values
 nano parameters.json
 ```
 
@@ -96,7 +96,7 @@ nano parameters.json
 ### 2. Deploy Infrastructure
 
 ```bash
-# Deploy the stack
+:# Deploy the stack
 aws cloudformation create-stack \
   --stack-name rent-coordinator-production \
   --template-body file://rent-coordinator-infrastructure.yaml \
@@ -104,12 +104,12 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-west-2
 
-# Watch the deployment
+:# Watch the deployment
 aws cloudformation wait stack-create-complete \
   --stack-name rent-coordinator-production \
   --region us-west-2
 
-# Check status
+:# Check status
 aws cloudformation describe-stacks \
   --stack-name rent-coordinator-production \
   --region us-west-2 \
@@ -119,21 +119,21 @@ aws cloudformation describe-stacks \
 ### 3. Verify Deployment
 
 ```bash
-# Get Auto Scaling Group name
+:# Get Auto Scaling Group name
 ASG_NAME=$(aws cloudformation describe-stacks \
   --stack-name rent-coordinator-production \
   --region us-west-2 \
   --query 'Stacks[0].Outputs[?OutputKey==`AutoScalingGroupName`].OutputValue' \
   --output text)
 
-# List instances in Auto Scaling Group
+:# List instances in Auto Scaling Group
 aws autoscaling describe-auto-scaling-groups \
   --auto-scaling-group-names $ASG_NAME \
   --region us-west-2 \
   --query 'AutoScalingGroups[0].Instances[*].[InstanceId,HealthStatus,LifecycleState]' \
   --output table
 
-# Check instance logs (replace INSTANCE_ID)
+:# Check instance logs (replace INSTANCE_ID)
 aws ssm start-session --target INSTANCE_ID
 sudo journalctl -u rent-coordinator -f
 ```
@@ -145,7 +145,7 @@ sudo journalctl -u rent-coordinator -f
 The Auto Scaling Group handles this automatically, but you can manually trigger:
 
 ```bash
-# Increase desired capacity
+:# Increase desired capacity
 aws autoscaling set-desired-capacity \
   --auto-scaling-group-name $ASG_NAME \
   --desired-capacity 2 \
@@ -163,13 +163,13 @@ New instances will:
 ### Removing an Instance (e.g., vault2)
 
 ```bash
-# Decrease desired capacity
+:# Decrease desired capacity
 aws autoscaling set-desired-capacity \
   --auto-scaling-group-name $ASG_NAME \
   --desired-capacity 1 \
   --region us-west-2
 
-# Or manually deregister and terminate specific instance
+:# Or manually deregister and terminate specific instance
 aws elbv2 deregister-targets \
   --target-group-arn $TARGET_GROUP_ARN \
   --targets Id=i-xxxxxxxxx
@@ -183,7 +183,7 @@ There are two approaches:
 
 #### Option 1: Rolling Update (Zero Downtime)
 ```bash
-# Update Launch Template (if needed)
+:# Update Launch Template (if needed)
 aws cloudformation update-stack \
   --stack-name rent-coordinator-production \
   --template-body file://rent-coordinator-infrastructure.yaml \
@@ -191,7 +191,7 @@ aws cloudformation update-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-west-2
 
-# Perform instance refresh (rolling update)
+:# Perform instance refresh (rolling update)
 aws autoscaling start-instance-refresh \
   --auto-scaling-group-name $ASG_NAME \
   --preferences MinHealthyPercentage=50 \
@@ -207,17 +207,17 @@ Instances automatically pull latest code on boot. To deploy:
 ### Monitoring
 
 ```bash
-# Check Auto Scaling Group status
+:# Check Auto Scaling Group status
 aws autoscaling describe-auto-scaling-groups \
   --auto-scaling-group-names $ASG_NAME \
   --region us-west-2
 
-# Check target health
+:# Check target health
 aws elbv2 describe-target-health \
   --target-group-arn $TARGET_GROUP_ARN \
   --region us-west-2
 
-# View CloudWatch metrics
+:# View CloudWatch metrics
 aws cloudwatch get-metric-statistics \
   --namespace AWS/ApplicationELB \
   --metric-name TargetResponseTime \
@@ -232,7 +232,7 @@ aws cloudwatch get-metric-statistics \
 ## Updating the Stack
 
 ```bash
-# Update stack with changes to template or parameters
+:# Update stack with changes to template or parameters
 aws cloudformation update-stack \
   --stack-name rent-coordinator-production \
   --template-body file://rent-coordinator-infrastructure.yaml \
@@ -240,7 +240,7 @@ aws cloudformation update-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-west-2
 
-# Wait for update to complete
+:# Wait for update to complete
 aws cloudformation wait stack-update-complete \
   --stack-name rent-coordinator-production \
   --region us-west-2
@@ -249,12 +249,12 @@ aws cloudformation wait stack-update-complete \
 ## Deleting the Infrastructure
 
 ```bash
-# Delete the CloudFormation stack
+:# Delete the CloudFormation stack
 aws cloudformation delete-stack \
   --stack-name rent-coordinator-production \
   --region us-west-2
 
-# Wait for deletion to complete
+:# Wait for deletion to complete
 aws cloudformation wait stack-delete-complete \
   --stack-name rent-coordinator-production \
   --region us-west-2
@@ -270,7 +270,7 @@ aws cloudformation wait stack-delete-complete \
 ### Stack Creation Fails
 
 ```bash
-# Check stack events
+:# Check stack events
 aws cloudformation describe-stack-events \
   --stack-name rent-coordinator-production \
   --region us-west-2 \
@@ -280,26 +280,26 @@ aws cloudformation describe-stack-events \
 ### Instance Bootstrap Fails
 
 ```bash
-# SSH to instance
+:# SSH to instance
 ssh -i ~/.ssh/your-key.pem admin@<instance-ip>
 
-# Check user-data log
+:# Check user-data log
 sudo tail -f /var/log/user-data.log
 
-# Check application logs
+:# Check application logs
 sudo journalctl -u rent-coordinator -f
 ```
 
 ### Instances Not Joining Target Group
 
 ```bash
-# Check instance health
+:# Check instance health
 aws elbv2 describe-target-health \
   --target-group-arn $TARGET_GROUP_ARN \
   --region us-west-2
 
-# Verify security groups allow traffic
-# Check health check endpoint
+:# Verify security groups allow traffic
+:# Check health check endpoint
 curl http://<instance-ip>:3000/health
 ```
 
@@ -312,14 +312,14 @@ curl http://<instance-ip>:3000/health
 
 ### Reducing Costs
 ```bash
-# Use t3.micro for lighter workloads
-# Edit parameters.json: "InstanceType": "t3.micro"
+:# Use t3.micro for lighter workloads
+:# Edit parameters.json: "InstanceType": "t3.micro"
 
-# Run single instance
-# Edit parameters.json:
-#   "MinSize": "1"
-#   "MaxSize": "1"
-#   "DesiredCapacity": "1"
+:# Run single instance
+:# Edit parameters.json:
+:# "MinSize": "1"
+:# "MaxSize": "1"
+:# "DesiredCapacity": "1"
 ```
 
 ## Security Best Practices
@@ -335,14 +335,14 @@ curl http://<instance-ip>:3000/health
 
 ### Step 1: Prepare
 ```bash
-# Backup database from vault2
+:# Backup database from vault2
 ssh vault2 'cd ~/rent-coordinator && npm run backup'
 scp vault2:~/rent-coordinator/backups/*.json ./backups/
 ```
 
 ### Step 2: Deploy Infrastructure
 ```bash
-# Deploy CloudFormation stack (creates rent01 automatically)
+:# Deploy CloudFormation stack (creates rent01 automatically)
 aws cloudformation create-stack \
   --stack-name rent-coordinator-production \
   --template-body file://rent-coordinator-infrastructure.yaml \
@@ -352,14 +352,14 @@ aws cloudformation create-stack \
 
 ### Step 3: Verify rent01
 ```bash
-# Wait for instance to be healthy in target group
+:# Wait for instance to be healthy in target group
 watch -n 5 aws elbv2 describe-target-health \
   --target-group-arn $TARGET_GROUP_ARN
 ```
 
 ### Step 4: Migrate Traffic
 ```bash
-# Deregister vault2 from target group
+:# Deregister vault2 from target group
 aws elbv2 deregister-targets \
   --target-group-arn $TARGET_GROUP_ARN \
   --targets Id=i-06a914c47bf8e08da  # vault2 instance ID
@@ -367,10 +367,10 @@ aws elbv2 deregister-targets \
 
 ### Step 5: Shutdown vault2
 ```bash
-# Stop vault2 instance (keep it around for a few days in case of issues)
+:# Stop vault2 instance (keep it around for a few days in case of issues)
 aws ec2 stop-instances --instance-ids i-06a914c47bf8e08da
 
-# Later, terminate vault2
+:# Later, terminate vault2
 aws ec2 terminate-instances --instance-ids i-06a914c47bf8e08da
 ```
 

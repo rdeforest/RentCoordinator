@@ -170,25 +170,25 @@ Configuration lives in `~/rent-coordinator/config.sh` on the remote server.
 
 **Default config structure:**
 ```bash
-# Server
+:# Server
 export PORT=8080
 export NODE_ENV=production
 
-# Database
+:# Database
 export DB_PATH="$HOME/rent-coordinator/tenant-coordinator.db"
 
-# Authentication
+:# Authentication
 export SESSION_SECRET="CHANGE_ME"
 
-# SMTP (configure when ready for production)
-# export SMTP_HOST="smtp.example.com"
-# export SMTP_PORT=587
-# export SMTP_USER="username"
-# export SMTP_PASS="password"
-# export EMAIL_FROM="noreply@thatsnice.org"
+:# SMTP (configure when ready for production)
+:# export SMTP_HOST="smtp.example.com"
+:# export SMTP_PORT=587
+:# export SMTP_USER="username"
+:# export SMTP_PASS="password"
+:# export EMAIL_FROM="noreply@thatsnice.org"
 
-# Node.js (typically already in PATH on production systems)
-# export PATH="/usr/local/bin:$PATH"
+:# Node.js (typically already in PATH on production systems)
+:# export PATH="/usr/local/bin:$PATH"
 ```
 
 **After editing config:**
@@ -199,15 +199,15 @@ sudo systemctl restart rent-coordinator
 ## Managing the Service
 
 ```bash
-# Status
+:# Status
 sudo systemctl status rent-coordinator
 
-# Start/Stop/Restart
+:# Start/Stop/Restart
 sudo systemctl start rent-coordinator
 sudo systemctl stop rent-coordinator
 sudo systemctl restart rent-coordinator
 
-# Logs
+:# Logs
 sudo journalctl -u rent-coordinator -f          # Follow
 sudo journalctl -u rent-coordinator -n 100      # Last 100 lines
 sudo journalctl -u rent-coordinator --since today
@@ -231,7 +231,7 @@ npm run restore backups/backup-YYYY-MM-DD_HH-MM-SS.json
 
 **Set up automated backups via rsync:**
 ```bash
-# On your desktop, add to crontab:
+:# On your desktop, add to crontab:
 0 2 * * * rsync -az vault2:~/rent-coordinator/backups/ ~/rent-coordinator-backups/
 ```
 
@@ -257,28 +257,28 @@ ssh vault2 'rm -rf ~/rent-coordinator/'
 
 ### SSH Connection Fails
 ```bash
-# Test SSH
+:# Test SSH
 ssh vault2 'echo "SSH OK"'
 
-# Check SSH config
+:# Check SSH config
 cat ~/.ssh/config
 ```
 
 ### Sudo Password Prompt
 ```bash
-# Verify passwordless sudo
+:# Verify passwordless sudo
 ssh vault2 'sudo -n true && echo "Sudo OK"'
 
-# Fix: Add to /etc/sudoers.d/username
+:# Fix: Add to /etc/sudoers.d/username
 username ALL=(ALL) NOPASSWD: ALL
 ```
 
 ### Build Fails
 ```bash
-# Check Node.js version
+:# Check Node.js version
 node --version  # Should be 16.17+
 
-# Clean and rebuild
+:# Clean and rebuild
 rm -rf dist node_modules
 npm install
 npm run build
@@ -286,25 +286,25 @@ npm run build
 
 ### Service Won't Start
 ```bash
-# Check logs
+:# Check logs
 ssh vault2 'sudo journalctl -u rent-coordinator -n 50'
 
-# Check config
+:# Check config
 ssh vault2 'cat ~/rent-coordinator/config.sh'
 
-# Verify Node.js
+:# Verify Node.js
 ssh vault2 'sudo -u rent-coordinator node --version'
 ```
 
 ### Health Check Fails
 ```bash
-# Check if service is listening
+:# Check if service is listening
 ssh vault2 'sudo ss -tlnp | grep 8080'
 
-# Test health endpoint
+:# Test health endpoint
 ssh vault2 'curl http://localhost:8080/health'
 
-# Check firewall
+:# Check firewall
 ssh vault2 'sudo iptables -L -n | grep 8080'
 ```
 
@@ -313,11 +313,11 @@ ssh vault2 'sudo iptables -L -n | grep 8080'
 This deployment system is designed to migrate to .deb/.rpm packages:
 
 ```bash
-# Future workflow
+:# Future workflow
 ./scripts/build-deb.sh        # Build .deb package
 ./scripts/deploy-package.sh vault2 package.deb
 
-# On server
+:# On server
 sudo apt install ./rent-coordinator_1.0.0.deb
 ```
 
@@ -341,8 +341,8 @@ Without SMTP configured:
 
 Test SMTP configuration after setup:
 ```bash
-# Check logs for verification codes
+:# Check logs for verification codes
 sudo journalctl -u rent-coordinator -f
 
-# Try logging in at http://your-server:8080/login.html
+:# Try logging in at http://your-server:8080/login.html
 ```

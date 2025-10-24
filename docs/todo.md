@@ -57,26 +57,26 @@ scripts/lib/init-systems/
 **Each init system module must implement:**
 
 ```bash
-# Interface functions that all init system modules must provide:
+:# Interface functions that all init system modules must provide:
 
-# Returns 0 if this init system is in use on the current system, 1 otherwise
+:# Returns 0 if this init system is in use on the current system, 1 otherwise
 is_available() { ... }
 
-# Install/configure service for this init system
-# Args: $1=prefix, $2=user, $3=log_dir, $4=db_path, $5=port
+:# Install/configure service for this init system
+:# Args: $1=prefix, $2=user, $3=log_dir, $4=db_path, $5=port
 install_service() { ... }
 
-# Uninstall/remove service for this init system
+:# Uninstall/remove service for this init system
 uninstall_service() { ... }
 
-# Start service using this init system
+:# Start service using this init system
 start_service() { ... }
 
-# Stop service using this init system
+:# Stop service using this init system
 stop_service() { ... }
 
-# Get service status using this init system
-# Returns: 0 if running, 1 if stopped
+:# Get service status using this init system
+:# Returns: 0 if running, 1 if stopped
 get_service_status() { ... }
 ```
 
@@ -96,8 +96,8 @@ install_service() {
     local db_path="$4"
     local port="$5"
 
-    # Create systemd service file
-    # Enable and optionally start service
+    :# Create systemd service file
+    :# Enable and optionally start service
 }
 
 uninstall_service() {
@@ -107,7 +107,7 @@ uninstall_service() {
     systemctl daemon-reload
 }
 
-# ... implement other interface functions
+:# ... implement other interface functions
 ```
 
 #### 3. Create Init System Manager (`scripts/lib/init-manager.sh`)
@@ -117,12 +117,12 @@ Central module that discovers and delegates to appropriate init system:
 ```bash
 #!/bin/bash
 
-# Source all init system modules
+:# Source all init system modules
 for init_system in "$(dirname "$0")/init-systems"/*.sh; do
     source "$init_system"
 done
 
-# Detect which init system is available
+:# Detect which init system is available
 detect_init_system() {
     for system in systemd openrc runit upstart sysvinit; do
         if "${system}_is_available" 2>/dev/null; then
@@ -134,7 +134,7 @@ detect_init_system() {
     return 1
 }
 
-# Delegate to appropriate init system
+:# Delegate to appropriate init system
 install_init_service() {
     local init_system=$(detect_init_system)
     if [ "$init_system" != "unknown" ]; then
@@ -145,7 +145,7 @@ install_init_service() {
     fi
 }
 
-# Similar delegation functions for uninstall, start, stop, status
+:# Similar delegation functions for uninstall, start, stop, status
 ```
 
 #### 4. Update Main Scripts
@@ -154,14 +154,14 @@ install_init_service() {
 ```bash
 #!/bin/bash
 
-# Source shared library
+:# Source shared library
 source "$(dirname "$0")/lib/common.sh"
 source "$(dirname "$0")/lib/init-manager.sh"
 
-# Parse arguments
+:# Parse arguments
 parse_arguments "$@"
 
-# Main installation
+:# Main installation
 main() {
     check_root
     create_user
@@ -183,14 +183,14 @@ main
 ```bash
 #!/bin/bash
 
-# Source shared library
+:# Source shared library
 source "$(dirname "$0")/lib/common.sh"
 source "$(dirname "$0")/lib/init-manager.sh"
 
-# Parse arguments
+:# Parse arguments
 parse_arguments "$@"
 
-# Main uninstallation
+:# Main uninstallation
 main() {
     check_root
     show_removal_plan

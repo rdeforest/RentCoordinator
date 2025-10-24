@@ -1,4 +1,4 @@
-# CLAUDE.md
+# claude.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -10,19 +10,19 @@ RentCoordinator is a Node.js-based tenant coordination application for tracking 
 
 ### Essential Commands
 ```bash
-# Development (builds, watches files, runs server)
+:# Development (builds, watches files, runs server)
 npm run dev
 
-# Build only (compiles CoffeeScript to dist/)
+:# Build only (compiles CoffeeScript to dist/)
 npm run build
 
-# Start production server (requires prior build)
+:# Start production server (requires prior build)
 npm run start
 
-# Local installation (current machine)
+:# Local installation (current machine)
 ./scripts/install.sh
 
-# Remote deployment (to production server)
+:# Remote deployment (to production server)
 ./scripts/deploy-install.sh vault2.thatsnice.org
 ./scripts/deploy-upgrade.sh vault2.thatsnice.org
 ./scripts/deploy-uninstall.sh vault2.thatsnice.org
@@ -50,7 +50,7 @@ RentCoordinator supports two deployment models:
 ```bash
 cd infrastructure
 cp cloudformation/parameters-example.json cloudformation/parameters.json
-# Edit parameters.json with your AWS settings
+:# Edit parameters.json with your AWS settings
 ./deploy.sh deploy
 ```
 
@@ -88,9 +88,9 @@ See `infrastructure/README.md` for complete AWS deployment guide.
 └── backups/           # Automatic backups
 ```
 
-See `scripts/DEPLOYMENT.md` for complete manual deployment documentation.
+See `scripts/deployment.md` for complete manual deployment documentation.
 See `migrations/README.md` for database migration guide.
-See `docs/DISASTER-RECOVERY.md` for complete disaster recovery procedures.
+See `docs/disaster-recovery.md` for complete disaster recovery procedures.
 
 ## Technology Stack
 
@@ -194,16 +194,16 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 
 **Automated Backups:**
 ```bash
-# Create database backup
+:# Create database backup
 npm run backup
 
-# Restore from backup
+:# Restore from backup
 npm run restore backups/backup-YYYY-MM-DD*.json
 
-# Backups include:
-# - All SQLite database data
-# - Non-sensitive configuration (port, business rules, etc.)
-# - Database schema version
+:# Backups include:
+:# - All SQLite database data
+:# - Non-sensitive configuration (port, business rules, etc.)
+:# - Database schema version
 ```
 
 **Secrets Management:**
@@ -212,10 +212,10 @@ npm run restore backups/backup-YYYY-MM-DD*.json
 - Protected by IAM credentials
 
 ```bash
-# Restore secrets to a server
+:# Restore secrets to a server
 ./scripts/restore-secrets.sh vault2
 
-# Manual secret retrieval
+:# Manual secret retrieval
 aws secretsmanager get-secret-value \
   --secret-id rent-coordinator/config \
   --region us-west-2 \

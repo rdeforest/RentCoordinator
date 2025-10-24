@@ -53,25 +53,25 @@
 First, test the backup/restore functionality on vault2:
 
 ```bash
-# SSH to vault2
+:# SSH to vault2
 ssh vault2
 
-# Go to application directory
+:# Go to application directory
 cd ~/rent-coordinator
 
-# Pull latest changes (including new backup service)
+:# Pull latest changes (including new backup service)
 git pull
 
-# Install AWS SDK
+:# Install AWS SDK
 npm install
 
-# Test creating a backup
+:# Test creating a backup
 curl -X POST http://localhost:3000/api/backup
 
-# Check backup status
+:# Check backup status
 curl http://localhost:3000/api/backup/status
 
-# List backups in S3
+:# List backups in S3
 curl http://localhost:3000/api/backup/list
 ```
 
@@ -83,13 +83,13 @@ This will:
 ### Step 2: Deploy rent01 Infrastructure
 
 ```bash
-# From your local machine
+:# From your local machine
 cd infrastructure
 
-# Deploy CloudFormation stack
+:# Deploy CloudFormation stack
 ./deploy.sh deploy
 
-# Monitor deployment (takes ~5-10 minutes)
+:# Monitor deployment (takes ~5-10 minutes)
 watch -n 10 './deploy.sh status'
 ```
 
@@ -106,28 +106,28 @@ watch -n 10 './deploy.sh status'
 ### Step 3: Verify rent01
 
 ```bash
-# Check instance status
+:# Check instance status
 ./deploy.sh instances
 
-# Get rent01 instance ID
+:# Get rent01 instance ID
 INSTANCE_ID=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 
-# Check target health (both should be healthy)
+:# Check target health (both should be healthy)
 aws elbv2 describe-target-health \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106
 
-# SSH to rent01 and check logs
+:# SSH to rent01 and check logs
 aws ssm start-session --target $INSTANCE_ID
-# Or use regular SSH if you prefer
+:# Or use regular SSH if you prefer
 ```
 
 ### Step 4: Test Application
 
 ```bash
-# Test health endpoint
+:# Test health endpoint
 curl https://rentcoordinator.defore.st/health
 
-# Test backup API (should work on rent01)
+:# Test backup API (should work on rent01)
 curl https://rentcoordinator.defore.st/api/backup/status
 ```
 
@@ -137,7 +137,7 @@ curl https://rentcoordinator.defore.st/api/backup/status
 
 **To send all traffic to rent01:**
 ```bash
-# Remove vault2 from target group
+:# Remove vault2 from target group
 aws elbv2 deregister-targets \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106 \
   --targets Id=i-06a914c47bf8e08da
@@ -145,7 +145,7 @@ aws elbv2 deregister-targets \
 
 **To rollback (if needed):**
 ```bash
-# Re-add vault2 to target group
+:# Re-add vault2 to target group
 aws elbv2 register-targets \
   --target-group-arn arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106 \
   --targets Id=i-06a914c47bf8e08da
@@ -177,38 +177,38 @@ aws elbv2 register-targets \
 ### Testing Database Sync
 
 ```bash
-# On vault2: Create a backup
+:# On vault2: Create a backup
 ssh vault2
 curl -X POST http://localhost:3000/api/backup
 
-# On rent01: Restore from S3
+:# On rent01: Restore from S3
 ssh rent01  # (or use instance connect)
 curl -X POST http://localhost:3000/api/backup/restore
 
-# Verify databases are in sync
-# (Check recent work logs, rent events, etc.)
+:# Verify databases are in sync
+:# (Check recent work logs, rent events, etc.)
 ```
 
 ## Operational Commands
 
 ### Scaling
 ```bash
-# Scale to 2 instances
+:# Scale to 2 instances
 cd infrastructure
 ./deploy.sh scale 2
 
-# Scale back to 1
+:# Scale back to 1
 ./deploy.sh scale 1
 ```
 
 ### Updating Application
 ```bash
-# Method 1: Push to GitHub, then refresh instances
+:# Method 1: Push to GitHub, then refresh instances
 git push origin main
 cd infrastructure
 ./deploy.sh refresh
 
-# Method 2: Terminate instances (ASG launches new ones with latest code)
+:# Method 2: Terminate instances (ASG launches new ones with latest code)
 INSTANCE_ID=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 aws autoscaling terminate-instance-in-auto-scaling-group \
   --instance-id $INSTANCE_ID \
@@ -217,11 +217,11 @@ aws autoscaling terminate-instance-in-auto-scaling-group \
 
 ### Monitoring
 ```bash
-# Check status
+:# Check status
 cd infrastructure
 ./deploy.sh status
 
-# View logs
+:# View logs
 INSTANCE_ID=$(./deploy.sh instances | grep i- | awk '{print $1}' | head -1)
 aws ssm start-session --target $INSTANCE_ID
 sudo journalctl -u rent-coordinator -f
@@ -230,22 +230,22 @@ sudo journalctl -u rent-coordinator -f
 ## Cleanup (If Needed)
 
 ```bash
-# Delete rent01 infrastructure (keeps vault2 intact)
+:# Delete rent01 infrastructure (keeps vault2 intact)
 cd infrastructure
 ./deploy.sh delete
 
-# This removes:
-# - EC2 instances (rent01)
-# - Launch Template
-# - Auto Scaling Group
-# - Security Groups
-# - IAM roles
+:# This removes:
+:# - EC2 instances (rent01)
+:# - Launch Template
+:# - Auto Scaling Group
+:# - Security Groups
+:# - IAM roles
 
-# This KEEPS:
-# - S3 backup bucket (delete manually if desired)
-# - Target Group and ALB (existed before)
-# - Secrets Manager (existed before)
-# - vault2 instance
+:# This KEEPS:
+:# - S3 backup bucket (delete manually if desired)
+:# - Target Group and ALB (existed before)
+:# - Secrets Manager (existed before)
+:# - vault2 instance
 ```
 
 ## Cost Estimate
@@ -263,7 +263,7 @@ cd infrastructure
 
 ### Instance won't launch
 ```bash
-# Check CloudFormation events
+:# Check CloudFormation events
 aws cloudformation describe-stack-events \
   --stack-name rent-coordinator-production \
   --region us-west-2 \
@@ -272,7 +272,7 @@ aws cloudformation describe-stack-events \
 
 ### Instance not joining target group
 ```bash
-# Check bootstrap log
+:# Check bootstrap log
 INSTANCE_ID=<from deploy.sh instances>
 aws ssm start-session --target $INSTANCE_ID
 sudo tail -f /var/log/user-data.log
@@ -280,11 +280,11 @@ sudo tail -f /var/log/user-data.log
 
 ### S3 restore fails
 ```bash
-# Check IAM permissions
-# Check if bucket exists
+:# Check IAM permissions
+:# Check if bucket exists
 aws s3 ls s3://rent-coordinator-backups-822812818413/database/
 
-# Check application logs
+:# Check application logs
 sudo journalctl -u rent-coordinator -n 100
 ```
 
@@ -299,6 +299,6 @@ sudo journalctl -u rent-coordinator -n 100
 ## Support
 
 - **Infrastructure docs:** `infrastructure/README.md`
-- **Migration guide:** `infrastructure/MIGRATION-GUIDE.md`
-- **Disaster recovery:** `docs/DISASTER-RECOVERY.md`
+- **Migration guide:** `infrastructure/migration-guide.md`
+- **Disaster recovery:** `docs/disaster-recovery.md`
 - **Deployment tool:** `infrastructure/deploy.sh --help`

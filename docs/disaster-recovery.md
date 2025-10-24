@@ -11,7 +11,7 @@ This guide explains how to restore the RentCoordinator system from backups in ca
 Backups are created automatically during upgrades and can be created manually:
 
 ```bash
-# On vault2
+:# On vault2
 cd ~/rent-coordinator
 npm run backup
 ```
@@ -51,14 +51,14 @@ The secret contains all sensitive configuration:
 ### Retrieving Secrets
 
 ```bash
-# Retrieve all secrets as JSON
+:# Retrieve all secrets as JSON
 aws secretsmanager get-secret-value \
   --secret-id rent-coordinator/config \
   --region us-west-2 \
   --query 'SecretString' \
   --output text
 
-# Or use the helper script (see scripts/restore-secrets.sh)
+:# Or use the helper script (see scripts/restore-secrets.sh)
 ./scripts/restore-secrets.sh <server>
 ```
 
@@ -75,16 +75,16 @@ Store these ARNs/IDs for reference:
 ### 1. Provision New Server
 
 ```bash
-# Launch EC2 instance (or equivalent)
-# Recommended: Debian/Ubuntu, t3.small or larger
-# Node.js 18+ is typically pre-installed or available via:
+:# Launch EC2 instance (or equivalent)
+:# Recommended: Debian/Ubuntu, t3.small or larger
+:# Node.js 18+ is typically pre-installed or available via:
 sudo apt update && sudo apt install -y nodejs npm
 ```
 
 ### 2. Deploy Application
 
 ```bash
-# From your local machine
+:# From your local machine
 cd /path/to/RentCoordinator
 ./scripts/deploy-install.sh <new-server>
 ```
@@ -94,22 +94,22 @@ cd /path/to/RentCoordinator
 Retrieve secrets from AWS Secrets Manager and configure the server:
 
 ```bash
-# Use the automated restore script (recommended)
+:# Use the automated restore script (recommended)
 ./scripts/restore-secrets.sh <new-server>
 
-# Or manually:
-# 1. Get secrets from AWS
+:# Or manually:
+:# 1. Get secrets from AWS
 aws secretsmanager get-secret-value \
   --secret-id rent-coordinator/config \
   --region us-west-2 \
   --query 'SecretString' \
   --output text > /tmp/secrets.json
 
-# 2. SSH to server and update config.sh
+:# 2. SSH to server and update config.sh
 ssh <new-server>
 sudo -u rent-coordinator bash -c 'cat >> ~/rent-coordinator/config.sh << EOF
 
-# Secrets from AWS Secrets Manager
+:# Secrets from AWS Secrets Manager
 SESSION_SECRET=$(jq -r .SESSION_SECRET /tmp/secrets.json)
 SMTP_HOST=$(jq -r .SMTP_HOST /tmp/secrets.json)
 SMTP_PORT=$(jq -r .SMTP_PORT /tmp/secrets.json)
@@ -124,13 +124,13 @@ EOF'
 ### 4. Restore Database
 
 ```bash
-# Copy backup from old server or S3
+:# Copy backup from old server or S3
 scp vault2:~/rent-coordinator/backups/backup-YYYY-MM-DD*.json ./
 
-# Upload to new server
+:# Upload to new server
 scp backup-*.json <new-server>:~/
 
-# Restore on new server
+:# Restore on new server
 ssh <new-server>
 cd ~/rent-coordinator
 npm run restore ~/backup-*.json
@@ -141,11 +141,11 @@ npm run restore ~/backup-*.json
 Point `rent.thatsnice.org` to new server:
 
 ```bash
-# Update ALB target or update Route53 A record
+:# Update ALB target or update Route53 A record
 aws elbv2 register-targets --target-group-arn <arn> \\
   --targets Id=<new-instance-id>
 
-# Or update Route53 directly if not using ALB
+:# Or update Route53 directly if not using ALB
 aws route53 change-resource-record-sets --hosted-zone-id ZUK6DSCVHUE2Q \\
   --change-batch file://dns-update.json
 ```
@@ -154,7 +154,7 @@ aws route53 change-resource-record-sets --hosted-zone-id ZUK6DSCVHUE2Q \\
 
 ```bash
 curl https://rent.thatsnice.org/health
-# Should return: {"status":"healthy","timestamp":"..."}
+:# Should return: {"status":"healthy","timestamp":"..."}
 ```
 
 ## Regular Backup Schedule
@@ -162,7 +162,7 @@ curl https://rent.thatsnice.org/health
 **Recommendation:** Set up automated S3 sync for backups:
 
 ```bash
-# Add to crontab on vault2
+:# Add to crontab on vault2
 0 2 * * * aws s3 sync ~/rent-coordinator/backups/ s3://your-backup-bucket/rent-coordinator/ --delete
 ```
 
@@ -188,16 +188,16 @@ curl https://rent.thatsnice.org/health
 **To update secrets:**
 
 ```bash
-# Get current secret
+:# Get current secret
 aws secretsmanager get-secret-value \
   --secret-id rent-coordinator/config \
   --region us-west-2 \
   --query 'SecretString' \
   --output text > secrets.json
 
-# Edit secrets.json as needed
+:# Edit secrets.json as needed
 
-# Update secret
+:# Update secret
 aws secretsmanager update-secret \
   --secret-id rent-coordinator/config \
   --region us-west-2 \

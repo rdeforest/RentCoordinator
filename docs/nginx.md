@@ -45,11 +45,11 @@ server {
 
 ### Install Certbot
 ```bash
-# Ubuntu/Debian
+:# Ubuntu/Debian
 sudo apt update
 sudo apt install certbot python3-certbot-nginx
 
-# RHEL/CentOS
+:# RHEL/CentOS
 sudo yum install certbot python3-certbot-nginx
 ```
 
@@ -203,32 +203,32 @@ server {
 ## Common Commands
 
 ```bash
-# Test configuration
+:# Test configuration
 sudo nginx -t
 
-# Reload configuration
+:# Reload configuration
 sudo nginx -s reload
 
-# Start Nginx
+:# Start Nginx
 sudo systemctl start nginx
 
-# Stop Nginx
+:# Stop Nginx
 sudo systemctl stop nginx
 
-# Enable Nginx on boot
+:# Enable Nginx on boot
 sudo systemctl enable nginx
 
-# View logs
+:# View logs
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/nginx/error.log
 
-# Enable site
+:# Enable site
 sudo ln -s /etc/nginx/sites-available/rentcoordinator /etc/nginx/sites-enabled/
 
-# Disable site
+:# Disable site
 sudo rm /etc/nginx/sites-enabled/rentcoordinator
 
-# Auto-renew SSL certificates
+:# Auto-renew SSL certificates
 sudo certbot renew --dry-run
 ```
 
