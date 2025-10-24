@@ -1,34 +1,24 @@
-{ v1 } = require 'uuid'
-{ db } = require '../db/schema.coffee'
+{ v1 }                   = require 'uuid'
+{ db }                   = require '../db/schema.coffee'
+{ formatSQLParameters }  = require '../db/utils.coffee'
 
 
 createWorkLog = (data) ->
-  id  = v1()
-  now = new Date().toISOString()
-
-  params = [
-    id
-    data.worker
-    data.start_time
-    data.end_time
-    data.duration
-    data.description
-    data.project_id or null
-    data.task_id or null
-    if data.billable? then data.billable else true
-    false
-    now
-  ]
+  params = formatSQLParameters Object.assign {}, data,
+    id:         v1()
+    project_id: data.project_id ? null
+    task_id:    data.task_id    ? null
+    billable:   data.billable   ? 1
+    submitted:  0
+    created_at: new Date().toISOString()
 
   db.prepare("""
-    INSERT INTO work_logs (
-      id, worker, start_time, end_time, duration, description,
-      project_id, task_id, billable, submitted, created_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  """).run params...
+    INSERT INTO work_logs
+           ( id,  worker,  start_time,  end_time,  duration,  description,  project_id,  task_id,  billable,  submitted,  created_at)
+    VALUES (:id, :worker, :start_time, :end_time, :duration, :description, :project_id, :task_id, :billable, :submitted, :created_at)
+  """).run params
 
-  return db.prepare("SELECT * FROM work_logs WHERE id = ?").get id
+  return db.prepare("SELECT * FROM work_logs WHERE id = ?").get params[':id']
 
 
 getWorkLogs = (filters = {}) ->
