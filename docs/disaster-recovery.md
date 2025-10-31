@@ -77,8 +77,7 @@ Store these ARNs/IDs for reference:
 ```bash
 :# Launch EC2 instance (or equivalent)
 :# Recommended: Debian/Ubuntu, t3.small or larger
-:# Node.js 18+ is typically pre-installed or available via:
-sudo apt update && sudo apt install -y nodejs npm
+:# Node.js will be installed via nvm during deployment
 ```
 
 ### 2. Deploy Application

@@ -94,7 +94,7 @@ See `docs/disaster-recovery.md` for complete disaster recovery procedures.
 
 ## Technology Stack
 
-- **Runtime**: Node.js 18+ with CoffeeScript
+- **Runtime**: Node.js 24 LTS (managed via nvm) with CoffeeScript
 - **Backend**: Express.js server with CoffeeScript source, compiled to JavaScript
 - **Frontend**: Compiled JavaScript (from CoffeeScript) - no longer browser-compiled
 - **Database**: SQLite (using node:sqlite built-in module)
@@ -234,9 +234,24 @@ See `DISASTER-RECOVERY.md` for complete restoration procedures.
 
 ## Development Notes
 
+- **Node.js Version**: Uses nvm with Node 24 LTS (`.nvmrc` file in repo root)
 - **Client-side**: CoffeeScript is now pre-compiled to JavaScript for better reliability
 - **Server-side**: CoffeeScript files run directly via coffee command (no compilation needed for server)
-- **Database**: Uses SQLite via Node.js built-in `node:sqlite` module (Node 18+)
+- **Database**: Uses SQLite via Node.js built-in `node:sqlite` module (Node 22+)
 - **Workers**: Hardcoded as ['robert', 'lyndzie'] in config
 - **Frontend**: Loads compiled JavaScript, polls `/timer/status` every second for live updates
 - **Hot Reload**: Available in dev mode with file watching
+
+### Local Development Setup
+```bash
+:# Install nvm (if not already installed)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+
+:# Use the project's Node version
+nvm install
+nvm use
+
+:# Install dependencies and run
+npm install
+npm run dev
+```

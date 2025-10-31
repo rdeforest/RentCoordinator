@@ -247,16 +247,22 @@ Resources:
               awscli \
               build-essential
 
-            # Install Node.js 18.x
-            curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-            apt-get install -y nodejs
-
-            # Verify installations
-            node --version
-            npm --version
-
             # Create application user
             useradd -r -m -s /bin/bash rent-coordinator || true
+
+            # Install nvm and Node.js 24 LTS as rent-coordinator user
+            sudo -u rent-coordinator bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash'
+
+            # Source nvm and install Node 24
+            sudo -u rent-coordinator bash -c '
+              export NVM_DIR="/home/rent-coordinator/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              nvm install 24
+              nvm use 24
+              nvm alias default 24
+              node --version
+              npm --version
+            '
 
             # Create application directory
             mkdir -p /opt/rent-coordinator
@@ -268,10 +274,20 @@ Resources:
             sudo -u rent-coordinator git checkout ${GitBranch}
 
             # Install Node.js dependencies
-            sudo -u rent-coordinator npm ci --only=production
+            sudo -u rent-coordinator bash -c '
+              export NVM_DIR="/home/rent-coordinator/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              nvm use
+              npm ci --only=production
+            '
 
             # Build client-side assets
-            sudo -u rent-coordinator npm run build
+            sudo -u rent-coordinator bash -c '
+              export NVM_DIR="/home/rent-coordinator/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              nvm use
+              npm run build
+            '
 
             # Retrieve secrets from AWS Secrets Manager
             SECRET_JSON=$(aws secretsmanager get-secret-value \
@@ -325,7 +341,12 @@ Resources:
             RESTORESCRIPT
 
             # Run restore as rent-coordinator user
-            sudo -u rent-coordinator node /tmp/restore-s3.js || echo "Restore failed, continuing with fresh database"
+            sudo -u rent-coordinator bash -c '
+              export NVM_DIR="/home/rent-coordinator/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              nvm use
+              node /tmp/restore-s3.js
+            ' || echo "Restore failed, continuing with fresh database"
             rm /tmp/restore-s3.js
 
             # Create systemd service
@@ -339,8 +360,9 @@ Resources:
             User=rent-coordinator
             Group=rent-coordinator
             WorkingDirectory=/opt/rent-coordinator
+            Environment="NVM_DIR=/home/rent-coordinator/.nvm"
             EnvironmentFile=/opt/rent-coordinator/.env
-            ExecStart=/usr/bin/npx coffee main.coffee
+            ExecStart=/bin/bash -c 'source $NVM_DIR/nvm.sh && nvm use && npx coffee main.coffee'
             Restart=always
             RestartSec=10
 
