@@ -322,22 +322,19 @@ Resources:
             echo "Checking for latest database backup in S3..."
             cd /opt/rent-coordinator
 
-            # Create a simple Node.js script to restore from S3
-            cat > /tmp/restore-s3.js << 'RESTORESCRIPT'
-            const backup = require('./lib/services/backup.coffee');
+            # Create a simple CoffeeScript script to restore from S3
+            cat > /tmp/restore-s3.coffee << 'RESTORESCRIPT'
+            backup = require './lib/services/backup.coffee'
 
-            (async () => {
-              try {
-                const result = await backup.restoreFromS3();
-                if (result) {
-                  console.log('Database restored from S3:', result.backup.filename);
-                } else {
-                  console.log('No backup found in S3, starting with fresh database');
-                }
-              } catch (error) {
-                console.log('Failed to restore from S3 (continuing anyway):', error.message);
-              }
-            })();
+            do ->
+              try
+                result = await backup.restoreFromS3()
+                if result
+                  console.log 'Database restored from S3:', result.backup.filename
+                else
+                  console.log 'No backup found in S3, starting with fresh database'
+              catch error
+                console.log 'Failed to restore from S3 (continuing anyway):', error.message
             RESTORESCRIPT
 
             # Run restore as rent-coordinator user
@@ -345,9 +342,9 @@ Resources:
               export NVM_DIR="/home/rent-coordinator/.nvm"
               [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
               nvm use
-              node /tmp/restore-s3.js
+              npx coffee /tmp/restore-s3.coffee
             ' || echo "Restore failed, continuing with fresh database"
-            rm /tmp/restore-s3.js
+            rm /tmp/restore-s3.coffee
 
             # Create systemd service
             cat > /etc/systemd/system/rent-coordinator.service << 'SERVICEEOF'
