@@ -401,7 +401,7 @@ Resources:
       MaxSize: !Ref MaxSize
       DesiredCapacity: !Ref DesiredCapacity
       HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
+      HealthCheckGracePeriod: 480
       TargetGroupARNs:
         - !Ref TargetGroupArn
       Tags:
