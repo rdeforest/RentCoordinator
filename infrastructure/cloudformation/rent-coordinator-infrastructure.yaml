@@ -299,7 +299,7 @@ Resources:
             # Create environment file
             cat > /opt/rent-coordinator/.env << 'ENVEOF'
             NODE_ENV=production
-            PORT=3000
+            PORT=8080
             DB_PATH=/var/lib/rent-coordinator/tenant-coordinator.db
             BACKUP_S3_BUCKET=${BackupBucket}
             BACKUP_S3_PREFIX=database/
@@ -382,7 +382,7 @@ Resources:
             # Wait for application to be healthy
             echo "Waiting for application to start..."
             for i in {1..30}; do
-              if curl -f http://localhost:3000/health > /dev/null 2>&1; then
+              if curl -f http://localhost:8080/health > /dev/null 2>&1; then
                 echo "Application is healthy!"
                 break
               fi
