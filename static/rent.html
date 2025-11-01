@@ -22,20 +22,23 @@
             <!-- Summary Cards -->
             <section class="rent-summary">
                 <div class="summary-card">
-                    <h3>Outstanding Balance</h3>
-                    <div class="amount" id="outstanding-balance">$0</div>
-                </div>
-                <div class="summary-card">
                     <h3>Total Credits Applied</h3>
                     <div class="amount" id="total-credits">$0</div>
                 </div>
                 <div class="summary-card">
-                    <h3>Total Paid</h3>
-                    <div class="amount" id="total-paid">$0</div>
-                </div>
-                <div class="summary-card">
                     <h3>Months Tracked</h3>
                     <div class="amount" id="months-tracked">0</div>
+                </div>
+                <div class="summary-card" style="grid-column: 1 / -1; text-align: center;">
+                    <button id="toggle-spoilers-btn" class="btn btn-secondary">Show Full Details</button>
+                </div>
+                <div class="summary-card spoiler-content" style="display: none;">
+                    <h3>Outstanding Balance</h3>
+                    <div class="amount" id="outstanding-balance">$0</div>
+                </div>
+                <div class="summary-card spoiler-content" style="display: none;">
+                    <h3>Total Paid</h3>
+                    <div class="amount" id="total-paid">$0</div>
                 </div>
             </section>
 

@@ -1,10 +1,14 @@
 now              = new Date()
 currentYear      = now.getFullYear()
 currentMonth     = now.getMonth() + 1
+currentDay       = now.getDate()
 currentFilters   = {}
 allEvents        = []
 eventToDelete    = null
 showingDeleted   = false
+
+AGREED_MONTHLY_PAYMENT = 950
+RENT_DUE_DAY          = 15
 
 eventModal       = document.getElementById 'event-modal'
 eventForm        = document.getElementById 'event-form'
@@ -37,6 +41,7 @@ window.addEventListener 'load', ->
   loadAllPeriods()
   loadEvents()
   populateFilterYears()
+  setupSpoilerToggle()
 
 
 loadRentSummary = ->
@@ -60,14 +65,17 @@ loadCurrentMonth = ->
 
     document.getElementById('current-month-title').textContent = formatMonthYear currentYear, currentMonth
 
+    # Calculate display amount for current month
+    displayDue = if currentDay < RENT_DUE_DAY then 0 else AGREED_MONTHLY_PAYMENT
+
     document.getElementById('hours-worked')  .textContent = period.hours_worked.toFixed 2
     document.getElementById('hours-previous').textContent = (period.hours_from_previous or 0).toFixed 2
     document.getElementById('hours-applied') .textContent = Math.min(period.hours_worked + (period.hours_from_previous or 0), 8).toFixed 2
     document.getElementById('credit-applied').textContent = formatCurrency period.discount_applied
-    document.getElementById('amount-due')    .textContent = formatCurrency period.amount_due
+    document.getElementById('amount-due')    .textContent = formatCurrency displayDue
     document.getElementById('amount-paid')   .textContent = formatCurrency period.amount_paid or 0
 
-    outstanding = period.amount_due - (period.amount_paid or 0)
+    outstanding = displayDue - (period.amount_paid or 0)
     document.getElementById('outstanding-balance-current').textContent = formatCurrency outstanding
 
     payOnlineBtn = document.getElementById 'pay-rent-online-btn'
@@ -99,13 +107,14 @@ loadAllPeriods = ->
     tbody.innerHTML = periods.map((period) ->
       status = getPaymentStatus period
       statusClass = status.toLowerCase()
+      displayDue = getDisplayAmountDue period
 
       """
         <tr>
           <td>#{formatMonthYear period.year, period.month}</td>
           <td>#{period.hours_worked.toFixed 2}</td>
           <td>#{formatCurrency period.discount_applied}</td>
-          <td>#{formatCurrency period.amount_due}</td>
+          <td>#{formatCurrency displayDue}</td>
           <td>#{formatCurrency period.amount_paid or 0}</td>
           <td class="#{statusClass}">#{status}</td>
           <td>
@@ -534,16 +543,48 @@ escapeHtml = (text) ->
   div.textContent = text
   return div.innerHTML
 
+getDisplayAmountDue = (period) ->
+  # Determine if this period is past, current, or future
+  isPast = period.year < currentYear or (period.year is currentYear and period.month < currentMonth)
+  isCurrent = period.year is currentYear and period.month is currentMonth
+  isFuture = period.year > currentYear or (period.year is currentYear and period.month > currentMonth)
+
+  if isFuture
+    # Future months show full calculation
+    return period.amount_due
+  else if isCurrent
+    # Current month: $0 before 15th, $950 after 15th
+    if currentDay < RENT_DUE_DAY
+      return 0
+    else
+      return AGREED_MONTHLY_PAYMENT
+  else
+    # Past months: cap at agreed payment amount
+    return AGREED_MONTHLY_PAYMENT
+
 getPaymentStatus = (period) ->
-  due  = period.amount_due
+  displayDue = getDisplayAmountDue period
   paid = period.amount_paid or 0
 
-  if      paid >= due then 'PAID'
-  else if paid > 0    then 'PARTIAL'
-  else                     'UNPAID'
+  if      paid >= displayDue then 'PAID'
+  else if paid > 0           then 'PARTIAL'
+  else                            'UNPAID'
 
 showSuccess = (message) -> alert message
 showError   = (message) -> alert message
+
+setupSpoilerToggle = ->
+  toggleBtn = document.getElementById 'toggle-spoilers-btn'
+  spoilerCards = document.querySelectorAll '.spoiler-content'
+  isShowing = false
+
+  toggleBtn.addEventListener 'click', ->
+    isShowing = not isShowing
+
+    spoilerCards.forEach (card) ->
+      card.style.display = if isShowing then 'block' else 'none'
+
+    toggleBtn.textContent = if isShowing then 'Hide Full Details' else 'Show Full Details'
 
 # Edit Period Modal
 editPeriodModal = document.getElementById 'edit-period-modal'
