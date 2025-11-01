@@ -173,15 +173,48 @@
                             <th>Amount Due</th>
                             <th>Amount Paid</th>
                             <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="periods-table">
                         <tr>
-                            <td colspan="6" style="text-align: center;">Loading...</td>
+                            <td colspan="7" style="text-align: center;">Loading...</td>
                         </tr>
                     </tbody>
                 </table>
             </section>
+
+            <!-- Edit Period Modal (hidden by default) -->
+            <div id="edit-period-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3>Edit Rent Period</h3>
+                    <form id="edit-period-form">
+                        <input type="hidden" id="edit-period-year">
+                        <input type="hidden" id="edit-period-month">
+
+                        <div style="margin-bottom: 15px;">
+                            <strong id="edit-period-title">Period:</strong>
+                        </div>
+
+                        <label for="edit-manual-adjustments">Manual Adjustments:</label>
+                        <input type="number" id="edit-manual-adjustments" step="0.01">
+                        <small>Positive values increase rent, negative values decrease it</small>
+
+                        <label for="edit-amount-due">Amount Due Override:</label>
+                        <input type="number" id="edit-amount-due" step="0.01">
+                        <small>Leave empty to use calculated value</small>
+
+                        <label for="edit-amount-paid">Amount Paid Override:</label>
+                        <input type="number" id="edit-amount-paid" step="0.01">
+                        <small>Leave empty to use sum of payment events</small>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <button type="button" id="cancel-edit-period" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
             <!-- Payment Modal (hidden by default) -->
             <div id="payment-modal" class="modal" style="display: none;">

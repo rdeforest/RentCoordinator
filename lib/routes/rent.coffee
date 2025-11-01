@@ -40,6 +40,38 @@ setup = (app) ->
     catch err
       res.status(500).json error: err.message
 
+  app.put '/rent/period/:year/:month', (req, res) ->
+    year  = parseInt req.params.year
+    month = parseInt req.params.month
+    updates = req.body
+
+    unless updates and Object.keys(updates).length > 0
+      return res.status(400).json error: 'No updates provided'
+
+    try
+      # Only allow updating specific fields
+      allowedFields = [
+        'manual_adjustments'
+        'amount_due'
+        'amount_paid'
+        'base_rent'
+        'hourly_credit'
+        'max_monthly_hours'
+      ]
+
+      filteredUpdates = {}
+      for key, value of updates
+        if key in allowedFields
+          filteredUpdates[key] = value
+
+      unless Object.keys(filteredUpdates).length > 0
+        return res.status(400).json error: 'No valid fields to update'
+
+      period = await rentModel.updateRentPeriod year, month, filteredUpdates
+      res.json period
+    catch err
+      res.status(500).json error: err.message
+
   app.post '/rent/payment', (req, res) ->
     { year, month, amount, payment_method, notes } = req.body
 

@@ -93,7 +93,7 @@ loadAllPeriods = ->
     tbody = document.getElementById 'periods-table'
 
     if periods.length is 0
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No rent periods found</td></tr>'
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No rent periods found</td></tr>'
       return
 
     tbody.innerHTML = periods.map((period) ->
@@ -108,9 +108,19 @@ loadAllPeriods = ->
           <td>#{formatCurrency period.amount_due}</td>
           <td>#{formatCurrency period.amount_paid or 0}</td>
           <td class="#{statusClass}">#{status}</td>
+          <td>
+            <button class="btn btn-small btn-secondary edit-period-btn" data-year="#{period.year}" data-month="#{period.month}">Edit</button>
+          </td>
         </tr>
       """
     ).join ''
+
+    # Add click handlers for edit buttons
+    document.querySelectorAll('.edit-period-btn').forEach (btn) ->
+      btn.addEventListener 'click', (e) ->
+        year = parseInt e.target.dataset.year
+        month = parseInt e.target.dataset.month
+        openEditPeriodModal year, month
 
   catch err
     console.error 'Error loading periods:', err
@@ -506,3 +516,66 @@ getPaymentStatus = (period) ->
 
 showSuccess = (message) -> alert message
 showError   = (message) -> alert message
+
+# Edit Period Modal
+editPeriodModal = document.getElementById 'edit-period-modal'
+editPeriodForm = document.getElementById 'edit-period-form'
+cancelEditPeriodBtn = document.getElementById 'cancel-edit-period'
+
+openEditPeriodModal = (year, month) ->
+  try
+    response = await fetch "/rent/period/#{year}/#{month}"
+    period = await response.json()
+
+    document.getElementById('edit-period-year').value = year
+    document.getElementById('edit-period-month').value = month
+    document.getElementById('edit-period-title').textContent = "Period: #{formatMonthYear year, month}"
+
+    document.getElementById('edit-manual-adjustments').value = period.manual_adjustments or 0
+    document.getElementById('edit-amount-due').value = period.amount_due or ''
+    document.getElementById('edit-amount-paid').value = period.amount_paid or ''
+
+    editPeriodModal.style.display = 'block'
+
+  catch err
+    showError "Failed to load period data: #{err.message}"
+
+cancelEditPeriodBtn.addEventListener 'click', ->
+  editPeriodModal.style.display = 'none'
+
+editPeriodForm.addEventListener 'submit', (e) ->
+  e.preventDefault()
+
+  year = parseInt document.getElementById('edit-period-year').value
+  month = parseInt document.getElementById('edit-period-month').value
+
+  updates = {}
+
+  manualAdj = document.getElementById('edit-manual-adjustments').value
+  if manualAdj isnt ''
+    updates.manual_adjustments = parseFloat manualAdj
+
+  amountDue = document.getElementById('edit-amount-due').value
+  if amountDue isnt ''
+    updates.amount_due = parseFloat amountDue
+
+  amountPaid = document.getElementById('edit-amount-paid').value
+  if amountPaid isnt ''
+    updates.amount_paid = parseFloat amountPaid
+
+  try
+    response = await fetch "/rent/period/#{year}/#{month}",
+      method: 'PUT'
+      headers: 'Content-Type': 'application/json'
+      body: JSON.stringify updates
+
+    if response.ok
+      editPeriodModal.style.display = 'none'
+      showSuccess 'Period updated successfully'
+      autoRecalculateAndReload()
+    else
+      error = await response.json()
+      showError "Failed to update period: #{error.error}"
+
+  catch err
+    showError "Error updating period: #{err.message}"
