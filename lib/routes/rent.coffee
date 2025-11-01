@@ -72,6 +72,19 @@ setup = (app) ->
     catch err
       res.status(500).json error: err.message
 
+  app.delete '/rent/period/:year/:month', (req, res) ->
+    year  = parseInt req.params.year
+    month = parseInt req.params.month
+
+    try
+      result = await rentModel.deleteRentPeriod year, month
+      res.json result
+    catch err
+      if err.message.includes 'not found'
+        res.status(404).json error: err.message
+      else
+        res.status(500).json error: err.message
+
   app.post '/rent/payment', (req, res) ->
     { year, month, amount, payment_method, notes } = req.body
 

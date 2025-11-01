@@ -90,6 +90,21 @@ updateRentPeriod = (year, month, updates) ->
   return getRentPeriod year, month
 
 
+deleteRentPeriod = (year, month) ->
+  existing = getRentPeriod year, month
+
+  unless existing
+    throw new Error "Rent period not found: #{year}-#{month}"
+
+  # Delete all events for this period first
+  db.prepare("DELETE FROM rent_events WHERE period_id = ?").run existing.id
+
+  # Delete the period
+  db.prepare("DELETE FROM rent_periods WHERE year = ? AND month = ?").run year, month
+
+  return deleted: true, year: year, month: month
+
+
 createRentEvent = (data) ->
   id  = v1()
   now = new Date().toISOString()
@@ -292,6 +307,7 @@ module.exports = {
   getOrCreateRentPeriod
   getAllRentPeriods
   updateRentPeriod
+  deleteRentPeriod
   createRentEvent
   getAllRentEvents
   getRentEvent

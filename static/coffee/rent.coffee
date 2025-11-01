@@ -110,6 +110,7 @@ loadAllPeriods = ->
           <td class="#{statusClass}">#{status}</td>
           <td>
             <button class="btn btn-small btn-secondary edit-period-btn" data-year="#{period.year}" data-month="#{period.month}">Edit</button>
+            <button class="btn btn-small btn-danger delete-period-btn" data-year="#{period.year}" data-month="#{period.month}">Delete</button>
           </td>
         </tr>
       """
@@ -121,6 +122,13 @@ loadAllPeriods = ->
         year = parseInt e.target.dataset.year
         month = parseInt e.target.dataset.month
         openEditPeriodModal year, month
+
+    # Add click handlers for delete buttons
+    document.querySelectorAll('.delete-period-btn').forEach (btn) ->
+      btn.addEventListener 'click', (e) ->
+        year = parseInt e.target.dataset.year
+        month = parseInt e.target.dataset.month
+        deletePeriod year, month
 
   catch err
     console.error 'Error loading periods:', err
@@ -261,6 +269,26 @@ window.deleteEvent = (eventId) ->
   """
 
   confirmDeleteModal.style.display = 'block'
+
+window.deletePeriod = (year, month) ->
+  periodName = formatMonthYear year, month
+
+  unless confirm "Are you sure you want to delete the rent period for #{periodName}?\n\nThis will delete all associated events and cannot be undone."
+    return
+
+  try
+    response = await fetch "/rent/period/#{year}/#{month}",
+      method: 'DELETE'
+
+    if response.ok
+      showSuccess "Period #{periodName} deleted successfully"
+      autoRecalculateAndReload()
+    else
+      error = await response.json()
+      showError "Failed to delete period: #{error.error}"
+
+  catch err
+    showError "Error deleting period: #{err.message}"
 
 window.undeleteEvent = (eventId) ->
   try
