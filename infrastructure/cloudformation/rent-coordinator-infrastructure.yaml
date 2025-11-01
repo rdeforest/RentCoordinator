@@ -36,6 +36,11 @@ Parameters:
     Description: ARN of existing ALB Target Group
     Default: arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106
 
+  ALBSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID of existing ALB
+    Default: sg-8eb1fae9
+
   SecretsManagerSecretArn:
     Type: String
     Description: ARN of Secrets Manager secret containing application configuration
@@ -167,7 +172,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          SourceSecurityGroupId: !Ref ALBSecurityGroupId
           Description: Application port from ALB
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -176,30 +181,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub RentCoordinator-SG-${Environment}
-        - Key: Environment
-          Value: !Ref Environment
-
-  # ALB Security Group (for reference/update)
-  ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub RentCoordinator-ALB-${Environment}
-      GroupDescription: Security group for RentCoordinator ALB
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: HTTP from internet
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: HTTPS from internet
-      Tags:
-        - Key: Name
-          Value: !Sub RentCoordinator-ALB-SG-${Environment}
         - Key: Environment
           Value: !Ref Environment
 

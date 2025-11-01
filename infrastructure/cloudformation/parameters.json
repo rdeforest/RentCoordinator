@@ -24,6 +24,10 @@
     "ParameterValue": "arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106"
   },
   {
+    "ParameterKey": "ALBSecurityGroupId",
+    "ParameterValue": "sg-8eb1fae9"
+  },
+  {
     "ParameterKey": "SecretsManagerSecretArn",
     "ParameterValue": "arn:aws:secretsmanager:us-west-2:822812818413:secret:rent-coordinator/config-zlAnNB"
   },
