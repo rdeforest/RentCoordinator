@@ -17,7 +17,7 @@ MAX_MONTHLY_HOURS = 8
 
 ALLOWED_EMAILS  = ['robert@defore.st', 'lynz57@hotmail.com']
 SESSION_SECRET  = process.env.SESSION_SECRET or 'dev-secret-change-in-production'
-SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000
+SESSION_MAX_AGE = 90 * 24 * 60 * 60 * 1000
 CODE_EXPIRY     = 10 * 60 * 1000
 
 SMTP_HOST = process.env.SMTP_HOST
