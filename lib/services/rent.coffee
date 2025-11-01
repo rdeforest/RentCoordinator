@@ -60,7 +60,7 @@ calculateRent = (year, month) ->
     discount_applied:      discountApplied
     manual_adjustments:    manualAdjustments
     amount_due:            amountDue
-    amount_paid:           totalPayments
+    amount_paid:           Math.abs totalPayments
 
 
 recalculateAllRent = ->
@@ -137,7 +137,7 @@ recalculateAllRent = ->
       total_discount:         totalDiscount
       manual_adjustments:     manualAdjustments
       amount_due:             finalAmountDue
-      amount_paid:            totalPayments
+      amount_paid:            Math.abs totalPayments
       cumulative_shortfall:   totalShortfall
 
   return periods
@@ -155,7 +155,7 @@ createOrUpdateRentPeriod = (year, month) ->
       hours_to_next:       calculation.hours_to_next
       discount_applied:    calculation.discount_applied
       amount_due:          calculation.amount_due
-      amount_paid:         calculation.amount_paid
+      amount_paid:         Math.abs calculation.amount_paid
 
     return updated
   else
