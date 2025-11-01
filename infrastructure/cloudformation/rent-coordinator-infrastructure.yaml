@@ -270,6 +270,16 @@ Resources:
               npm run build
             '
 
+            # Copy static files to dist/static for production
+            sudo -u rent-coordinator bash -c '
+              cd /opt/rent-coordinator
+              mkdir -p dist/static
+              cp -r static/*.html dist/static/
+              cp -r static/css dist/static/ 2>/dev/null || true
+              cp -r static/vendor dist/static/ 2>/dev/null || true
+              cp -r static/images dist/static/ 2>/dev/null || true
+            '
+
             # Retrieve secrets from AWS Secrets Manager
             SECRET_JSON=$(aws secretsmanager get-secret-value \
               --secret-id ${SecretsManagerSecretArn} \
