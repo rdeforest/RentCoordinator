@@ -22,10 +22,13 @@ npm run start
 :# Local installation (current machine)
 ./scripts/install.sh
 
-:# Remote deployment (to production server)
-./scripts/deploy-install.sh vault2.thatsnice.org
-./scripts/deploy-upgrade.sh vault2.thatsnice.org
-./scripts/deploy-uninstall.sh vault2.thatsnice.org
+:# AWS deployment (current production method)
+cd infrastructure
+./deploy.sh deploy
+
+:# Manual instance update (SSH to current instance)
+:# Find current instance IP: aws ec2 describe-instances --filters "Name=tag:Name,Values=RentCoordinator-production" --query 'Reservations[*].Instances[*].PublicIpAddress'
+ssh -i ~/.ssh/id_aws_rdeforest ubuntu@<INSTANCE_IP> "sudo su - rent-coordinator -c 'cd /opt/rent-coordinator && git pull && source ~/.nvm/nvm.sh && npm run build' && sudo systemctl restart rent-coordinator"
 ```
 
 ### Build System
@@ -157,20 +160,68 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 - Automatic session timeout after 8 hours
 
 #### Rent Coordination
-- Base rent: $1600/month
-- Hourly credit: $50/hour worked (max 8 hours/month creditable)
+
+**Business Rules:**
+- Base rent: $1600/month (due on the 15th)
+- Agreed payment: $950/month from Lyndzie
+- Hourly credit: $50/hour worked (max 8 hours/month creditable = $400)
 - Excess hours roll over to next month
 - Comprehensive event tracking system (payments, adjustments, manual entries)
 - Rent calculation based on work logs with manual adjustments
 - Audit logging for all rent events
 
+**Stress-Free Display Logic:**
+- Current/past months show $950 as "amount due" (not full $1600)
+- Current month shows $0 before the 15th, $950 after the 15th
+- Future months show full calculation ($1600 - work credits)
+- Payment status shows PAID when >= $950 paid (green, stress-free)
+- "Outstanding Balance" and "Total Paid" hidden behind "Show Full Details" button
+- Real debt tracked in background for gradual catch-up over 1-3 years
+- Constants: AGREED_MONTHLY_PAYMENT = 950, RENT_DUE_DAY = 15
+
+**Stripe Integration:**
+- Live mode enabled (pk_live_... and sk_live_... keys)
+- Keys stored in AWS Secrets Manager and server .env file
+- Payment processing for monthly rent payments
+
 #### Authentication System
+
+**Current Implementation:**
 - Email-based verification code authentication (6-digit codes, 10-minute expiration)
-- Session management with 30-day cookie expiration
+- Session management with 90-day cookie expiration
 - Whitelist-based access control (robert@defore.st, lynz57@hotmail.com)
 - All routes protected except `/login.html`, `/auth/*`, and `/health`
 - Browser requests redirect to login page, API requests return 401 JSON
 - Console logging in development, SMTP-ready for production
+
+**Future OAuth Migration Plan:**
+
+*Phase 1: Current (Stable)*
+- Email verification working well with 90-day sessions
+- Minimal login frequency due to long session duration
+- Adequate security for 2-user application
+
+*Phase 2: Authelia (3-6 months, Learning Project)*
+- Set up lightweight self-hosted OAuth provider
+- Low operational complexity (<30MB footprint, 1-2 hrs/month maintenance)
+- Good learning experience with OAuth/OIDC
+- Can run on existing infrastructure ($0 cost)
+- Resources: Single instance with Redis for sessions
+- Target: Educational value + control over auth
+
+*Phase 3: Keycloak (6+ months, Teaching Platform)*
+- Upgrade to enterprise-grade OAuth provider
+- Better for teaching friends about IAM
+- Full OAuth 2.0 / OpenID Connect compliance
+- Industry-standard skills transferable to enterprise
+- Resources: Single instance + PostgreSQL (~$30/month or use existing infra)
+- Target: Educational platform for helping friends learn tech
+
+**Design Constraints:**
+- 90% uptime acceptable (not high-availability requirements)
+- 2 users only (no scale requirements)
+- Educational value prioritized over operational efficiency
+- Self-hosted to support migration away from Google services
 
 ### Key Configuration
 - Workers defined in `config.WORKERS` array
