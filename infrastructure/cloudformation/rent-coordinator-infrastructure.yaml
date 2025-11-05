@@ -81,12 +81,20 @@ Mappings:
     us-east-2:
       AMI: ami-0f30a9c3a48f3fa79
 
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
+
 Resources:
   # S3 Bucket for Database Backups
   BackupBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub rent-coordinator-backups-${AWS::AccountId}
+      # Production uses legacy name (no environment suffix for backward compatibility)
+      # Staging/other environments get environment-specific buckets
+      BucketName: !If
+        - IsProduction
+        - !Sub rent-coordinator-backups-${AWS::AccountId}
+        - !Sub rent-coordinator-backups-${AWS::AccountId}-${Environment}
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
