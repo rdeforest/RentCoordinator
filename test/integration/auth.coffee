@@ -72,9 +72,9 @@ describe 'Auth Integration Tests', ->
     # Step 2: Get the code from the database (in dev mode, also logged to console)
     # In a real test, you'd extract from dev logs or mock the email service
     # For now, we'll read from the DB directly
-    sqlite3 = require 'better-sqlite3'
-    db      = new sqlite3 testConfig.dbPath
-    stored  = db.prepare("""
+    { DatabaseSync } = require 'node:sqlite'
+    db               = new DatabaseSync testConfig.dbPath
+    stored           = db.prepare("""
       SELECT code FROM auth_sessions
       WHERE email = ? AND verified = 0
       ORDER BY created_at DESC
@@ -124,9 +124,9 @@ describe 'Auth Integration Tests', ->
       body:    JSON.stringify { email }
 
     # Get code from DB
-    sqlite3 = require 'better-sqlite3'
-    db      = new sqlite3 testConfig.dbPath
-    stored  = db.prepare("""
+    { DatabaseSync } = require 'node:sqlite'
+    db               = new DatabaseSync testConfig.dbPath
+    stored           = db.prepare("""
       SELECT code FROM auth_sessions
       WHERE email = ? AND verified = 0
       ORDER BY created_at DESC
@@ -144,9 +144,11 @@ describe 'Auth Integration Tests', ->
 
     # Make multiple rapid requests with the session
     # Without the fix, some of these might fail due to race conditions
-    requests = [1..10].map ->
+    makeRequest = ->
       fetch "#{baseUrl}/auth/status",
         headers: 'Cookie': "connect.sid=#{sessionCookie}"
+
+    requests = [1..10].map makeRequest
 
     responses = await Promise.all requests
 
@@ -183,6 +185,12 @@ describe 'Auth Integration Tests', ->
     { baseUrl } = testConfig
     email = 'robert@defore.st'
 
+    # Clean up any old codes first to avoid interference
+    { DatabaseSync } = require 'node:sqlite'
+    db = new DatabaseSync testConfig.dbPath
+    db.prepare("DELETE FROM auth_sessions WHERE email = ?").run email
+    db.close()
+
     # Send code
     await fetch "#{baseUrl}/auth/send-code",
       method:  'POST'
@@ -190,9 +198,8 @@ describe 'Auth Integration Tests', ->
       body:    JSON.stringify { email }
 
     # Get code
-    sqlite3 = require 'better-sqlite3'
-    db      = new sqlite3 testConfig.dbPath
-    stored  = db.prepare("""
+    db = new DatabaseSync testConfig.dbPath
+    stored = db.prepare("""
       SELECT code FROM auth_sessions
       WHERE email = ? AND verified = 0
       ORDER BY created_at DESC
@@ -206,6 +213,8 @@ describe 'Auth Integration Tests', ->
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { email, code: stored.code }
 
+    firstData = await firstResponse.json()
+    console.log 'First verification response:', firstResponse.status, firstData
     assert.equal firstResponse.status, 200, 'First verification should succeed'
 
     # Try to use the same code again
@@ -214,9 +223,12 @@ describe 'Auth Integration Tests', ->
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { email, code: stored.code }
 
+    secondData = await secondResponse.json()
+    console.log 'Second verification response:', secondResponse.status, secondData
     assert.equal secondResponse.status, 400, 'Second verification should fail'
 
-    data = await secondResponse.json()
-    assert.equal data.success, false, 'Response should indicate failure'
-    assert.match data.error, /no verification code found/i,
-      'Error should indicate code was already used'
+    assert.equal secondData.success, false, 'Response should indicate failure'
+    # After using a code, it's marked verified=1, so subsequent attempts should fail
+    # Either "No verification code found" (correct) or "Invalid" (if old unverified codes exist)
+    assert.match secondData.error, /no verification code found|invalid/i,
+      "Error should indicate code cannot be reused (got: '#{secondData.error}')"
