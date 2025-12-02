@@ -19,6 +19,9 @@ npm run build
 :# Start production server (requires prior build)
 npm run start
 
+:# Run integration tests
+npm run test:integration
+
 :# Local installation (current machine)
 ./scripts/install.sh
 
@@ -146,7 +149,29 @@ migrations/               - Database migrations (empty for now)
 └── README.md             - Migration documentation
 
 backups/                  - Database backups (gitignored)
+
+test/                     - Test suite
+├── integration/          - Integration tests
+│   ├── auth.coffee       - Authentication flow tests (including session race conditions)
+│   └── timer.coffee      - Timer system tests
+├── services/             - Unit tests for services
+└── helper.coffee         - Test utilities
 ```
+
+### Testing
+
+**Integration Tests:**
+- Use Node's built-in test runner (no additional test framework needed)
+- Start isolated server instances with temporary databases
+- Test full HTTP request/response cycles with real sessions
+- Auth tests verify session persistence immediately after verification (catches race conditions)
+- Run with: `npm run test:integration`
+
+**Key Testing Insights:**
+- Session race conditions manifest as flakiness, not timing issues
+- Test the invariant (session available after response) not the timing
+- No need for headless browsers or sleep() calls to test session persistence
+- Use native `node:sqlite` DatabaseSync for test database inspection
 
 ### Database Design
 Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, work_events, work_logs, timer_state, rent_periods, rent_events, audit_logs, recurring_events, and auth_sessions. Designed with proper foreign key constraints and indexes for performance.
@@ -192,7 +217,20 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 - Whitelist-based access control (robert@defore.st, lynz57@hotmail.com)
 - All routes protected except `/login.html`, `/auth/*`, and `/health`
 - Browser requests redirect to login page, API requests return 401 JSON
-- Console logging in development, SMTP-ready for production
+- Console logging in development, AWS SES SMTP in production
+
+**Email Configuration:**
+- Production uses AWS SES SMTP (email-smtp.us-west-2.amazonaws.com:587)
+- Account in SES sandbox mode (can only send to verified addresses)
+- Both allowed emails (robert@defore.st, lynz57@hotmail.com) are verified
+- Sender domain (defore.st) and email (noreply@defore.st) verified
+- Credentials stored in AWS Secrets Manager (rent-coordinator/config)
+
+**Session Management Implementation Notes:**
+- CRITICAL: Must call `await req.session.save()` before responding after session modifications
+- Without explicit save, race condition exists between session persistence and response
+- Manifests as: user verifies code successfully but gets logged out on redirect
+- Tests in test/integration/auth.coffee verify session persistence without timing hacks
 
 **Future OAuth Migration Plan:**
 
