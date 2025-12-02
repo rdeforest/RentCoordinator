@@ -28,6 +28,10 @@ setup = (app) ->
         req.session.email         = email
         req.session.authenticated = true
 
+        await new Promise (resolve, reject) ->
+          req.session.save (err) ->
+            if err then reject err else resolve()
+
         res.json
           success: true
           email:   email
