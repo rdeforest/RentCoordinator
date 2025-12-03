@@ -319,30 +319,32 @@ Resources:
 
             # Try to restore latest database from S3
             echo "Checking for latest database backup in S3..."
-            cd /opt/rent-coordinator
 
-            # Create a simple CoffeeScript script to restore from S3
-            cat > /tmp/restore-s3.coffee << 'RESTORESCRIPT'
-            backup = require './lib/services/backup.coffee'
+            # Use AWS CLI to find and restore the latest backup
+            LATEST_BACKUP=$(aws s3 ls s3://${BackupBucket}/database/ \
+              --region ${AWS::Region} \
+              --recursive | \
+              grep '\.db$' | \
+              sort | \
+              tail -n 1 | \
+              awk '{print $4}')
 
-            try
-              result = await backup.restoreFromS3()
-              if result
-                console.log 'Database restored from S3:', result.backup.filename
-              else
-                console.log 'No backup found in S3, starting with fresh database'
-            catch error
-              console.log 'Failed to restore from S3 (continuing anyway):', error.message
-            RESTORESCRIPT
+            if [ -n "$LATEST_BACKUP" ]; then
+              echo "Found backup: $LATEST_BACKUP"
+              echo "Downloading backup from S3..."
 
-            # Run restore as rent-coordinator user
-            sudo -u rent-coordinator bash -c '
-              export NVM_DIR="/home/rent-coordinator/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              nvm use
-              npx coffee /tmp/restore-s3.coffee
-            ' || echo "Restore failed, continuing with fresh database"
-            rm /tmp/restore-s3.coffee
+              # Download to temporary location
+              aws s3 cp s3://${BackupBucket}/$LATEST_BACKUP \
+                /var/lib/rent-coordinator/tenant-coordinator.db \
+                --region ${AWS::Region}
+
+              # Set ownership
+              chown rent-coordinator:rent-coordinator /var/lib/rent-coordinator/tenant-coordinator.db
+
+              echo "Database restored successfully from S3"
+            else
+              echo "No backups found in S3, starting with fresh database"
+            fi
 
             # Create systemd service
             cat > /etc/systemd/system/rent-coordinator.service << 'SERVICEEOF'
@@ -384,6 +386,26 @@ Resources:
               echo "Attempt $i: Application not ready yet..."
               sleep 2
             done
+
+            # Set up automated daily backups at 2 AM UTC
+            echo "Setting up automated daily backups..."
+            sudo -u rent-coordinator bash -c 'cat > /tmp/backup-cron.txt << "CRONEOF"
+            0 2 * * * cd /opt/rent-coordinator && . ~/.nvm/nvm.sh && nvm use && curl -X POST http://localhost:8080/api/backup >> /var/log/rent-coordinator-backup.log 2>&1
+            CRONEOF
+            crontab /tmp/backup-cron.txt
+            rm /tmp/backup-cron.txt'
+
+            echo "Automated backups configured (daily at 2 AM UTC)"
+
+            # Create initial backup
+            echo "Creating initial backup..."
+            sleep 5  # Give the app a moment to fully initialize
+            sudo -u rent-coordinator bash -c '
+              cd /opt/rent-coordinator
+              . ~/.nvm/nvm.sh
+              nvm use
+              curl -X POST http://localhost:8080/api/backup
+            ' || echo "Initial backup failed (app may still be initializing)"
 
             echo "RentCoordinator bootstrap completed at $(date)"
 
