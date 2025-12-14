@@ -11,9 +11,9 @@ createRentPeriod = (data) ->
     INSERT INTO rent_periods (
       id, year, month, base_rent, hourly_credit, max_monthly_hours,
       hours_worked, hours_from_previous, hours_to_next, manual_adjustments,
-      amount_due, amount_paid, created_at, updated_at
+      discount_applied, amount_due, amount_due_manual, amount_paid, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   """).run(
     id,
     data.year,
@@ -25,7 +25,9 @@ createRentPeriod = (data) ->
     data.hours_from_previous or 0,
     data.hours_to_next or 0,
     data.manual_adjustments or 0,
+    data.discount_applied or 0,
     data.amount_due,
+    if data.amount_due_manual? then data.amount_due_manual else 0,
     data.amount_paid or 0,
     now,
     now
@@ -110,9 +112,10 @@ createRentEvent = (data) ->
   now = new Date().toISOString()
 
   period_id = data.period_id
-  unless period_id or (data.year and data.month)
-    period    = getRentPeriod data.year, data.month
-    period_id = period?.id
+  unless period_id
+    if data.year and data.month
+      period    = getRentPeriod data.year, data.month
+      period_id = period?.id
 
   unless period_id
     throw new Error "Cannot create rent event: period not found for #{data.year}-#{data.month}"
@@ -238,6 +241,35 @@ getRentEventsForPeriod = (year, month, includeDeleted = false) ->
   return events
 
 
+recordPayment = (data) ->
+  { year, month, amount, payment_method, notes } = data
+
+  unless year and month and amount
+    throw new Error 'Year, month, and amount are required'
+
+  period = getRentPeriod year, month
+
+  unless period
+    throw new Error "Rent period not found for #{year}-#{month}"
+
+  paymentDate = new Date().toISOString()
+
+  event = await createRentEvent
+    period_id:   period.id
+    year:        year
+    month:       month
+    type:        'payment'
+    amount:      -Math.abs(amount)
+    description: "Payment received for #{year}-#{month}"
+    metadata:
+      payment_method: payment_method or 'unknown'
+      payment_date:   paymentDate
+      notes:          notes
+    created_by:  'user'
+
+  return event
+
+
 createAuditLog = (data) ->
   id  = v1()
   now = new Date().toISOString()
@@ -314,6 +346,7 @@ module.exports = {
   updateRentEvent
   deleteRentEvent
   getRentEventsForPeriod
+  recordPayment
   createAuditLog
   getAuditLogs
 }

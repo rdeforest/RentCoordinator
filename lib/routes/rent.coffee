@@ -45,6 +45,8 @@ setup = (app) ->
     month = parseInt req.params.month
     updates = req.body
 
+    console.log "PUT /rent/period/#{year}/#{month} - Received updates:", JSON.stringify(updates)
+
     unless updates and Object.keys(updates).length > 0
       return res.status(400).json error: 'No updates provided'
 
@@ -57,6 +59,8 @@ setup = (app) ->
         'base_rent'
         'hourly_credit'
         'max_monthly_hours'
+        'hours_worked'
+        'discount_applied'
       ]
 
       filteredUpdates = {}
@@ -64,12 +68,21 @@ setup = (app) ->
         if key in allowedFields
           filteredUpdates[key] = value
 
+      # Mark amount_due as manually set when explicitly updated
+      if filteredUpdates.amount_due?
+        filteredUpdates.amount_due_manual = 1
+
+      console.log "Filtered updates:", JSON.stringify(filteredUpdates)
+
       unless Object.keys(filteredUpdates).length > 0
+        console.log "No valid fields to update. Allowed fields:", allowedFields
         return res.status(400).json error: 'No valid fields to update'
 
       period = await rentModel.updateRentPeriod year, month, filteredUpdates
+      console.log "Updated period successfully:", period.id
       res.json period
     catch err
+      console.error "Error updating period:", err
       res.status(500).json error: err.message
 
   app.delete '/rent/period/:year/:month', (req, res) ->

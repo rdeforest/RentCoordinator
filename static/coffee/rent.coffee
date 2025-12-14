@@ -110,27 +110,75 @@ loadAllPeriods = ->
       displayDue = getDisplayAmountDue period
 
       """
-        <tr>
+        <tr data-year="#{period.year}" data-month="#{period.month}">
           <td>#{formatMonthYear period.year, period.month}</td>
-          <td>#{period.hours_worked.toFixed 2}</td>
-          <td>#{formatCurrency period.discount_applied}</td>
-          <td>#{formatCurrency displayDue}</td>
-          <td>#{formatCurrency period.amount_paid or 0}</td>
+          <td class="editable-cell"
+              contenteditable="false"
+              data-field="hours_worked"
+              data-value="#{period.hours_worked}"
+              title="Click to edit">#{period.hours_worked.toFixed 2}</td>
+          <td class="editable-cell"
+              contenteditable="false"
+              data-field="discount_applied"
+              data-value="#{period.discount_applied}"
+              title="Click to edit">#{formatCurrency period.discount_applied}</td>
+          <td class="editable-cell"
+              contenteditable="false"
+              data-field="amount_due"
+              data-value="#{displayDue}"
+              title="Click to edit">#{formatCurrency displayDue}</td>
+          <td class="editable-cell"
+              contenteditable="false"
+              data-field="amount_paid"
+              data-value="#{period.amount_paid or 0}"
+              title="Click to edit">#{formatCurrency period.amount_paid or 0}</td>
           <td class="#{statusClass}">#{status}</td>
           <td>
-            <button class="btn btn-small btn-secondary edit-period-btn" data-year="#{period.year}" data-month="#{period.month}">Edit</button>
             <button class="btn btn-small btn-danger delete-period-btn" data-year="#{period.year}" data-month="#{period.month}">Delete</button>
           </td>
         </tr>
       """
     ).join ''
 
-    # Add click handlers for edit buttons
-    document.querySelectorAll('.edit-period-btn').forEach (btn) ->
-      btn.addEventListener 'click', (e) ->
-        year = parseInt e.target.dataset.year
-        month = parseInt e.target.dataset.month
-        openEditPeriodModal year, month
+    # Add inline editing handlers
+    document.querySelectorAll('.editable-cell').forEach (cell) ->
+      # Make cell editable on click
+      cell.addEventListener 'click', ->
+        return if cell.getAttribute('contenteditable') is 'true'
+
+        cell.setAttribute 'contenteditable', 'true'
+        cell.classList.add 'editing'
+        # Show raw number value for editing
+        originalValue = cell.dataset.value
+        cell.textContent = originalValue
+        cell.focus()
+
+        # Select all text
+        range = document.createRange()
+        range.selectNodeContents cell
+        selection = window.getSelection()
+        selection.removeAllRanges()
+        selection.addRange range
+
+      # Save on blur
+      cell.addEventListener 'blur', ->
+        await saveCellEdit cell
+
+      # Save on Enter, cancel on Escape
+      cell.addEventListener 'keydown', (e) ->
+        if e.key is 'Enter'
+          e.preventDefault()
+          cell.blur()
+        else if e.key is 'Escape'
+          e.preventDefault()
+          field = cell.dataset.field
+          originalValue = cell.dataset.value
+          cell.textContent = if field is 'hours_worked'
+            parseFloat(originalValue).toFixed 2
+          else
+            formatCurrency parseFloat(originalValue)
+          cell.setAttribute 'contenteditable', 'false'
+          cell.classList.remove 'editing'
 
     # Add click handlers for delete buttons
     document.querySelectorAll('.delete-period-btn').forEach (btn) ->
@@ -142,6 +190,67 @@ loadAllPeriods = ->
   catch err
     console.error 'Error loading periods:', err
     showError 'Failed to load rent periods'
+
+
+saveCellEdit = (cell) ->
+  try
+    newValue = parseFloat cell.textContent.replace(/[^0-9.-]/g, '')
+    originalValue = parseFloat cell.dataset.value
+
+    if isNaN(newValue) or newValue is originalValue
+      # Restore original display
+      field = cell.dataset.field
+      cell.textContent = if field is 'hours_worked'
+        originalValue.toFixed 2
+      else
+        formatCurrency originalValue
+      cell.setAttribute 'contenteditable', 'false'
+      cell.classList.remove 'editing'
+      return
+
+    # Get year and month from row
+    row = cell.closest 'tr'
+    year = parseInt row.dataset.year
+    month = parseInt row.dataset.month
+    field = cell.dataset.field
+
+    # Build update object
+    updates = {}
+    updates[field] = newValue
+
+    # Send update
+    response = await fetch "/rent/period/#{year}/#{month}",
+      method: 'PUT'
+      headers: 'Content-Type': 'application/json'
+      body: JSON.stringify updates
+
+    if response.ok
+      cell.dataset.value = newValue
+      cell.textContent = if field is 'hours_worked'
+        newValue.toFixed 2
+      else
+        formatCurrency newValue
+      cell.setAttribute 'contenteditable', 'false'
+      cell.classList.remove 'editing'
+
+      # Reload to update status and summary
+      loadRentSummary()
+      loadCurrentMonth()
+      loadAllPeriods()
+    else
+      error = await response.json()
+      showError "Failed to update: #{error.error}"
+      # Restore original
+      cell.textContent = if field is 'hours_worked'
+        originalValue.toFixed 2
+      else
+        formatCurrency originalValue
+      cell.setAttribute 'contenteditable', 'false'
+      cell.classList.remove 'editing'
+
+  catch err
+    console.error 'Error saving cell edit:', err
+    showError "Error saving: #{err.message}"
 
 # Load rent events
 loadEvents = (filters = {}) ->
@@ -544,7 +653,11 @@ escapeHtml = (text) ->
   return div.innerHTML
 
 getDisplayAmountDue = (period) ->
-  # Determine if this period is past, current, or future
+  # If manually overridden, always show the actual value
+  if period.amount_due_manual
+    return period.amount_due
+
+  # Otherwise use stress-free display logic
   isPast = period.year < currentYear or (period.year is currentYear and period.month < currentMonth)
   isCurrent = period.year is currentYear and period.month is currentMonth
   isFuture = period.year > currentYear or (period.year is currentYear and period.month > currentMonth)
@@ -641,7 +754,11 @@ editPeriodForm.addEventListener 'submit', (e) ->
     if response.ok
       editPeriodModal.style.display = 'none'
       showSuccess 'Period updated successfully'
-      autoRecalculateAndReload()
+      # Reload data without recalculating (to preserve manual overrides)
+      loadRentSummary()
+      loadCurrentMonth()
+      loadAllPeriods()
+      loadEvents currentFilters
     else
       error = await response.json()
       showError "Failed to update period: #{error.error}"
