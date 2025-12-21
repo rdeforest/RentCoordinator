@@ -149,14 +149,19 @@ createOrUpdateRentPeriod = (year, month) ->
   existing = await rentModel.getRentPeriod year, month
 
   if existing
-    updated = await rentModel.updateRentPeriod year, month,
+    # Build updates object, respecting manual overrides
+    updates =
       hours_worked:        calculation.hours_worked
       hours_from_previous: calculation.hours_from_previous
       hours_to_next:       calculation.hours_to_next
       discount_applied:    calculation.discount_applied
-      amount_due:          calculation.amount_due
       amount_paid:         Math.abs calculation.amount_paid
 
+    # Only update amount_due if not manually overridden
+    unless existing.amount_due_manual
+      updates.amount_due = calculation.amount_due
+
+    updated = await rentModel.updateRentPeriod year, month, updates
     return updated
   else
     return await rentModel.createRentPeriod calculation

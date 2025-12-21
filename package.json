@@ -1,6 +1,6 @@
 {
   "name": "tenant-coordinator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Tool for coordinating efforts, reimbursements, plans and rent payments with my tenant",
   "type": "module",
   "main": "dist/main.js",
