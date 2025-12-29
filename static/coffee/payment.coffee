@@ -142,19 +142,42 @@ processPayment = ->
             email : user.email
       redirect : 'if_required'
 
-    throw new Error result.error.message if result.error
+    if result.error
+      console.error 'Stripe error:', result.error
+      throw new Error result.error.message
 
     console.log 'Step 4: Payment result:', result.paymentIntent?.status
 
     if result.paymentIntent?.status is 'succeeded'
       await confirmPayment result.paymentIntent.id
+    else if result.paymentIntent?.status is 'requires_payment_method'
+      throw new Error 'Unable to verify payment method. Please check your bank account details.'
+    else if result.paymentIntent?.status in ['processing', 'requires_action']
+      showMessage 'Payment initiated! ACH payments take 4-5 business days to process.', 'success'
+      await checkPaymentStatus result.paymentIntent.id
+    else if result.paymentIntent?.status is 'canceled'
+      throw new Error 'Payment was canceled. Please try again.'
+    else if result.paymentIntent?.status is 'requires_capture'
+      throw new Error 'Payment requires manual capture. Please contact support.'
     else
-      showMessage 'Payment initiated! You may need to verify with your bank.', 'success'
+      console.error "Unhandled payment status: #{result.paymentIntent?.status}"
+      showMessage "Payment status: #{result.paymentIntent?.status}. Please contact support.", 'error'
       await checkPaymentStatus result.paymentIntent.id
 
   catch err
     console.error 'Process payment error:', err
-    showMessage err.message, 'error'
+    console.error 'Error details:', JSON.stringify(err, null, 2)
+
+    errorMessage = err.message or 'An unexpected error occurred'
+
+    if errorMessage.includes 'payment_method'
+      errorMessage = 'Unable to verify your bank account. Please check your account details and try again.'
+    else if errorMessage.includes 'insufficient_funds'
+      errorMessage = 'Insufficient funds in your bank account.'
+    else if errorMessage.includes 'account_closed'
+      errorMessage = 'The bank account appears to be closed or invalid.'
+
+    showMessage errorMessage, 'error'
     payButton.disabled    = false
     payButton.textContent = 'Process Payment'
 
@@ -180,8 +203,12 @@ checkPaymentStatus = (paymentIntentId) ->
           setTimeout (-> window.location.href = '/rent'), 3000
       else if status.status is 'requires_payment_method'
         throw new Error 'Payment method verification required'
+      else if status.status is 'canceled'
+        throw new Error 'Payment was canceled'
+      else if status.status is 'requires_capture'
+        throw new Error 'Payment requires manual capture. Contact support.'
       else
-        throw new Error "Payment failed: #{status.status}"
+        throw new Error "Payment failed with status: #{status.status}"
 
     await checkStatus()
 

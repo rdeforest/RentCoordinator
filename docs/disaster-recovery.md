@@ -1,6 +1,6 @@
 # Disaster Recovery Guide
 
-**Last Updated:** 2025-11-05
+**Last Updated:** 2025-12-29
 
 ## Architecture Overview
 
@@ -12,6 +12,7 @@ RentCoordinator runs on AWS infrastructure managed by CloudFormation:
 - **S3 Bucket** - Database backups with versioning enabled
 - **AWS Secrets Manager** - Application secrets and credentials
 - **Route53** - DNS (`rent.thatsnice.org`)
+- **CloudWatch Logs** - Centralized application logging and monitoring
 
 ## Persistence Model
 
@@ -34,6 +35,13 @@ RentCoordinator runs on AWS infrastructure managed by CloudFormation:
 - **Secret Name:** `rent-coordinator/config`
 - **Region:** `us-west-2`
 - **Contains:** SESSION_SECRET, SMTP credentials, Stripe keys
+
+**Application Logs:**
+- **Location:** CloudWatch Logs
+- **Log Group:** `/rent-coordinator/application`
+- **Retention:** Configurable (default: never expire)
+- **Cost:** ~$0.50-2.50/month
+- **Access:** `aws logs tail /rent-coordinator/application --follow`
 
 ### Guarantees and Limitations
 

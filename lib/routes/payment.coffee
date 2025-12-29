@@ -24,16 +24,21 @@ setup = (app) ->
           expected:  amountDue
           requested: amount
 
+      console.log "Creating payment intent for #{req.session.email}: #{year}-#{month}, amount: $#{amount}"
+
       result = await paymentService.createPaymentIntent(
         amount,
         "Rent payment for #{year}-#{String(month).padStart 2, '0'}",
         { year, month, tenant: req.session.email }
       )
 
+      console.log "Payment intent created: #{result.id}"
+
       res.json result
 
     catch err
       console.error 'Create payment intent error:', err
+      console.error 'Error stack:', err.stack
       res.status(500).json error: err.message
 
   app.post '/payment/confirm', (req, res) ->
@@ -43,11 +48,17 @@ setup = (app) ->
       return res.status(400).json error: 'Payment intent ID, year, and month required'
 
     try
+      console.log "Confirming payment: #{paymentIntentId} for #{year}-#{month}"
+
       result = await paymentService.confirmPayment paymentIntentId, year, month
+
+      console.log "Payment confirmed successfully: #{paymentIntentId}"
+
       res.json result
 
     catch err
       console.error 'Confirm payment error:', err
+      console.error 'Error details:', { paymentIntentId, year, month, message: err.message }
       res.status(400).json error: err.message
 
   app.get '/payment/status/:paymentIntentId', (req, res) ->

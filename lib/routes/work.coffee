@@ -67,8 +67,8 @@ setup = (app) ->
         description: description.trim()
         project_id:  project_id or null
         task_id:     task_id or null
-        billable:    billable ? true
-        submitted:   false
+        billable:    if billable? then (if billable then 1 else 0) else 1
+        submitted:   0
 
       res.json workLog
     catch err

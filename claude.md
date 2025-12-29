@@ -98,6 +98,20 @@ See `scripts/deployment.md` for complete manual deployment documentation.
 See `migrations/README.md` for database migration guide.
 See `docs/disaster-recovery.md` for complete disaster recovery procedures.
 
+### Logging and Monitoring
+
+**CloudWatch Logs** (deployed 2025-12-29):
+- Application logs shipped to CloudWatch Logs in real-time
+- Log group: `/rent-coordinator/application`
+- View logs: `aws logs tail /rent-coordinator/application --follow`
+- Setup script: `infrastructure/setup-cloudwatch-logs.sh`
+- Full documentation: `docs/cloudwatch-logs-setup.md`
+
+**Log Architecture:**
+1. `rent-coordinator.service` → journald
+2. `rent-coordinator-logs.service` → `/var/log/rent-coordinator/application.log`
+3. CloudWatch Agent → CloudWatch Logs
+
 ## Technology Stack
 
 - **Runtime**: Node.js 24 LTS (managed via nvm) with CoffeeScript
@@ -183,6 +197,8 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 - Session-based work tracking with start/pause/resume/stop
 - Real-time status updates via polling API
 - Automatic session timeout after 8 hours
+- Manual work entry via POST /work-logs endpoint
+- **Bug Fix** (2025-12-29): Fixed SQL parameter binding for `billable` field - must pass 0/1 integers, not JavaScript booleans
 
 #### Rent Coordination
 
@@ -207,7 +223,13 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 **Stripe Integration:**
 - Live mode enabled (pk_live_... and sk_live_... keys)
 - Keys stored in AWS Secrets Manager and server .env file
-- Payment processing for monthly rent payments
+- Payment processing for monthly rent payments via ACH Direct Debit
+- API version: 2024-12-18.acacia
+- **Error Handling** (enhanced 2025-12-29):
+  - All PaymentIntent statuses properly handled: succeeded, processing, requires_payment_method, requires_action, canceled, requires_capture
+  - User-friendly error messages for common issues (insufficient funds, closed accounts, verification failures)
+  - Comprehensive logging of payment intent creation and confirmation
+  - ACH-specific messaging (4-5 business days processing time)
 
 #### Authentication System
 
