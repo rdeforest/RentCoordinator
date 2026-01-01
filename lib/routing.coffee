@@ -7,6 +7,7 @@ recurringEventsRoutes = require './routes/recurring_events.coffee'
 authRoutes            = require './routes/auth.coffee'
 paymentRoutes         = require './routes/payment.coffee'
 backupRoutes          = require './routes/backup.coffee'
+adminRoutes           = require './routes/admin.coffee'
 middleware            = require './middleware.coffee'
 
 
@@ -43,6 +44,7 @@ setup = (app, getServer) ->
   app.get '/rent',    (req, res) -> res.sendFile 'rent.html',    root: config.STATIC_DIR
   app.get '/work',    (req, res) -> res.sendFile 'work.html',    root: config.STATIC_DIR
   app.get '/payment', (req, res) -> res.sendFile 'payment.html', root: config.STATIC_DIR
+  app.get '/admin',   (req, res) -> res.sendFile 'admin.html',   root: config.STATIC_DIR
 
 
   app.post '/timer/start', (req, res) ->
@@ -148,6 +150,7 @@ setup = (app, getServer) ->
   recurringEventsRoutes.setup app
   paymentRoutes        .setup app
   backupRoutes         .setup app
+  adminRoutes          .setup app
 
 
 module.exports = { setup }

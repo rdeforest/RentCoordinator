@@ -407,6 +407,104 @@ Resources:
               curl -X POST http://localhost:8080/api/backup
             ' || echo "Initial backup failed (app may still be initializing)"
 
+            # Setup CloudWatch Logs
+            echo "Setting up CloudWatch Logs..."
+
+            # Create log directory
+            mkdir -p /var/log/rent-coordinator
+            chown rent-coordinator:rent-coordinator /var/log/rent-coordinator
+
+            # Create systemd service to stream logs to file
+            cat > /etc/systemd/system/rent-coordinator-logs.service << 'LOGSERVICEEOF'
+            [Unit]
+            Description=RentCoordinator Log Streaming
+            After=rent-coordinator.service
+
+            [Service]
+            Type=simple
+            ExecStart=/bin/bash -c 'journalctl -u rent-coordinator -f --no-pager >> /var/log/rent-coordinator/application.log 2>&1'
+            Restart=always
+            RestartSec=5
+
+            [Install]
+            WantedBy=multi-user.target
+            LOGSERVICEEOF
+
+            # Enable and start log streaming
+            systemctl daemon-reload
+            systemctl enable rent-coordinator-logs
+            systemctl start rent-coordinator-logs
+
+            # Install CloudWatch agent
+            wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+            dpkg -i -E ./amazon-cloudwatch-agent.deb
+            rm amazon-cloudwatch-agent.deb
+
+            # Create CloudWatch agent configuration
+            mkdir -p /opt/aws/amazon-cloudwatch-agent/etc/
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWCONFIGEOF'
+            {
+              "agent": {
+                "metrics_collection_interval": 60,
+                "run_as_user": "cwagent"
+              },
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/rent-coordinator/application.log",
+                        "log_group_name": "/rent-coordinator/application",
+                        "log_stream_name": "{instance_id}",
+                        "timezone": "UTC"
+                      }
+                    ]
+                  }
+                }
+              },
+              "metrics": {
+                "namespace": "RentCoordinator",
+                "metrics_collected": {
+                  "mem": {
+                    "measurement": [
+                      {
+                        "name": "mem_used_percent",
+                        "rename": "MemoryUsage",
+                        "unit": "Percent"
+                      }
+                    ],
+                    "metrics_collection_interval": 60
+                  },
+                  "disk": {
+                    "measurement": [
+                      {
+                        "name": "used_percent",
+                        "rename": "DiskUsage",
+                        "unit": "Percent"
+                      }
+                    ],
+                    "metrics_collection_interval": 60,
+                    "resources": [
+                      "/"
+                    ]
+                  }
+                }
+              }
+            }
+            CWCONFIGEOF
+
+            # Start CloudWatch agent
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a fetch-config \
+              -m ec2 \
+              -s \
+              -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+            # Enable CloudWatch agent on boot
+            systemctl enable amazon-cloudwatch-agent
+
+            echo "CloudWatch Logs setup complete"
+
             echo "RentCoordinator bootstrap completed at $(date)"
 
   # Auto Scaling Group

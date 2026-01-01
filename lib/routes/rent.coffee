@@ -1,8 +1,28 @@
-rentService = require '../services/rent.coffee'
-rentModel   = require '../models/rent.coffee'
+rentService        = require '../services/rent.coffee'
+rentModel          = require '../models/rent.coffee'
+rentConfiguration  = require '../models/rent_configuration.coffee'
+logger             = require '../logger.coffee'
 
 
 setup = (app) ->
+  # Get rent configuration
+  app.get '/rent/configuration', (req, res) ->
+    try
+      config = rentConfiguration.getConfiguration()
+      res.json config
+    catch err
+      logger.error 'rent.getConfiguration', err, {}, req.id
+      res.status(500).json error: err.message
+
+  # Update rent configuration
+  app.put '/rent/configuration', (req, res) ->
+    try
+      updated = rentConfiguration.updateConfiguration req.body
+      res.json updated
+    catch err
+      logger.error 'rent.updateConfiguration', err, { updates: req.body }, req.id
+      res.status(500).json error: err.message
+
   app.get '/rent/calculate', (req, res) ->
     { year, month } = req.query
 
@@ -45,8 +65,6 @@ setup = (app) ->
     month = parseInt req.params.month
     updates = req.body
 
-    console.log "PUT /rent/period/#{year}/#{month} - Received updates:", JSON.stringify(updates)
-
     unless updates and Object.keys(updates).length > 0
       return res.status(400).json error: 'No updates provided'
 
@@ -72,17 +90,15 @@ setup = (app) ->
       if filteredUpdates.amount_due?
         filteredUpdates.amount_due_manual = 1
 
-      console.log "Filtered updates:", JSON.stringify(filteredUpdates)
-
       unless Object.keys(filteredUpdates).length > 0
-        console.log "No valid fields to update. Allowed fields:", allowedFields
         return res.status(400).json error: 'No valid fields to update'
 
       period = await rentModel.updateRentPeriod year, month, filteredUpdates
-      console.log "Updated period successfully:", period.id
       res.json period
     catch err
-      console.error "Error updating period:", err
+      logger.error 'rent.updatePeriod', err,
+        { year, month, updates },
+        req.id
       res.status(500).json error: err.message
 
   app.delete '/rent/period/:year/:month', (req, res) ->

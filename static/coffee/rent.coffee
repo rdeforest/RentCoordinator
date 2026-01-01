@@ -40,9 +40,28 @@ window.addEventListener 'load', ->
   loadCurrentMonth()
   loadAllPeriods()
   loadEvents()
+  loadRentConfiguration()
   populateFilterYears()
   setupSpoilerToggle()
 
+
+loadRentConfiguration = ->
+  try
+    response = await fetch '/rent/configuration'
+    config   = await response.json()
+
+    overrideInput = document.getElementById 'temporary-override-input'
+    applyCheckbox = document.getElementById 'apply-override-checkbox'
+
+    if config.temporary_base_rent?
+      overrideInput.value = config.temporary_base_rent
+    else
+      overrideInput.value = ''
+
+    applyCheckbox.checked = config.apply_to_new_periods
+
+  catch err
+    console.error 'Error loading rent configuration:', err
 
 loadRentSummary = ->
   try
@@ -106,7 +125,7 @@ loadAllPeriods = ->
 
     tbody.innerHTML = periods.map((period) ->
       status = getPaymentStatus period
-      statusClass = status.toLowerCase()
+      statusClass = status.toLowerCase().replace(/\s+/g, '')  # Remove spaces for CSS class
       displayDue = getDisplayAmountDue period
 
       """
@@ -609,6 +628,38 @@ paymentForm.addEventListener 'submit', (e) ->
 document.getElementById('recalculate-btn').addEventListener 'click', ->
   autoRecalculateAndReload()
 
+# Save temporary override
+document.getElementById('save-override-btn').addEventListener 'click', ->
+  try
+    overrideInput = document.getElementById 'temporary-override-input'
+    applyCheckbox = document.getElementById 'apply-override-checkbox'
+
+    updates = {}
+
+    if overrideInput.value
+      updates.temporary_base_rent = parseFloat overrideInput.value
+    else
+      updates.temporary_base_rent = null
+
+    updates.apply_to_new_periods = applyCheckbox.checked
+
+    response = await fetch '/rent/configuration',
+      method: 'PUT'
+      headers: 'Content-Type': 'application/json'
+      body: JSON.stringify updates
+
+    if response.ok
+      showSuccess 'Configuration updated successfully'
+      # Optionally recalculate to apply to existing periods if checkbox is checked
+      if applyCheckbox.checked
+        autoRecalculateAndReload()
+    else
+      error = await response.json()
+      showError "Failed to update configuration: #{error.error}"
+
+  catch err
+    showError "Error updating configuration: #{err.message}"
+
 formatCurrency = (amount) ->
   new Intl.NumberFormat 'en-US',
     style    : 'currency'
@@ -678,6 +729,11 @@ getDisplayAmountDue = (period) ->
 getPaymentStatus = (period) ->
   displayDue = getDisplayAmountDue period
   paid = period.amount_paid or 0
+
+  # Check if rent is not due yet (before 15th of current month)
+  isCurrent = period.year is currentYear and period.month is currentMonth
+  if isCurrent and currentDay < RENT_DUE_DAY
+    return 'NOT DUE'
 
   if      paid >= displayDue then 'PAID'
   else if paid > 0           then 'PARTIAL'

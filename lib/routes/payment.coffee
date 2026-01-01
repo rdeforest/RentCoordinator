@@ -1,6 +1,7 @@
 paymentService = require '../services/payment.coffee'
 rentModel      = require '../models/rent.coffee'
 config         = require '../config.coffee'
+logger         = require '../logger.coffee'
 
 
 setup = (app) ->
@@ -24,21 +25,18 @@ setup = (app) ->
           expected:  amountDue
           requested: amount
 
-      console.log "Creating payment intent for #{req.session.email}: #{year}-#{month}, amount: $#{amount}"
-
       result = await paymentService.createPaymentIntent(
         amount,
         "Rent payment for #{year}-#{String(month).padStart 2, '0'}",
         { year, month, tenant: req.session.email }
       )
 
-      console.log "Payment intent created: #{result.id}"
-
       res.json result
 
     catch err
-      console.error 'Create payment intent error:', err
-      console.error 'Error stack:', err.stack
+      logger.error 'payment.createIntent', err,
+        { year, month, amount, tenant: req.session.email },
+        req.id
       res.status(500).json error: err.message
 
   app.post '/payment/confirm', (req, res) ->
@@ -48,17 +46,14 @@ setup = (app) ->
       return res.status(400).json error: 'Payment intent ID, year, and month required'
 
     try
-      console.log "Confirming payment: #{paymentIntentId} for #{year}-#{month}"
-
       result = await paymentService.confirmPayment paymentIntentId, year, month
-
-      console.log "Payment confirmed successfully: #{paymentIntentId}"
 
       res.json result
 
     catch err
-      console.error 'Confirm payment error:', err
-      console.error 'Error details:', { paymentIntentId, year, month, message: err.message }
+      logger.error 'payment.confirmPayment', err,
+        { paymentIntentId, year, month },
+        req.id
       res.status(400).json error: err.message
 
   app.get '/payment/status/:paymentIntentId', (req, res) ->
@@ -69,7 +64,9 @@ setup = (app) ->
       res.json status
 
     catch err
-      console.error 'Get payment status error:', err
+      logger.error 'payment.getStatus', err,
+        { paymentIntentId },
+        req.id
       res.status(500).json error: err.message
 
   app.post '/payment/setup-intent', (req, res) ->
@@ -84,7 +81,9 @@ setup = (app) ->
       res.json Object.assign {}, result, { customerId: customer.id }
 
     catch err
-      console.error 'Create setup intent error:', err
+      logger.error 'payment.createSetupIntent', err,
+        { email: req.session.email },
+        req.id
       res.status(500).json error: err.message
 
 module.exports = { setup }

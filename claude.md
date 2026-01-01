@@ -366,3 +366,16 @@ nvm use
 npm install
 npm run dev
 ```
+
+## Known Issues
+
+### Work Hours Not Appearing in Rent Periods (2026-01-01)
+**Reported:** Lyndzie entered 48.75 hours in production, but they're not showing up in the rent periods list.
+
+**Investigation needed:**
+- Verify work logs are being saved correctly in database
+- Check if rent calculation is pulling work logs for the correct date range
+- Verify rent period recalculation is including the hours
+- Check if there's a worker name mismatch or filtering issue
+- Review `lib/services/rent.coffee` calculateRent function
+- Review work log queries in `lib/models/work_log.coffee`

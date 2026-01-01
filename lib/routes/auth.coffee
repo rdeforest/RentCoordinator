@@ -1,4 +1,5 @@
 authModel = require '../models/auth.coffee'
+logger    = require '../logger.coffee'
 
 
 setup = (app) ->
@@ -12,7 +13,9 @@ setup = (app) ->
       result = await authModel.sendVerificationCode email
       res.json result
     catch err
-      console.error 'Send code error:', err
+      logger.error 'auth.sendCode', err,
+        { email },
+        req.id
       res.status(400).json error: err.message
 
   app.post '/auth/verify-code', (req, res) ->
@@ -38,7 +41,9 @@ setup = (app) ->
       else
         res.status(400).json result
     catch err
-      console.error 'Verify code error:', err
+      logger.error 'auth.verifyCode', err,
+        { email },
+        req.id
       res.status(500).json error: 'Verification failed'
 
   app.get '/auth/status', (req, res) ->
@@ -53,7 +58,9 @@ setup = (app) ->
   app.post '/auth/logout', (req, res) ->
     req.session.destroy (err) ->
       if err
-        console.error 'Logout error:', err
+        logger.error 'auth.logout', err,
+          { email: req.session?.email },
+          req.id
         return res.status(500).json error: 'Logout failed'
 
       res.json success: true

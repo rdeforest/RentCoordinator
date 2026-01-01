@@ -63,6 +63,11 @@ th {
     font-weight: 600;
 }
 
+.notdue {
+    color: #3498db;
+    font-weight: 600;
+}
+
 .actions {
     display: flex;
     gap: 10px;

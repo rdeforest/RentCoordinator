@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log Detokenizer - RentCoordinator Admin</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 0.5rem;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .panel {
+      background: #f5f5f5;
+      padding: 1rem;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      color: #666;
+    }
+    textarea {
+      width: 100%;
+      height: 400px;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 12px;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      resize: vertical;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 1rem;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 0.75rem;
+      border-radius: 4px;
+      margin-top: 1rem;
+      border: 1px solid #f5c6cb;
+    }
+    .help {
+      background: #e7f3ff;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      border-left: 4px solid #007bff;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>Log Detokenizer</h1>
+
+  <div class="help">
+    <strong>How to use:</strong>
+    <ol>
+      <li>Paste JSON log data containing tokens (like <code>token:abc123...</code>) into the left panel</li>
+      <li>Click "Detokenize" to reveal the original PII values</li>
+      <li>View the detokenized output in the right panel</li>
+    </ol>
+  </div>
+
+  <div class="container">
+    <div class="panel">
+      <h2>Input (Tokenized Logs)</h2>
+      <textarea id="input" placeholder='Paste JSON log here, e.g.:
+{
+  "timestamp": "2025-12-30T10:15:30.123Z",
+  "level": "error",
+  "operation": "payment.createIntent",
+  "metadata": {
+    "tenant": "token:a1b2c3d4e5f6g7h8",
+    "year": 2025,
+    "month": 12
+  }
+}'></textarea>
+    </div>
+
+    <div class="panel">
+      <h2>Output (Detokenized)</h2>
+      <textarea id="output" readonly placeholder="Detokenized output will appear here..."></textarea>
+    </div>
+  </div>
+
+  <button id="detokenizeBtn" onclick="detokenize()">Detokenize</button>
+  <div id="error"></div>
+
+  <script>
+    async function detokenize() {
+      const inputText = document.getElementById('input').value.trim();
+      const outputEl = document.getElementById('output');
+      const errorEl = document.getElementById('error');
+      const btn = document.getElementById('detokenizeBtn');
+
+      // Clear previous output and errors
+      outputEl.value = '';
+      errorEl.innerHTML = '';
+      errorEl.className = '';
+
+      if (!inputText) {
+        errorEl.className = 'error';
+        errorEl.textContent = 'Please paste JSON log data into the input field';
+        return;
+      }
+
+      try {
+        // Parse input JSON
+        const data = JSON.parse(inputText);
+
+        // Disable button during processing
+        btn.disabled = true;
+        btn.textContent = 'Detokenizing...';
+
+        // Call detokenize API
+        const response = await fetch('/admin/detokenize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Detokenization failed');
+        }
+
+        const result = await response.json();
+
+        // Display detokenized output
+        outputEl.value = JSON.stringify(result.detokenized, null, 2);
+
+      } catch (err) {
+        errorEl.className = 'error';
+        if (err instanceof SyntaxError) {
+          errorEl.textContent = 'Invalid JSON: ' + err.message;
+        } else {
+          errorEl.textContent = 'Error: ' + err.message;
+        }
+      } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btn.textContent = 'Detokenize';
+      }
+    }
+
+    // Allow Ctrl+Enter to detokenize
+    document.getElementById('input').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        detokenize();
+      }
+    });
+  </script>
+</body>
+</html>

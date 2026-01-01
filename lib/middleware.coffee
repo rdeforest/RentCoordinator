@@ -1,7 +1,9 @@
 express = require 'express'
 cors    = require 'cors'
 session = require 'express-session'
+crypto  = require 'crypto'
 config  = require './config.coffee'
+logger  = require './logger.coffee'
 
 
 setup = (app) ->
@@ -34,18 +36,17 @@ setup = (app) ->
       if path.endsWith '.coffee'
         res.set 'Content-Type', 'text/coffeescript'
 
-  if config.NODE_ENV is 'development'
-    app.use (req, res, next) ->
-      console.log "#{new Date().toISOString()} #{req.method} #{req.path}"
-      next()
-
+  # Add request ID for correlation
   app.use (req, res, next) ->
-    if req.path is '/health'
-      console.log "Health check from #{req.ip}"
+    req.id = crypto.randomUUID()
     next()
 
+  # Error handler with structured logging
   app.use (err, req, res, next) ->
-    console.error 'Error:', err.stack
+    logger.error 'middleware.errorHandler', err,
+      { path: req.path, method: req.method },
+      req.id
+
     res.status(500).json
       error:   'Internal server error'
       message: if config.NODE_ENV is 'development' then err.message else undefined

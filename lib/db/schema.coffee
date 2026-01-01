@@ -160,6 +160,24 @@ SCHEMA = """
 
   CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email);
   CREATE INDEX IF NOT EXISTS idx_auth_sessions_code ON auth_sessions(code);
+
+  CREATE TABLE IF NOT EXISTS pii_tokens (
+    token TEXT PRIMARY KEY,
+    value TEXT NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP,
+    access_count INTEGER DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pii_tokens_value ON pii_tokens(value);
+
+  CREATE TABLE IF NOT EXISTS rent_configuration (
+    id TEXT PRIMARY KEY,
+    temporary_base_rent REAL,
+    apply_to_new_periods BOOLEAN DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 """
 
 

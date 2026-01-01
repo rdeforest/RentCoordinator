@@ -1,6 +1,7 @@
-rentModel    = require '../models/rent.coffee'
-workLogModel = require '../models/work_log.coffee'
-config       = require '../config.coffee'
+rentModel          = require '../models/rent.coffee'
+rentConfiguration  = require '../models/rent_configuration.coffee'
+workLogModel       = require '../models/work_log.coffee'
+config             = require '../config.coffee'
 
 
 BASE_RENT         = config.BASE_RENT or 1600
@@ -145,6 +146,13 @@ recalculateAllRent = ->
 
 createOrUpdateRentPeriod = (year, month) ->
   calculation = await calculateRent year, month
+
+  # Check for temporary base rent override
+  rentConfig = rentConfiguration.getConfiguration()
+  if rentConfig.temporary_base_rent? and rentConfig.apply_to_new_periods
+    # Override the calculated amount_due
+    # Note: base_rent stays at 1600, but amount_due becomes the override value
+    calculation.amount_due = rentConfig.temporary_base_rent
 
   existing = await rentModel.getRentPeriod year, month
 
