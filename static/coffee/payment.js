@@ -25,7 +25,7 @@
   };
 
   document.addEventListener('DOMContentLoaded', async function() {
-    var month, year;
+    var month, success, year;
     await requireAuth();
     ({year, month} = getPaymentPeriod());
     if (!(year && month)) {
@@ -34,15 +34,20 @@
     }
     currentYear = year;
     currentMonth = month;
-    await loadRentPeriod(year, month);
+    success = (await loadRentPeriod(year, month));
+    if (!success) {
+      return;
+    }
     return (await initializeStripe());
   });
 
   loadRentPeriod = async function(year, month) {
     var amountDue, data, err, monthName, response;
     try {
+      console.log(`Loading rent period for ${year}-${month}...`);
       response = (await fetch(`/rent/period/${year}/${month}`));
       data = (await response.json());
+      console.log('Rent period data received:', data);
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load rent period');
       }
@@ -51,22 +56,29 @@
       });
       document.getElementById('payment-period').textContent = `${monthName} ${year}`;
       amountDue = data.amount_due - (data.amount_paid || 0);
+      console.log(`Calculated amount due: ${amountDue} (${data.amount_due} - ${data.amount_paid || 0})`);
       currentAmount = amountDue;
       document.getElementById('payment-amount').textContent = `$${amountDue.toFixed(2)}`;
       if (amountDue <= 0) {
         showMessage('This period is already paid in full', 'success');
-        return document.getElementById('pay-button').disabled = true;
+        document.getElementById('pay-button').disabled = true;
+        return false;
       }
+      return true;
     } catch (error) {
       err = error;
       console.error('Load rent period error:', err);
-      return showMessage(err.message, 'error');
+      showMessage(err.message, 'error');
+      return false;
     }
   };
 
   initializeStripe = async function() {
     var config, err, response;
     try {
+      if (!((currentAmount != null) && currentAmount > 0)) {
+        throw new Error(`Invalid payment amount: ${currentAmount}`);
+      }
       console.log('Step 1: Fetching Stripe config...');
       response = (await fetch('/payment/config'));
       config = (await response.json());
@@ -78,7 +90,7 @@
       if (!window.Stripe) {
         throw new Error('Stripe.js not loaded - check script tag');
       }
-      console.log('Step 4: Initializing Stripe...');
+      console.log(`Step 4: Initializing Stripe with amount: $${currentAmount} (${currentAmount * 100} cents)...`);
       stripe = Stripe(config.publishableKey);
       elements = stripe.elements({
         mode: 'payment',
@@ -121,7 +133,7 @@
   });
 
   processPayment = async function() {
-    var clientSecret, data, err, errorMessage, payButton, ref, ref1, ref2, ref3, ref4, ref5, response, result, submitResult, user;
+    var clientSecret, data, err, errorMessage, payButton, ref, ref1, ref2, ref3, ref4, ref5, ref6, ref7, ref8, response, result, submitResult, user;
     payButton = document.getElementById('pay-button');
     payButton.disabled = true;
     payButton.textContent = 'Processing...';
@@ -176,8 +188,13 @@
       } else if ((ref3 = (ref4 = result.paymentIntent) != null ? ref4.status : void 0) === 'processing' || ref3 === 'requires_action') {
         showMessage('Payment initiated! ACH payments take 4-5 business days to process.', 'success');
         return (await checkPaymentStatus(result.paymentIntent.id));
+      } else if (((ref5 = result.paymentIntent) != null ? ref5.status : void 0) === 'canceled') {
+        throw new Error('Payment was canceled. Please try again.');
+      } else if (((ref6 = result.paymentIntent) != null ? ref6.status : void 0) === 'requires_capture') {
+        throw new Error('Payment requires manual capture. Please contact support.');
       } else {
-        showMessage(`Payment status: ${(ref5 = result.paymentIntent) != null ? ref5.status : void 0}. Please contact support if this persists.`, 'error');
+        console.error(`Unhandled payment status: ${(ref7 = result.paymentIntent) != null ? ref7.status : void 0}`);
+        showMessage(`Payment status: ${(ref8 = result.paymentIntent) != null ? ref8.status : void 0}. Please contact support.`, 'error');
         return (await checkPaymentStatus(result.paymentIntent.id));
       }
     } catch (error) {
@@ -222,8 +239,12 @@
           }
         } else if (status.status === 'requires_payment_method') {
           throw new Error('Payment method verification required');
+        } else if (status.status === 'canceled') {
+          throw new Error('Payment was canceled');
+        } else if (status.status === 'requires_capture') {
+          throw new Error('Payment requires manual capture. Contact support.');
         } else {
-          throw new Error(`Payment failed: ${status.status}`);
+          throw new Error(`Payment failed with status: ${status.status}`);
         }
       };
       return (await checkStatus());

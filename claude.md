@@ -367,6 +367,30 @@ npm install
 npm run dev
 ```
 
+## Planned Features
+
+### Work Item Comments System
+**Requested:** 2026-01-05
+
+Add commenting functionality to work items with bidirectional notifications:
+
+**Requirements:**
+- Both Robert and Lyndzie can add comments to work items (work_logs, rent_periods, and/or rent_events)
+- Comment thread display on work item details
+- Notification system: Email users if they haven't seen a comment 3 days after it was posted
+- Bidirectional: Works for both users
+
+**Design Notes (from exploration):**
+- Two-table structure:
+  - `work_item_comments`: id, work_item_type, work_item_id, author, content, created_at, updated_at
+  - `comment_seen_status`: comment_id, user, seen_at (tracks who has seen each comment)
+- Scheduled notification check (daily cron-like task)
+- Integrate with existing Nodemailer email service
+- Frontend: Add comment UI to work items interface (modal or inline)
+- Follow existing CoffeeScript + SQLite patterns
+
+**Status:** Design phase complete, awaiting implementation decision
+
 ## Known Issues
 
 ### Work Hours Not Appearing in Rent Periods (2026-01-01)

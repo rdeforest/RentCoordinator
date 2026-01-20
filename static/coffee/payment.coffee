@@ -25,13 +25,18 @@ document.addEventListener 'DOMContentLoaded', ->
   currentYear  = year
   currentMonth = month
 
-  await loadRentPeriod year, month
+  success = await loadRentPeriod year, month
+  return unless success
+
   await initializeStripe()
 
 loadRentPeriod = (year, month) ->
   try
+    console.log "Loading rent period for #{year}-#{month}..."
     response = await fetch "/rent/period/#{year}/#{month}"
     data     = await response.json()
+
+    console.log 'Rent period data received:', data
 
     throw new Error (data.error or 'Failed to load rent period') unless response.ok
 
@@ -39,19 +44,28 @@ loadRentPeriod = (year, month) ->
     document.getElementById('payment-period').textContent = "#{monthName} #{year}"
 
     amountDue     = data.amount_due - (data.amount_paid or 0)
+    console.log "Calculated amount due: #{amountDue} (#{data.amount_due} - #{data.amount_paid or 0})"
+
     currentAmount = amountDue
     document.getElementById('payment-amount').textContent = "$#{amountDue.toFixed 2}"
 
     if amountDue <= 0
       showMessage 'This period is already paid in full', 'success'
       document.getElementById('pay-button').disabled = true
+      return false
+
+    return true
 
   catch err
     console.error 'Load rent period error:', err
     showMessage err.message, 'error'
+    return false
 
 initializeStripe = ->
   try
+    unless currentAmount? and currentAmount > 0
+      throw new Error "Invalid payment amount: #{currentAmount}"
+
     console.log 'Step 1: Fetching Stripe config...'
     response = await fetch '/payment/config'
     config   = await response.json()
@@ -62,7 +76,7 @@ initializeStripe = ->
     console.log 'Step 3: Checking Stripe.js loaded...'
     throw new Error 'Stripe.js not loaded - check script tag' unless window.Stripe
 
-    console.log 'Step 4: Initializing Stripe...'
+    console.log "Step 4: Initializing Stripe with amount: $#{currentAmount} (#{currentAmount * 100} cents)..."
     stripe = Stripe config.publishableKey
 
     elements = stripe.elements
