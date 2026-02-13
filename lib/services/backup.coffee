@@ -7,15 +7,24 @@
 { createReadStream, createWriteStream, copyFileSync, existsSync, mkdirSync } = require 'node:fs'
 { readFile } = require 'node:fs/promises'
 { join, dirname, basename } = require 'node:path'
-config = require '../config.coffee'
 
 BACKUP_VERSION = '2.0.0'  # SQLite-based backups
 
-# S3 Configuration
-S3_BUCKET    = process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups'
-S3_PREFIX    = process.env.BACKUP_S3_PREFIX || 'database/'
-AWS_REGION   = process.env.AWS_REGION || 'us-west-2'
-S3_ENABLED   = process.env.S3_BACKUP_ENABLED isnt 'false'  # Enabled by default in production
+# Get database path dynamically (allows test overrides)
+getDbPath = -> process.env.DB_PATH or './tenant-coordinator.db'
+
+# S3 Configuration (read dynamically to support test overrides)
+getS3Config = ->
+  bucket:  process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups'
+  prefix:  process.env.BACKUP_S3_PREFIX || 'database/'
+  region:  process.env.AWS_REGION || 'us-west-2'
+  enabled: process.env.S3_BACKUP_ENABLED isnt 'false'
+
+# Legacy constants for backwards compatibility
+S3_BUCKET  = process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups'
+S3_PREFIX  = process.env.BACKUP_S3_PREFIX || 'database/'
+AWS_REGION = process.env.AWS_REGION || 'us-west-2'
+S3_ENABLED = process.env.S3_BACKUP_ENABLED isnt 'false'
 
 # Initialize S3 client
 s3Client = new S3Client { region: AWS_REGION }
@@ -39,15 +48,16 @@ ensureBackupDir = (dir) ->
 # Create local backup of SQLite database
 createLocalBackup = (backupDir = './backups') ->
   await ensureBackupDir backupDir
+  dbPath = getDbPath()
 
-  unless existsSync config.DB_PATH
-    throw new Error "Database file not found: #{config.DB_PATH}"
+  unless existsSync dbPath
+    throw new Error "Database file not found: #{dbPath}"
 
   filename = generateBackupFilename()
   filepath = join backupDir, filename
 
   console.log "Creating backup: #{filepath}"
-  copyFileSync config.DB_PATH, filepath
+  copyFileSync dbPath, filepath
 
   console.log "Backup created successfully"
   { filepath, filename }
@@ -55,32 +65,34 @@ createLocalBackup = (backupDir = './backups') ->
 
 # Upload backup to S3
 uploadBackupToS3 = (filepath) ->
-  unless S3_ENABLED
+  s3Config = getS3Config()
+
+  unless s3Config.enabled
     console.log "S3 sync disabled, skipping upload"
     return null
 
   filename = basename filepath
-  s3Key    = "#{S3_PREFIX}#{filename}"
+  s3Key    = "#{s3Config.prefix}#{filename}"
 
-  console.log "Uploading backup to S3: s3://#{S3_BUCKET}/#{s3Key}"
+  console.log "Uploading backup to S3: s3://#{s3Config.bucket}/#{s3Key}"
 
   try
     fileContent = await readFile filepath
 
     command = new PutObjectCommand
-      Bucket:      S3_BUCKET
+      Bucket:      s3Config.bucket
       Key:         s3Key
       Body:        fileContent
       ContentType: 'application/x-sqlite3'
       Metadata:
         'backup-version': BACKUP_VERSION
-        'db-path':        config.DB_PATH
+        'db-path':        getDbPath()
         'timestamp':      new Date().toISOString()
 
     result = await s3Client.send command
     console.log "Backup uploaded successfully to S3"
 
-    { bucket: S3_BUCKET, key: s3Key, etag: result.ETag }
+    { bucket: s3Config.bucket, key: s3Key, etag: result.ETag }
   catch error
     console.error "Failed to upload backup to S3:", error.message
     throw error
@@ -88,16 +100,18 @@ uploadBackupToS3 = (filepath) ->
 
 # List backups in S3
 listS3Backups = ->
-  unless S3_ENABLED
+  s3Config = getS3Config()
+
+  unless s3Config.enabled
     console.log "S3 sync disabled"
     return []
 
-  console.log "Listing backups in S3: s3://#{S3_BUCKET}/#{S3_PREFIX}"
+  console.log "Listing backups in S3: s3://#{s3Config.bucket}/#{s3Config.prefix}"
 
   try
     command = new ListObjectsV2Command
-      Bucket: S3_BUCKET
-      Prefix: S3_PREFIX
+      Bucket: s3Config.bucket
+      Prefix: s3Config.prefix
 
     result = await s3Client.send command
 
@@ -119,14 +133,16 @@ listS3Backups = ->
 
 # Download backup from S3
 downloadBackupFromS3 = (s3Key, localPath) ->
-  unless S3_ENABLED
+  s3Config = getS3Config()
+
+  unless s3Config.enabled
     throw new Error "S3 sync is disabled"
 
-  console.log "Downloading backup from S3: s3://#{S3_BUCKET}/#{s3Key}"
+  console.log "Downloading backup from S3: s3://#{s3Config.bucket}/#{s3Key}"
 
   try
     command = new GetObjectCommand
-      Bucket: S3_BUCKET
+      Bucket: s3Config.bucket
       Key:    s3Key
 
     result      = await s3Client.send command
@@ -158,7 +174,9 @@ getLatestBackupFromS3 = ->
 
 # Download and restore latest backup from S3
 restoreFromS3 = ->
-  unless S3_ENABLED
+  s3Config = getS3Config()
+
+  unless s3Config.enabled
     console.log "S3 sync disabled, skipping restore"
     return null
 
@@ -171,19 +189,21 @@ restoreFromS3 = ->
 
   console.log "Latest backup: #{latest.filename} (#{latest.lastModified})"
 
+  dbPath = getDbPath()
+
   # Download to temporary location
-  tempPath = "#{config.DB_PATH}.restore-temp"
+  tempPath = "#{dbPath}.restore-temp"
   await downloadBackupFromS3 latest.key, tempPath
 
   # Backup current database if it exists
-  if existsSync config.DB_PATH
-    backupPath = "#{config.DB_PATH}.before-restore"
+  if existsSync dbPath
+    backupPath = "#{dbPath}.before-restore"
     console.log "Backing up current database to: #{backupPath}"
-    copyFileSync config.DB_PATH, backupPath
+    copyFileSync dbPath, backupPath
 
   # Replace current database with downloaded backup
   console.log "Restoring database from S3 backup"
-  copyFileSync tempPath, config.DB_PATH
+  copyFileSync tempPath, dbPath
 
   # Clean up temp file
   fs = require 'node:fs'
@@ -207,7 +227,8 @@ createBackup = (backupDir = './backups') ->
     timestamp:  new Date()
 
   # Upload to S3 if enabled
-  if S3_ENABLED
+  s3Config = getS3Config()
+  if s3Config.enabled
     try
       result.s3 = await uploadBackupToS3 filepath
     catch error
@@ -225,14 +246,16 @@ restoreFromFile = (filepath) ->
 
   console.log "Restoring database from: #{filepath}"
 
+  dbPath = getDbPath()
+
   # Backup current database
-  if existsSync config.DB_PATH
-    backupPath = "#{config.DB_PATH}.before-restore"
+  if existsSync dbPath
+    backupPath = "#{dbPath}.before-restore"
     console.log "Backing up current database to: #{backupPath}"
-    copyFileSync config.DB_PATH, backupPath
+    copyFileSync dbPath, backupPath
 
   # Restore from backup
-  copyFileSync filepath, config.DB_PATH
+  copyFileSync filepath, dbPath
 
   console.log "Database restored successfully"
   { restored: true, source: filepath }
