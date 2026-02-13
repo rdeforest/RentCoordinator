@@ -53,12 +53,12 @@ loadRentConfiguration = ->
     overrideInput = document.getElementById 'temporary-override-input'
     applyCheckbox = document.getElementById 'apply-override-checkbox'
 
-    if config.temporary_base_rent?
-      overrideInput.value = config.temporary_base_rent
+    if config.temporary_rent_amount?
+      overrideInput.value = config.temporary_rent_amount
     else
       overrideInput.value = ''
 
-    applyCheckbox.checked = config.apply_to_new_periods
+    applyCheckbox.checked = config.apply_override
 
   catch err
     console.error 'Error loading rent configuration:', err
@@ -628,7 +628,7 @@ paymentForm.addEventListener 'submit', (e) ->
 document.getElementById('recalculate-btn').addEventListener 'click', ->
   autoRecalculateAndReload()
 
-# Save temporary override
+# Save temporary rent override
 document.getElementById('save-override-btn').addEventListener 'click', ->
   try
     overrideInput = document.getElementById 'temporary-override-input'
@@ -637,11 +637,11 @@ document.getElementById('save-override-btn').addEventListener 'click', ->
     updates = {}
 
     if overrideInput.value
-      updates.temporary_base_rent = parseFloat overrideInput.value
+      updates.temporary_rent_amount = parseFloat overrideInput.value
     else
-      updates.temporary_base_rent = null
+      updates.temporary_rent_amount = null
 
-    updates.apply_to_new_periods = applyCheckbox.checked
+    updates.apply_override = applyCheckbox.checked
 
     response = await fetch '/rent/configuration',
       method: 'PUT'
@@ -650,7 +650,7 @@ document.getElementById('save-override-btn').addEventListener 'click', ->
 
     if response.ok
       showSuccess 'Configuration updated successfully'
-      # Optionally recalculate to apply to existing periods if checkbox is checked
+      # Recalculate to apply the override if checkbox is checked
       if applyCheckbox.checked
         autoRecalculateAndReload()
     else

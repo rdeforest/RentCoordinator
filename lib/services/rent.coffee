@@ -147,12 +147,12 @@ recalculateAllRent = ->
 createOrUpdateRentPeriod = (year, month) ->
   calculation = await calculateRent year, month
 
-  # Check for temporary base rent override
+  # Check for temporary rent amount override
   rentConfig = rentConfiguration.getConfiguration()
-  if rentConfig.temporary_base_rent? and rentConfig.apply_to_new_periods
-    # Override the calculated amount_due
+  if rentConfig.temporary_rent_amount? and rentConfig.apply_override
+    # Override the calculated amount_due with the temporary rent amount
     # Note: base_rent stays at 1600, but amount_due becomes the override value
-    calculation.amount_due = rentConfig.temporary_base_rent
+    calculation.amount_due = rentConfig.temporary_rent_amount
 
   existing = await rentModel.getRentPeriod year, month
 

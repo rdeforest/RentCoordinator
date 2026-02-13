@@ -173,8 +173,8 @@ SCHEMA = """
 
   CREATE TABLE IF NOT EXISTS rent_configuration (
     id TEXT PRIMARY KEY,
-    temporary_base_rent REAL,
-    apply_to_new_periods BOOLEAN DEFAULT 0,
+    temporary_rent_amount REAL,
+    apply_override BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );

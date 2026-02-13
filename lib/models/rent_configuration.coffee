@@ -10,7 +10,7 @@ getConfiguration = ->
     # Create default configuration
     now = new Date().toISOString()
     db.prepare("""
-      INSERT INTO rent_configuration (id, temporary_base_rent, apply_to_new_periods, created_at, updated_at)
+      INSERT INTO rent_configuration (id, temporary_rent_amount, apply_override, created_at, updated_at)
       VALUES (?, NULL, 0, ?, ?)
     """).run CONFIG_ID, now, now
 
@@ -28,13 +28,13 @@ updateConfiguration = (updates) ->
   fields = []
   values = []
 
-  if updates.temporary_base_rent?
-    fields.push 'temporary_base_rent = ?'
-    values.push updates.temporary_base_rent
+  if updates.temporary_rent_amount?
+    fields.push 'temporary_rent_amount = ?'
+    values.push updates.temporary_rent_amount
 
-  if updates.apply_to_new_periods?
-    fields.push 'apply_to_new_periods = ?'
-    values.push if updates.apply_to_new_periods then 1 else 0
+  if updates.apply_override?
+    fields.push 'apply_override = ?'
+    values.push if updates.apply_override then 1 else 0
 
   return getConfiguration() if fields.length is 0
 
