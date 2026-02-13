@@ -30,6 +30,10 @@ startServer = ->
     recurringEventsService.scheduleDailyProcessing()
     console.log 'Recurring events daily processing scheduled'
 
+    # Mark application as fully ready (for health checks)
+    routing.markAppReady()
+    console.log 'Application ready - health checks will pass'
+
   for signal in ['SIGINT', 'SIGTERM']
     process.on signal, ->
       console.log "\nShutting down gracefully..."

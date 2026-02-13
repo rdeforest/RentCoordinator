@@ -9,13 +9,98 @@ paymentRoutes         = require './routes/payment.coffee'
 backupRoutes          = require './routes/backup.coffee'
 adminRoutes           = require './routes/admin.coffee'
 middleware            = require './middleware.coffee'
+{ DatabaseSync }      = require 'node:sqlite'
+pkg                   = require '../package.json'
+fs                    = require 'node:fs'
+
+
+# Startup readiness tracking
+appReadyState =
+  dbInitialized:     false
+  dbConnectable:     false
+  schemaValid:       false
+  startupComplete:   false
+  startTime:         Date.now()
+
+
+# Mark app as ready (called after successful startup)
+markAppReady = ->
+  appReadyState.dbInitialized   = true
+  appReadyState.dbConnectable   = true
+  appReadyState.schemaValid     = true
+  appReadyState.startupComplete = true
+
+
+# Health check with database validation
+healthCheck = (req, res) ->
+  try
+    # Check if database file exists
+    unless fs.existsSync config.DB_PATH
+      return res.status(503).json
+        status:  'unhealthy'
+        error:   'Database file not found'
+        dbPath:  config.DB_PATH
+
+    # Try to connect and query database
+    db = new DatabaseSync config.DB_PATH
+    db.exec 'PRAGMA foreign_keys = ON'
+
+    # Verify critical tables exist
+    tables = db.prepare("""
+      SELECT name FROM sqlite_master
+      WHERE type='table' AND name IN ('work_logs', 'rent_periods', 'timer_state')
+    """).all()
+
+    db.close()
+
+    if tables.length < 3
+      return res.status(503).json
+        status:       'unhealthy'
+        error:        'Database schema incomplete'
+        foundTables:  tables.length
+        expectedTables: 3
+
+    # All checks passed
+    appReadyState.dbConnectable = true
+    appReadyState.schemaValid = true
+
+    res.json
+      status:    'healthy'
+      version:   pkg.version
+      uptime:    Math.floor((Date.now() - appReadyState.startTime) / 1000)
+      timestamp: new Date().toISOString()
+      ready:     appReadyState.startupComplete
+
+  catch error
+    console.error 'Health check failed:', error.message
+    res.status(503).json
+      status:    'unhealthy'
+      error:     error.message
+      timestamp: new Date().toISOString()
+
+
+# Readiness check (stricter - only passes after full initialization)
+readinessCheck = (req, res) ->
+  if appReadyState.startupComplete
+    res.json
+      status:  'ready'
+      version: pkg.version
+      uptime:  Math.floor((Date.now() - appReadyState.startTime) / 1000)
+  else
+    res.status(503).json
+      status:         'not_ready'
+      dbInitialized:  appReadyState.dbInitialized
+      dbConnectable:  appReadyState.dbConnectable
+      schemaValid:    appReadyState.schemaValid
+      startupComplete: appReadyState.startupComplete
 
 
 setup = (app, getServer) ->
-  app.get '/health', (req, res) ->
-    res.json
-      status:    'healthy'
-      timestamp: new Date().toISOString()
+  # Health check endpoint (with DB validation)
+  app.get '/health', healthCheck
+
+  # Readiness check endpoint (only passes after full startup)
+  app.get '/health/ready', readinessCheck
 
   app.post '/v1/shutdown', (req, res) ->
     unless config.NODE_ENV is 'test'
@@ -153,4 +238,4 @@ setup = (app, getServer) ->
   adminRoutes          .setup app
 
 
-module.exports = { setup }
+module.exports = { setup, markAppReady }
