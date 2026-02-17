@@ -74,11 +74,16 @@ findSQLQueries = (filepath) ->
 extractReferences = (sql) ->
   refs = {}
 
+  # Ignore system tables and common false positives
+  ignoreTables = ['sqlite_master', 'sqlite_sequence', 'fields']
+
   # Extract FROM/JOIN table references
   tableMatches = sql.match /(?:FROM|JOIN)\s+(\w+)/gi
   if tableMatches
     for match in tableMatches
       tableName = match.replace(/(?:FROM|JOIN)\s+/i, '').trim()
+      # Skip single-letter table aliases and ignored tables
+      continue if tableName.length <= 2 or tableName in ignoreTables
       refs[tableName] ?= []
 
   # Extract column references (word.word pattern or SELECT word)
@@ -89,6 +94,8 @@ extractReferences = (sql) ->
       if parts
         table = parts[1]
         column = parts[2]
+        # Skip single-letter aliases and ignored tables
+        continue if table.length <= 2 or table in ignoreTables
         refs[table] ?= []
         refs[table].push column unless column in refs[table] or column is '*'
 
@@ -96,16 +103,18 @@ extractReferences = (sql) ->
   updateMatch = sql.match /UPDATE\s+(\w+)/i
   if updateMatch
     tableName = updateMatch[1]
-    refs[tableName] ?= []
+    # Skip single-letter aliases and ignored tables
+    unless tableName.length <= 2 or tableName in ignoreTables
+      refs[tableName] ?= []
 
-    # Extract SET columns
-    setMatch = sql.match /SET\s+([^WHERE]+)/i
-    if setMatch
-      setColumns = setMatch[1].match /(\w+)\s*=/g
-      if setColumns
-        for col in setColumns
-          columnName = col.replace(/\s*=\s*/, '').trim()
-          refs[tableName].push columnName unless columnName in refs[tableName]
+      # Extract SET columns
+      setMatch = sql.match /SET\s+([^WHERE]+)/i
+      if setMatch
+        setColumns = setMatch[1].match /(\w+)\s*=/g
+        if setColumns
+          for col in setColumns
+            columnName = col.replace(/\s*=\s*/, '').trim()
+            refs[tableName].push columnName unless columnName in refs[tableName]
 
   return refs
 
