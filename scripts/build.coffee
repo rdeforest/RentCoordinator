@@ -41,6 +41,9 @@ build = ->
   console.log 'Building RentCoordinator...'
 
   try
+    console.log 'Running pre-build validation...'
+    await execAsync 'npx coffee scripts/validate.coffee'
+
     console.log 'Compiling server-side CoffeeScript...'
     await execAsync 'npx coffee -b -c -M -o dist .'
 

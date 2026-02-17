@@ -99,7 +99,7 @@
     margin: 0;
 }
 
-.modal-close {
+.modal-header .modal-close {
     background: none;
     border: none;
     font-size: 1.5rem;
@@ -113,7 +113,7 @@
     justify-content: center;
 }
 
-.modal-close:hover {
+.modal-header .modal-close:hover {
     color: #333;
 }
 

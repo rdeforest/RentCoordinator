@@ -14,7 +14,8 @@
     "test": "coffee test/services/rent.coffee",
     "test:focus": "coffee scripts/run-tests.coffee",
     "test:integration": "coffee scripts/test-integration.coffee",
-    "lint": "echo 'Linting skipped - configure if needed'"
+    "lint": "echo 'Linting skipped - configure if needed'",
+    "validate": "coffee scripts/validate.coffee"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.515.0",
