@@ -4,7 +4,7 @@ logger    = require '../logger.coffee'
 
 setup = (app) ->
   # Get all payments across all periods
-  app.get '/payments', (req, res) ->
+  app.get '/v1/api/payments', (req, res) ->
     try
       # Get all rent events of type 'payment'
       allEvents = await rentModel.getAllRentEvents()
@@ -38,7 +38,7 @@ setup = (app) ->
       res.status(500).json error: err.message
 
   # Update which period a payment applies to
-  app.put '/payments/:paymentId/reassign', (req, res) ->
+  app.put '/v1/api/payments/:paymentId/reassign', (req, res) ->
     paymentId = req.params.paymentId
     { year, month } = req.body
 
@@ -76,7 +76,7 @@ setup = (app) ->
       res.status(500).json error: err.message
 
   # Delete a payment
-  app.delete '/payments/:paymentId', (req, res) ->
+  app.delete '/v1/api/payments/:paymentId', (req, res) ->
     paymentId = req.params.paymentId
 
     try

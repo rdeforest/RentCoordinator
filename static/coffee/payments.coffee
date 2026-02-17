@@ -16,7 +16,7 @@ loadPayments = ->
   try
     showLoading true
 
-    response = await fetch '/payments'
+    response = await fetch '/v1/api/payments'
 
     unless response.ok
       throw new Error "Failed to load payments: #{response.statusText}"
@@ -133,7 +133,7 @@ saveReassignment = ->
     return
 
   try
-    response = await fetch "/payments/#{selectedPayment.id}/reassign",
+    response = await fetch "/v1/api/payments/#{selectedPayment.id}/reassign",
       method:  'PUT'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { year, month }
@@ -173,7 +173,7 @@ deletePayment = ->
   return unless selectedPayment
 
   try
-    response = await fetch "/payments/#{selectedPayment.id}",
+    response = await fetch "/v1/api/payments/#{selectedPayment.id}",
       method: 'DELETE'
 
     unless response.ok
