@@ -6,6 +6,7 @@ workRoutes            = require './routes/work.coffee'
 recurringEventsRoutes = require './routes/recurring_events.coffee'
 authRoutes            = require './routes/auth.coffee'
 paymentRoutes         = require './routes/payment.coffee'
+paymentsRoutes        = require './routes/payments.coffee'
 backupRoutes          = require './routes/backup.coffee'
 adminRoutes           = require './routes/admin.coffee'
 middleware            = require './middleware.coffee'
@@ -125,11 +126,12 @@ setup = (app, getServer) ->
 
   app.use middleware.requireAuth
 
-  app.get '/',        (req, res) -> res.sendFile 'index.html',   root: config.STATIC_DIR
-  app.get '/rent',    (req, res) -> res.sendFile 'rent.html',    root: config.STATIC_DIR
-  app.get '/work',    (req, res) -> res.sendFile 'work.html',    root: config.STATIC_DIR
-  app.get '/payment', (req, res) -> res.sendFile 'payment.html', root: config.STATIC_DIR
-  app.get '/admin',   (req, res) -> res.sendFile 'admin.html',   root: config.STATIC_DIR
+  app.get '/',         (req, res) -> res.sendFile 'index.html',    root: config.STATIC_DIR
+  app.get '/rent',     (req, res) -> res.sendFile 'rent.html',    root: config.STATIC_DIR
+  app.get '/work',     (req, res) -> res.sendFile 'work.html',    root: config.STATIC_DIR
+  app.get '/payment',  (req, res) -> res.sendFile 'payment.html', root: config.STATIC_DIR
+  app.get '/payments', (req, res) -> res.sendFile 'payments.html', root: config.STATIC_DIR
+  app.get '/admin',    (req, res) -> res.sendFile 'admin.html',   root: config.STATIC_DIR
 
 
   app.post '/timer/start', (req, res) ->
@@ -234,6 +236,7 @@ setup = (app, getServer) ->
   workRoutes           .setup app
   recurringEventsRoutes.setup app
   paymentRoutes        .setup app
+  paymentsRoutes       .setup app
   backupRoutes         .setup app
   adminRoutes          .setup app
 
