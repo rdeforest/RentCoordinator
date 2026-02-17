@@ -81,13 +81,13 @@ renderPayments = ->
       editBtn = document.createElement 'button'
       editBtn.textContent = 'Reassign'
       editBtn.classList.add 'btn', 'btn-small'
-      editBtn.addEventListener 'click', -> showEditModal payment
+      editBtn.addEventListener 'click', do (payment) -> -> showEditModal payment
       actionsCell.appendChild editBtn
 
       deleteBtn = document.createElement 'button'
       deleteBtn.textContent = 'Delete'
       deleteBtn.classList.add 'btn', 'btn-small', 'btn-danger'
-      deleteBtn.addEventListener 'click', -> showDeleteModal payment
+      deleteBtn.addEventListener 'click', do (payment) -> -> showDeleteModal payment
       actionsCell.appendChild deleteBtn
 
       row.appendChild actionsCell
