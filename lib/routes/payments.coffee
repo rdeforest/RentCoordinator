@@ -1,5 +1,6 @@
-rentModel = require '../models/rent.coffee'
-logger    = require '../logger.coffee'
+rentModel   = require '../models/rent.coffee'
+rentService = require '../services/rent.coffee'
+logger      = require '../logger.coffee'
 
 
 setup = (app) ->
@@ -55,6 +56,10 @@ setup = (app) ->
       unless payment.type is 'payment'
         return res.status(400).json error: 'Event is not a payment'
 
+      # Save old period year/month for recalculation
+      oldYear = payment.year
+      oldMonth = payment.month
+
       # Get the target period
       targetPeriod = await rentModel.getRentPeriod parseInt(year), parseInt(month)
 
@@ -65,6 +70,11 @@ setup = (app) ->
       updated = await rentModel.updateRentEvent paymentId,
         period_id:   targetPeriod.id
         description: "Payment received for #{year}-#{month}"
+
+      # Recalculate both affected periods
+      if oldYear and oldMonth
+        await rentService.calculateRent oldYear, oldMonth
+      await rentService.calculateRent parseInt(year), parseInt(month)
 
       res.json updated
     catch err
