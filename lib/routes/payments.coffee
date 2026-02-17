@@ -61,11 +61,9 @@ setup = (app) ->
       unless targetPeriod
         return res.status(404).json error: "Rent period not found for #{year}-#{month}"
 
-      # Update the payment event
+      # Update the payment event (only period_id and description exist on rent_events)
       updated = await rentModel.updateRentEvent paymentId,
-        period_id: targetPeriod.id
-        year:      parseInt(year)
-        month:     parseInt(month)
+        period_id:   targetPeriod.id
         description: "Payment received for #{year}-#{month}"
 
       res.json updated

@@ -146,8 +146,13 @@ createRentEvent = (data) ->
 
 getAllRentEvents = (includeDeleted = false) ->
   events = db.prepare("""
-    SELECT * FROM rent_events
-    ORDER BY created_at DESC
+    SELECT
+      e.*,
+      p.year,
+      p.month
+    FROM rent_events e
+    LEFT JOIN rent_periods p ON e.period_id = p.id
+    ORDER BY e.created_at DESC
   """).all()
 
   for event in events
