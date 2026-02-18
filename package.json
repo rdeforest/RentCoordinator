@@ -5,11 +5,9 @@
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
-    "build": "coffee -b -c -M -o dist/static/js static/coffee",
     "check-env": "scripts/check-env",
-    "clean": "rm -rf dist/ tenant-coordinator.db* node_modules/.cache/ && echo 'Clean complete'",
+    "clean": "rm -rf static/js/ tenant-coordinator.db* node_modules/.cache/ && echo 'Clean complete'",
     "clean:all": "npm run clean && rm -rf node_modules/ && echo 'Full clean complete - run npm install'",
-    "dev": "npm run build && coffee main.coffee",
     "start": "coffee main.coffee",
     "test": "coffee test/services/rent.coffee",
     "test:focus": "coffee scripts/run-tests.coffee",

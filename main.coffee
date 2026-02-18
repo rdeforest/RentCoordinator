@@ -1,12 +1,18 @@
-express    = require 'express'
-cors       = require 'cors'
-config     = require './lib/config.coffee'
-middleware = require './lib/middleware.coffee'
-routing    = require './lib/routing.coffee'
-db         = require './lib/db/schema.coffee'
+express         = require 'express'
+cors            = require 'cors'
+{ execSync }    = require 'child_process'
+config          = require './lib/config.coffee'
+middleware      = require './lib/middleware.coffee'
+routing         = require './lib/routing.coffee'
+db              = require './lib/db/schema.coffee'
 
 
 startServer = ->
+  # Compile client-side CoffeeScript on startup
+  console.log 'Compiling client-side CoffeeScript...'
+  execSync 'npx coffee -b -c -M -o static/js static/coffee', stdio: 'inherit'
+  console.log '✓ Client-side compilation complete\n'
+
   await db.initialize()
 
   app    = express()

@@ -2,7 +2,7 @@ PORT     = process.env.PORT     or 3000
 NODE_ENV = process.env.NODE_ENV or 'development'
 DB_PATH  = process.env.DB_PATH  or './tenant-coordinator.db'
 
-STATIC_DIR = if NODE_ENV is 'production' then './dist/static' else './static'
+STATIC_DIR = './static'
 
 TIMER_POLL_INTERVAL   = 1000
 SESSION_TIMEOUT       = 8 * 60 * 60 * 1000

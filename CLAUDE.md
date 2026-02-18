@@ -10,14 +10,8 @@ RentCoordinator is a Node.js-based tenant coordination application for tracking 
 
 ### Essential Commands
 ```bash
-:# Development (builds, watches files, runs server)
-npm run dev
-
-:# Build only (compiles CoffeeScript to dist/)
-npm run build
-
-:# Start production server (requires prior build)
-npm run start
+:# Start server (compiles client JS on startup, runs server)
+npm start
 
 :# Run integration tests
 npm run test:integration
@@ -31,11 +25,11 @@ cd infrastructure
 
 :# Manual instance update (SSH to current instance)
 :# Find current instance IP: aws ec2 describe-instances --filters "Name=tag:Name,Values=RentCoordinator-production" --query 'Reservations[*].Instances[*].PublicIpAddress'
-ssh -i ~/.ssh/id_aws_rdeforest ubuntu@<INSTANCE_IP> "sudo su - rent-coordinator -c 'cd /opt/rent-coordinator && git pull && source ~/.nvm/nvm.sh && npm run build' && sudo systemctl restart rent-coordinator"
+ssh -i ~/.ssh/id_aws_rdeforest ubuntu@<INSTANCE_IP> "sudo systemctl restart rent-coordinator"
 ```
 
 ### Build System
-The build system (scripts/build.ts) compiles CoffeeScript files to JavaScript, handles import path rewriting (.coffee → .js), and copies static assets to dist/. Watch mode rebuilds on changes and restarts the server automatically.
+The server automatically compiles client-side CoffeeScript to JavaScript on startup. Server-side CoffeeScript runs directly via the `coffee` command. No separate build step needed - just start the server.
 
 ### Deployment System
 
@@ -336,18 +330,18 @@ aws secretsmanager get-secret-value \
 
 See `DISASTER-RECOVERY.md` for complete restoration procedures.
 
-### Build Process
-1. Compiles all server-side `.coffee` files to `dist/*.js`
-2. Fixes import paths (`.coffee` → `.js`)
-3. Compiles client-side CoffeeScript to JavaScript
-4. Copies static assets and compiled JS to `dist/static/`
-5. In watch mode: restarts server on changes
+### Startup Process
+1. Server startup compiles client-side CoffeeScript to `static/js/`
+2. Server runs directly from source via `coffee main.coffee`
+3. Static files served from `static/`
+
+No separate build step needed - compilation happens automatically on startup.
 
 ## Development Notes
 
 - **Node.js Version**: Uses nvm with Node 24 LTS (`.nvmrc` file in repo root)
-- **Client-side**: CoffeeScript is now pre-compiled to JavaScript for better reliability
-- **Server-side**: CoffeeScript files run directly via coffee command (no compilation needed for server)
+- **Client-side**: CoffeeScript compiled to JavaScript on server startup
+- **Server-side**: CoffeeScript runs directly via coffee command
 - **Database**: Uses SQLite via Node.js built-in `node:sqlite` module (Node 22+)
 - **Workers**: Hardcoded as ['robert', 'lyndzie'] in config
 - **Frontend**: Loads compiled JavaScript, polls `/timer/status` every second for live updates
