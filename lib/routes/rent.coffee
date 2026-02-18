@@ -3,6 +3,40 @@ rentModel          = require '../models/rent.coffee'
 rentConfiguration  = require '../models/rent_configuration.coffee'
 logger             = require '../logger.coffee'
 
+AGREED_MONTHLY_PAYMENT = 950
+RENT_DUE_DAY = 15
+
+# Calculate display amount for stress-free presentation
+getDisplayAmountDue = (period) ->
+  # If manually overridden, always show the actual value
+  return period.amount_due if period.amount_due_manual
+
+  now = new Date()
+  currentYear = now.getFullYear()
+  currentMonth = now.getMonth() + 1
+  currentDay = now.getDate()
+
+  isPast = period.year < currentYear or (period.year is currentYear and period.month < currentMonth)
+  isCurrent = period.year is currentYear and period.month is currentMonth
+  isFuture = period.year > currentYear or (period.year is currentYear and period.month > currentMonth)
+
+  # Get the agreed payment amount (use override if enabled)
+  rentConfig = rentConfiguration.getConfiguration()
+  agreedPayment = if rentConfig?.apply_override and rentConfig?.temporary_rent_amount?
+    rentConfig.temporary_rent_amount
+  else
+    AGREED_MONTHLY_PAYMENT
+
+  if isFuture
+    # Future months show full calculation
+    return period.amount_due
+  else if isCurrent
+    # Current month: $0 before 15th, agreed payment after 15th
+    return if currentDay < RENT_DUE_DAY then 0 else agreedPayment
+  else
+    # Past months: cap at agreed payment amount
+    return agreedPayment
+
 
 setup = (app) ->
   # Get rent configuration
@@ -156,7 +190,15 @@ setup = (app) ->
   app.get '/rent/periods', (req, res) ->
     try
       periods = await rentModel.getAllRentPeriods()
-      res.json periods
+
+      # Add display_amount_due for stress-free presentation
+      periodsWithDisplay = periods.map (period) ->
+        {
+          ...period
+          display_amount_due: getDisplayAmountDue(period)
+        }
+
+      res.json periodsWithDisplay
     catch err
       res.status(500).json error: err.message
 

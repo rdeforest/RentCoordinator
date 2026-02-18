@@ -88,8 +88,8 @@ loadCurrentMonth = ->
 
     document.getElementById('current-month-title').textContent = formatMonthYear currentYear, currentMonth
 
-    # Calculate display amount for current month
-    displayDue = if currentDay < RENT_DUE_DAY then 0 else AGREED_MONTHLY_PAYMENT
+    # Use server-calculated display amount
+    displayDue = period.display_amount_due
 
     document.getElementById('hours-worked')  .textContent = period.hours_worked.toFixed 2
     document.getElementById('hours-previous').textContent = (period.hours_from_previous or 0).toFixed 2
@@ -708,33 +708,8 @@ escapeHtml = (text) ->
   return div.innerHTML
 
 getDisplayAmountDue = (period) ->
-  # If manually overridden, always show the actual value
-  if period.amount_due_manual
-    return period.amount_due
-
-  # Otherwise use stress-free display logic
-  isPast = period.year < currentYear or (period.year is currentYear and period.month < currentMonth)
-  isCurrent = period.year is currentYear and period.month is currentMonth
-  isFuture = period.year > currentYear or (period.year is currentYear and period.month > currentMonth)
-
-  # Determine the agreed payment amount (use override if enabled)
-  agreedPayment = if rentConfiguration?.apply_override and rentConfiguration?.temporary_rent_amount?
-    rentConfiguration.temporary_rent_amount
-  else
-    AGREED_MONTHLY_PAYMENT
-
-  if isFuture
-    # Future months show full calculation
-    return period.amount_due
-  else if isCurrent
-    # Current month: $0 before 15th, agreed payment after 15th
-    if currentDay < RENT_DUE_DAY
-      return 0
-    else
-      return agreedPayment
-  else
-    # Past months: cap at agreed payment amount
-    return agreedPayment
+  # Server provides the display value (with stress-free logic applied)
+  return period.display_amount_due
 
 getPaymentStatus = (period) ->
   displayDue = getDisplayAmountDue period
