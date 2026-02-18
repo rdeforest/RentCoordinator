@@ -80,7 +80,10 @@ setup = (app) ->
       unless period
         period = await rentService.createOrUpdateRentPeriod year, month
 
-      res.json period
+      res.json {
+        ...period
+        display_amount_due: getDisplayAmountDue(period)
+      }
     catch err
       res.status(500).json error: err.message
 

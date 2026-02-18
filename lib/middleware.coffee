@@ -27,7 +27,7 @@ setup = (app) ->
     res.sendFile 'coffeescript.js', root: "#{config.STATIC_DIR}/vendor/"
 
   app.use '/css',    express.static "#{config.STATIC_DIR}/css"
-  app.use '/js',     express.static './dist/static/js'
+  app.use '/js',     express.static "#{config.STATIC_DIR}/js"
   app.use '/vendor', express.static "#{config.STATIC_DIR}/vendor"
   app.use '/images', express.static "#{config.STATIC_DIR}/images"
 
