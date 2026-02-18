@@ -9,6 +9,7 @@ showingDeleted   = false
 
 AGREED_MONTHLY_PAYMENT = 950
 RENT_DUE_DAY          = 15
+rentConfiguration     = null  # Loaded from API
 
 eventModal       = document.getElementById 'event-modal'
 eventForm        = document.getElementById 'event-form'
@@ -49,6 +50,9 @@ loadRentConfiguration = ->
   try
     response = await fetch '/rent/configuration'
     config   = await response.json()
+
+    # Store configuration for use in display logic
+    rentConfiguration = config
 
     overrideInput = document.getElementById 'temporary-override-input'
     applyCheckbox = document.getElementById 'apply-override-checkbox'
@@ -713,18 +717,24 @@ getDisplayAmountDue = (period) ->
   isCurrent = period.year is currentYear and period.month is currentMonth
   isFuture = period.year > currentYear or (period.year is currentYear and period.month > currentMonth)
 
+  # Determine the agreed payment amount (use override if enabled)
+  agreedPayment = if rentConfiguration?.apply_override and rentConfiguration?.temporary_rent_amount?
+    rentConfiguration.temporary_rent_amount
+  else
+    AGREED_MONTHLY_PAYMENT
+
   if isFuture
     # Future months show full calculation
     return period.amount_due
   else if isCurrent
-    # Current month: $0 before 15th, $950 after 15th
+    # Current month: $0 before 15th, agreed payment after 15th
     if currentDay < RENT_DUE_DAY
       return 0
     else
-      return AGREED_MONTHLY_PAYMENT
+      return agreedPayment
   else
     # Past months: cap at agreed payment amount
-    return AGREED_MONTHLY_PAYMENT
+    return agreedPayment
 
 getPaymentStatus = (period) ->
   displayDue = getDisplayAmountDue period
