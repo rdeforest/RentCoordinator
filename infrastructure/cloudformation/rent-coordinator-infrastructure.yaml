@@ -72,14 +72,9 @@ Parameters:
     Description: Desired number of instances in Auto Scaling Group
 
 Mappings:
-  # Latest Debian 12 AMIs by region (update periodically)
   RegionMap:
     us-west-2:
-      AMI: ami-0735c191cf914754d  # Debian 12 (bookworm)
-    us-east-1:
-      AMI: ami-058bd2d568351da34
-    us-east-2:
-      AMI: ami-0f30a9c3a48f3fa79
+      AMI: ami-0a5eab7419cee78d7  # Devuan daedalus amd64 (custom, 2026-03-14)
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
@@ -224,9 +219,8 @@ Resources:
             exec 2>&1
             echo "Starting RentCoordinator bootstrap at $(date)"
 
-            # Update system
+            # Refresh package index (no full upgrade — instance is ephemeral)
             apt-get update
-            apt-get upgrade -y
 
             # Install dependencies
             apt-get install -y \
@@ -270,23 +264,7 @@ Resources:
               npm ci --only=production
             '
 
-            # Build client-side assets
-            sudo -u rent-coordinator bash -c '
-              export NVM_DIR="/home/rent-coordinator/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              nvm use
-              npm run build
-            '
-
-            # Copy static files to dist/static for production
-            sudo -u rent-coordinator bash -c '
-              cd /opt/rent-coordinator
-              mkdir -p dist/static
-              cp -r static/*.html dist/static/
-              cp -r static/css dist/static/ 2>/dev/null || true
-              cp -r static/vendor dist/static/ 2>/dev/null || true
-              cp -r static/images dist/static/ 2>/dev/null || true
-            '
+            # No separate build step — client-side CoffeeScript is compiled on first npm start
 
             # Retrieve secrets from AWS Secrets Manager
             SECRET_JSON=$(aws secretsmanager get-secret-value \
@@ -346,35 +324,48 @@ Resources:
               echo "No backups found in S3, starting with fresh database"
             fi
 
-            # Create systemd service
-            cat > /etc/systemd/system/rent-coordinator.service << 'SERVICEEOF'
-            [Unit]
-            Description=RentCoordinator Application
-            After=network.target
+            # Create SysVInit service
+            mkdir -p /var/log/rent-coordinator
+            chown rent-coordinator:rent-coordinator /var/log/rent-coordinator
 
-            [Service]
-            Type=simple
-            User=rent-coordinator
-            Group=rent-coordinator
-            WorkingDirectory=/opt/rent-coordinator
-            Environment="NVM_DIR=/home/rent-coordinator/.nvm"
-            EnvironmentFile=/opt/rent-coordinator/.env
-            ExecStart=/bin/bash -c 'source $NVM_DIR/nvm.sh && nvm use && npx coffee main.coffee'
-            Restart=always
-            RestartSec=10
+            cat > /etc/init.d/rent-coordinator << 'INITEOF'
+            #!/bin/sh
+            ### BEGIN INIT INFO
+            # Provides:          rent-coordinator
+            # Required-Start:    $network $remote_fs $syslog
+            # Required-Stop:     $network $remote_fs $syslog
+            # Default-Start:     2 3 4 5
+            # Default-Stop:      0 1 6
+            # Short-Description: RentCoordinator Application
+            ### END INIT INFO
+            NVM_DIR=/home/rent-coordinator/.nvm
+            APP_DIR=/opt/rent-coordinator
+            LOGFILE=/var/log/rent-coordinator/application.log
+            PIDFILE=/var/run/rent-coordinator.pid
+            USER=rent-coordinator
+            . /lib/lsb/init-functions
+            do_start() {
+              start-stop-daemon --start --quiet --pidfile $PIDFILE \
+                --chuid $USER --background --make-pidfile \
+                --exec /bin/bash -- -c \
+                "cd $APP_DIR && set -a && . $APP_DIR/.env && set +a && . $NVM_DIR/nvm.sh && nvm use && exec npx coffee main.coffee >> $LOGFILE 2>&1"
+            }
+            do_stop() {
+              start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE
+              rm -f $PIDFILE
+            }
+            case "$1" in
+              start)   do_start ;;
+              stop)    do_stop ;;
+              restart) do_stop; sleep 1; do_start ;;
+              status)  status_of_proc -p $PIDFILE /bin/bash rent-coordinator && exit 0 || exit $? ;;
+              *)       echo "Usage: $0 {start|stop|restart|status}" >&2; exit 3 ;;
+            esac
+            INITEOF
 
-            # Security hardening
-            NoNewPrivileges=true
-            PrivateTmp=true
-
-            [Install]
-            WantedBy=multi-user.target
-            SERVICEEOF
-
-            # Reload systemd and start service
-            systemctl daemon-reload
-            systemctl enable rent-coordinator
-            systemctl start rent-coordinator
+            chmod +x /etc/init.d/rent-coordinator
+            update-rc.d rent-coordinator defaults
+            service rent-coordinator start
 
             # Wait for application to be healthy
             echo "Waiting for application to start..."
@@ -409,34 +400,10 @@ Resources:
 
             # Setup CloudWatch Logs
             echo "Setting up CloudWatch Logs..."
-
-            # Create log directory
-            mkdir -p /var/log/rent-coordinator
-            chown rent-coordinator:rent-coordinator /var/log/rent-coordinator
-
-            # Create systemd service to stream logs to file
-            cat > /etc/systemd/system/rent-coordinator-logs.service << 'LOGSERVICEEOF'
-            [Unit]
-            Description=RentCoordinator Log Streaming
-            After=rent-coordinator.service
-
-            [Service]
-            Type=simple
-            ExecStart=/bin/bash -c 'journalctl -u rent-coordinator -f --no-pager >> /var/log/rent-coordinator/application.log 2>&1'
-            Restart=always
-            RestartSec=5
-
-            [Install]
-            WantedBy=multi-user.target
-            LOGSERVICEEOF
-
-            # Enable and start log streaming
-            systemctl daemon-reload
-            systemctl enable rent-coordinator-logs
-            systemctl start rent-coordinator-logs
+            # Log directory and file already created by init script above
 
             # Install CloudWatch agent
-            wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+            wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/debian/amd64/latest/amazon-cloudwatch-agent.deb
             dpkg -i -E ./amazon-cloudwatch-agent.deb
             rm amazon-cloudwatch-agent.deb
 
@@ -501,7 +468,7 @@ Resources:
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
             # Enable CloudWatch agent on boot
-            systemctl enable amazon-cloudwatch-agent
+            update-rc.d amazon-cloudwatch-agent defaults
 
             echo "CloudWatch Logs setup complete"
 
