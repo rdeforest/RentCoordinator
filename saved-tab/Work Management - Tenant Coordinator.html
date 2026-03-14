@@ -1,0 +1,596 @@
+<!-- static/work.html -->
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Management - Tenant Coordinator</title>
+    <link rel="stylesheet" href="Work%20Management%20-%20Tenant%20Coordinator_files/app.css">
+    <link rel="stylesheet" href="Work%20Management%20-%20Tenant%20Coordinator_files/work.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Work Management</h1>
+            <p>Add, edit, and review work entries</p>
+            <nav style="margin-top: 20px;">
+                <a href="https://rent.thatsnice.org/" class="btn btn-secondary">Back to Timer</a>
+                <a href="https://rent.thatsnice.org/rent" class="btn btn-secondary">Rent Dashboard</a>
+            </nav>
+        <button id="logoutBtn" class="btn btn-secondary" style="float: right;">Logout</button></header>
+
+        <main>
+            <!-- Filter Controls -->
+            <section class="filter-controls">
+                <select id="worker-filter">
+                    <option value="" selected="selected">All Workers</option>
+                    <option value="robert">Robert</option>
+                    <option value="lyndzie">Lyndzie</option>
+                </select>
+
+                <input type="month" id="month-filter" placeholder="Filter by month">
+
+                <button id="clear-filters" class="btn btn-secondary">Clear Filters</button>
+            </section>
+
+            <!-- Stats Bar -->
+            <section class="stats-bar" id="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-label">Total Entries</span>
+                    <span class="stat-value" id="total-entries">48</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Hours</span>
+                    <span class="stat-value" id="total-hours">104.50</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Credit</span>
+                    <span class="stat-value" id="total-credit">$5,216.67</span>
+                </div>
+            </section>
+
+            <!-- Actions Bar -->
+            <section class="actions-bar">
+                <h2>Work Entries</h2>
+                <button id="add-work-btn" class="btn btn-primary">Add Manual Entry</button>
+            </section>
+
+            <!-- Work Table -->
+            <section>
+                <table class="work-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Worker</th>
+                            <th>Duration</th>
+                            <th>Description</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="work-table-body"><tr>
+  <td>7/11/2026 06:00 AM</td>
+  <td>lyndzie</td>
+  <td>5.00 hours</td>
+  <td>CLEANED THE ALLEY WAY BEHIND MY BACK FENCE. ALOT OF OLD CEMENT 
+CHUNKS, WEEDS, AND DEBRIS. PILED CEMENT ALL TOGETHER BECAUSE A FRIEND 
+WILL BE OVER TO LOAD AND DISPOSE OF THE OLD CEMENT.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('809afc20-0d0e-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('809afc20-0d0e-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>2/28/2026 03:30 PM</td>
+  <td>lyndzie</td>
+  <td>0.83 hours</td>
+  <td>SPRAYED THE OUTDOOR PERIMETER OF THE HOUSE AND BEHIND ALLEY FENCE</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('a619ad30-1663-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('a619ad30-1663-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>2/27/2026 04:10 PM</td>
+  <td>lyndzie</td>
+  <td>1.50 hours</td>
+  <td>PULLED WEEDS, RAKED UP MESS THAT THE WIND BLEW IN THE BACK YARD, REMOVED COBWEBS FROM THE OUTSIDE OF THE HOUSE</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('7dbba960-1663-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('7dbba960-1663-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>2/27/2026 12:00 PM</td>
+  <td>robert</td>
+  <td>0.17 hours</td>
+  <td>testing</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('ac7b0100-1380-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('ac7b0100-1380-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>2/22/2026 03:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.33 hours</td>
+  <td>YARD WORK. EDGED AND CUT FRONT AND BACK GRASS, SWEPT THE GUTTER, BLEW OFF CEMENT AREAS AND SPRAYED OFF CEMENT</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('3db2d6e0-1663-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('3db2d6e0-1663-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>2/15/2026 01:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.00 hours</td>
+  <td>PULLED OUT MORE WEEDS GROWING IN THE FRONT LAWN AND BACK DIRT AREAS.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('06faf740-1663-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('06faf740-1663-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>2/8/2026 07:30 AM</td>
+  <td>lyndzie</td>
+  <td>2.50 hours</td>
+  <td>YARD WORK. EDGED AND CUT THE GRASS FRONT AND BACK, SWEPT THE GUTTER CLEAN, BLEW OFF CEMENT WALK WAYS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('53213f90-1662-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('53213f90-1662-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>2/6/2026 04:50 PM</td>
+  <td>lyndzie</td>
+  <td>0.33 hours</td>
+  <td>APLLIED WEED N FEED FERTIIZER TO GRASS TO FEED AND THE GRASS TRY TO KILL OFF AND PREVENT MORE WEEDS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('0d8126d0-1662-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('0d8126d0-1662-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>1/24/2026 07:30 AM</td>
+  <td>lyndzie</td>
+  <td>2.33 hours</td>
+  <td>EDGED FRONT AND BACK YARDS. CUT THE GRASS , SWEPT THE GUTTER, 
+WASHED OFF THE DRIVEWAY AND DECK WITH VINEGAR AND BLEW OFF CEMENT WALK 
+WAYS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('bd66f9f0-1660-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('bd66f9f0-1660-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>1/17/2026 09:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.33 hours</td>
+  <td>LAUNDRY DOOR WAS STICKING WHEN OPENING AND CLOSING DUE TO THE 
+SHIFTING OF THE HOUSE FROM ALL THE EARTH QUAKES THIS PAST THURSDAY. 
+ADJUSTED THE DOOR HINGES UNTIL IT OPENED AND CLOSED PROPERLY</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('268025c0-1660-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('268025c0-1660-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>1/10/2026 03:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.00 hours</td>
+  <td>WATER HOSE FAUCET ON THE SIDE OF THE HOUSE WAS LEAKING, FIXED THE SMALL LEAK</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('e6560fa0-165f-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('e6560fa0-165f-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>1/10/2026 07:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.25 hours</td>
+  <td>SPRAYED THE OUTTER PERIMETER OF THE HOUSE AND BACK ALLEYT AREA 
+ALONG THE FENCE, I FEEL LIKE THESE ROACHES ARE COMING FROM THE SEWER IN 
+THE ALLEY</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('be65c1c0-165f-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('be65c1c0-165f-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>1/9/2026 04:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.83 hours</td>
+  <td>EDGED AND CUT THE FRONT AND BACK YARD AREAS, CLEANED THE GUTTER 
+AREA OF OLD RAIN WATER AND BLEW OFF DEBRIS FROM CEMENT WALK WAY AREAS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('874be170-165e-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('874be170-165e-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>1/3/2026 09:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.50 hours</td>
+  <td>FIXED THE FRONT DOOR SEAL, DOOR WAS NOT CLOSING PROPERLY AND POPPING BACK OPEN</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('4d3fcdc0-165e-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('4d3fcdc0-165e-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>12/28/2025 11:00 AM</td>
+  <td>lyndzie</td>
+  <td>2.33 hours</td>
+  <td>EDGED AND CUT THE GRASS IN THE FRONT AND BACK AREA, SWEPT THE 
+GUTTER CLEAN AND BLEW OFF CEMENT. PULLED MORE OF THE NEVER ENDING WEEDS.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('7741b300-165d-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('7741b300-165d-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>12/22/2025 07:00 AM</td>
+  <td>lyndzie</td>
+  <td>3.83 hours</td>
+  <td>REMOVED THE SMALL STUMP IN THE BACK YARD AND I WAS DIGGING RAN 
+INTO SEVERAL GOOD SIZE CHUNKS OF BURRIED CEMENT, REMOVED THOSE AS WELL. 
+SURPRISE DIGGING. LOL!</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('f0797510-165c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('f0797510-165c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>12/20/2025 10:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.58 hours</td>
+  <td>PREPPED THE BACK OUTSIDE OF THE DOOR AND PAINTED IT DUE TO THE YELLOWING FROM THE PREVIOUS SUMMER MONTHS, APPLIED CLEAR COAT.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('a4eddb90-165c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('a4eddb90-165c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>12/14/2025 07:00 AM</td>
+  <td>lyndzie</td>
+  <td>2.33 hours</td>
+  <td>EDGED THE FRONT AND BACK AREA, CUT GRASS IN THE FRONT AND BACK, RAKED UP DEBRIS, SWEPT THE GUTTER AND BLEW OFF CEMENTS WALK WAYS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('65d58390-165c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('65d58390-165c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>12/3/2025 04:20 PM</td>
+  <td>lyndzie</td>
+  <td>0.92 hours</td>
+  <td>SPRAYED THE OUTSIDE PERIMETER OF THE HUSE FOR BUGS, SPIDERS, AND ROACHES. SILVER FISH. FOUND A FEW INSIDE THE HOUSE.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('2f803650-165c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('2f803650-165c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>11/28/2025 04:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.33 hours</td>
+  <td>EDGED THE FRONT AND BACK YARDS , CUT THE GRASS, BLEW OFF CEMENT AND CLEANED THE GUTTER AREA</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('54235d20-0d29-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('54235d20-0d29-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>11/25/2025 03:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.00 hours</td>
+  <td>PUT ADDITIONAL SCREWS IN SOME FENCE SLATS IN THE BACK YARD THAT WHERE LOOSE SO MY DOGS DIDNT ESCAPE</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('1a7e6fb0-0d29-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('1a7e6fb0-0d29-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>11/15/2025 07:30 AM</td>
+  <td>lyndzie</td>
+  <td>2.00 hours</td>
+  <td>REMOVED ALL WINDOW SCREENS AND WASHED THE SCREENS AND WINDOW, CLEANED OUT THE WINDOW TRACK AREA THAT HAD ALOT OF OLD DIRT</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('def977a0-0d28-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('def977a0-0d28-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>11/14/2025 05:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.50 hours</td>
+  <td>EDGED THE FRONT AND BACK YARDS, CUT THE GRASS, SWEPT THE GUTTER AND BLEW OFF CEMENT AREAS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('46698750-0d28-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('46698750-0d28-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>11/2/2025 08:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.17 hours</td>
+  <td>PULLED WEEDS IN THE BACK YARD, ALLEY AND SIDE AREA NEAR AC UNIT</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('c5565600-0d15-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('c5565600-0d15-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>10/14/2025 05:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.00 hours</td>
+  <td>GUTTER WAS FULL OF WATER AND GROSS DIRT . CLEANED THE AREA</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('7e595870-0d2d-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('7e595870-0d2d-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>10/10/2025 04:30 PM</td>
+  <td>lyndzie</td>
+  <td>2.50 hours</td>
+  <td>YARD WORK, EDGED FRONT AND BACK , CUT THE GRASS, CLEANED GUTTER, PULLED WEEDS, SPRAYED OF DRIVE WAY</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('f74cbe80-0d2c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('f74cbe80-0d2c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>10/2/2025 05:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.00 hours</td>
+  <td>SPRAYED THE PERIMETER OF THE HOUSE AND YARD FOR BUGS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('84249c70-0d2c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('84249c70-0d2c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>9/26/2025 04:30 PM</td>
+  <td>lyndzie</td>
+  <td>3.00 hours</td>
+  <td>CUT GRASS, YARD WORK, RAKED AREAS THAT WERE DIRTY , REMOVED COB WEBS FROM THE HOUSE AND PORCH</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('05ee6e30-0d2c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('05ee6e30-0d2c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>9/22/2025 07:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.58 hours</td>
+  <td>SPRAYED THE PERIMETER OF THE HOUSE AND YARD FOR BUGS</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('bf4f5c00-0d2b-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('bf4f5c00-0d2b-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>9/18/2025 05:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.75 hours</td>
+  <td>CLEANED THE GRASS AND WEEDS NEAR THE AC UNIT</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('8103a2d0-0d2b-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('8103a2d0-0d2b-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>9/13/2025 10:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.58 hours</td>
+  <td>WINDOW IN THE KID BATHROOM WOULD NOT OPEN. AFTER TRYING TO FIGURE IT OUT , I FOUND OUT THEY SCREWED THE WINDOW SHUT</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('209c2e90-0d2a-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('209c2e90-0d2a-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>9/12/2025 04:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.17 hours</td>
+  <td>YARD WORK, EDGED AND CUT GRASS FRONT AND BACK , CLEANED CEMENT AND GUTTER</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('b32c6f50-0d29-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('b32c6f50-0d29-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>8/29/2025 05:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.00 hours</td>
+  <td>EDGDED AND CUT THE GRASS IN THE BACK YARD AREA, RACKED UP FROM THE WIND AND SWEPT THE BACK CEMENT AREA</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('7c560d30-0d13-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('7c560d30-0d13-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>8/23/2025 06:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.83 hours</td>
+  <td>EDGED THE FRONT LAWN, CUT THE GRASS, AND BLEW OFF THE REMAINING DIRT AND GRASS AND SWEPT THE GUTTER CLEAN.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('291ad4c0-0d13-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('291ad4c0-0d13-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>8/13/2025 11:00 AM</td>
+  <td>lyndzie</td>
+  <td>1.50 hours</td>
+  <td>GARBAGE DISPOSAL BUTTON IN THE ISLAND WAS VERY LOOSE SO WHEN YOU 
+PRESSED IT TO TURN IT ON AND OFF THE BUTTON FELL THROUGH THE COUNTER. 
+THE THREADS ON THE WASHER WHERE BROKE. PURCHASED A NEW WASHER AND PUT IT
+ ALL BACK TOGETHER. WORKS GREAT NOW</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('091f2570-0d10-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('091f2570-0d10-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>8/1/2025 05:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.50 hours</td>
+  <td>EDGED THE FRONT LAWN, CUT THE GRASS, BLEW OFF REMAINING DIRT AND GRASS SWEPT THE GUTTER CLEAN</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('329608c0-0d0f-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('329608c0-0d0f-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>7/28/2025 06:20 PM</td>
+  <td>lyndzie</td>
+  <td>1.08 hours</td>
+  <td>FREEZER FAN STARTED MAKING THE LOUD NOISE AGAIN. I TOOK APART THE 
+BACK PANEL AND THE FAN WAS HITTING A BLOCK OF ICE. CLEANED UP THE ICE 
+AND UNIT IS WORKING.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('0fb61350-0d0e-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('0fb61350-0d0e-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>7/11/2025 06:45 AM</td>
+  <td>lyndzie</td>
+  <td>2.75 hours</td>
+  <td>DUG UP AND REMOVED BIG OVER GROWN BUSH RIGHT OUT SIDE THE BACK 
+DOOR, DUG UP LITTLE MESQUITES GROWING THROUGH OUT THE BACK YARD, PULLED 
+WEEDS.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('d4b12b40-0d0e-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('d4b12b40-0d0e-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>7/8/2025 01:00 PM</td>
+  <td>lyndzie</td>
+  <td>2.00 hours</td>
+  <td>THE LIGHT ABOVE THE ISLAND THATS HANGING FELL ON THE LEFT SIDE AS I
+ WAS DOING DISHES. I WAS ABLE TO TAKE IT DOWN, FOUND OUT IT WAS BADLY 
+MOUNTED AND THE BOLT WAS STRIPPED AND JUST HALF HUNG. MY DAD CAME OVER 
+AND WALKED ME THROUGH REPLACING THE BOLT AND RE-CONNECTING WIRES. WORKS 
+GREAT.</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('bd0da500-0d0d-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('bd0da500-0d0d-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>6/7/2025 06:30 AM</td>
+  <td>lyndzie</td>
+  <td>1.25 hours</td>
+  <td>PLANTED THE 2ND INDIAN LAUREL SHADE TREE IN THE BACK YARD TO PROVIDE SHADE TO THE HOUSE</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('46b72660-0d0d-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('46b72660-0d0d-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>6/6/2025 05:00 PM</td>
+  <td>lyndzie</td>
+  <td>1.42 hours</td>
+  <td>PLANTED 1 INDIAN LAUREL SHADE TREE IN THE FRONT YARD TO PROVIDE SHADE TO THE HOUSE DURING THE SUMMER HEAT</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('fd62b830-0d0c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('fd62b830-0d0c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>6/1/2025 06:00 AM</td>
+  <td>lyndzie</td>
+  <td>7.00 hours</td>
+  <td>HAND LEVELED THE DIRT BY THE NEWELY REPAIRED FENCE PORTION AND ALLEY GATE ENTRY SO THE GATES WOULD OPEN PROPERLY</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('b9916c00-0d0c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('b9916c00-0d0c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>5/25/2025 07:00 AM</td>
+  <td>lyndzie</td>
+  <td>2.00 hours</td>
+  <td>PLANTED BERMUDA GRASS SEED IN THE FRONT YARD (3 AREAS) HAND WATERED</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('72ba32d0-0d0c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('72ba32d0-0d0c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>5/24/2025 08:00 AM</td>
+  <td>lyndzie</td>
+  <td>4.00 hours</td>
+  <td>REMOVED ROCK FROM THE DIRT IN THE FRONT YARD. LEVELED AREAS IN THE
+ FRONT YARD AND PREPPED THE GROUND FOR BERMUDA GRASS SEED PLANTING</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('300db790-0d0c-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('300db790-0d0c-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>5/16/2025 04:30 PM</td>
+  <td>lyndzie</td>
+  <td>1.50 hours</td>
+  <td>MAINT. ON FRIDGE/FREEZER DUE TO LOUD FAN NOISE ( RESEARCHED THE 
+MODEL, MOVED THE APPLIANCE CLEANED THE UNIT WITH IN AND UNDERNEATH. UPON
+ TAKING THE BACK INSIDE PANEL OFF I FOUND THE LOUD NOISE WAS DUE TO THE 
+FAN HITTING A LOT OF FROZEN ICE. CHIPPED THE ICE ALL AWAY, CLEANED THE 
+AREA AND PUT IT BACK TOGETHER. UNIT HAS BEEN WORKING PROPERLY WITH NO 
+LOUD NOISE</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('dd501390-0d0b-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('dd501390-0d0b-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>4/24/2025 10:15 AM</td>
+  <td>lyndzie</td>
+  <td>1.17 hours</td>
+  <td>DAD/MYSELF WIRED A NEW 220 POWER SOURCE IN THE ELECTRICAL BOX FOR 
+THE DRYER OUTLET TO HAVE POWER TO IT. (LEFT UNDONE BY THE HOME 
+CONTRACTOR)</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('2ecf1280-0d0b-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('2ecf1280-0d0b-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>4/23/2025 07:00 AM</td>
+  <td>lyndzie</td>
+  <td>5.00 hours</td>
+  <td>DAD/MYSELF INSTALLED THE 2 ROLLING BK. ALLEY GATES</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('dc169ea0-0d0a-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('dc169ea0-0d0a-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr><tr>
+  <td>4/22/2025 08:30 AM</td>
+  <td>lyndzie</td>
+  <td>9.00 hours</td>
+  <td>2 ROLLING GATES FOR THE ALLEY ENTRANCE TO THE BACK YARD HAND 
+BUILT, WELDED METAL FRAME AND APPLIED WOOD TO THE FRAME BY MY DAD/MYSELF</td>
+  <td class="actions">
+    <button class="btn btn-secondary" onclick="editWork('afdb3990-0d0a-11f1-b96c-6bc6ad3a00ab')">Edit</button>
+    <button class="btn btn-danger" onclick="deleteWork('afdb3990-0d0a-11f1-b96c-6bc6ad3a00ab')">Delete</button>
+  </td>
+</tr></tbody>
+                </table>
+            </section>
+
+            <!-- Work Entry Modal -->
+            <div id="work-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3 id="modal-title">Add Work Entry</h3>
+                    <form id="work-form">
+                        <input type="hidden" id="work-id">
+
+                        <label for="work-worker">Worker:</label>
+                        <select id="work-worker" required="">
+                            <option value="" selected="selected">Select Worker</option>
+                            <option value="robert">Robert</option>
+                            <option value="lyndzie">Lyndzie</option>
+                        </select>
+
+                        <label for="work-date">Date:</label>
+                        <input type="date" id="work-date" required="" value="2026-03-03">
+
+                        <label for="work-start-time">Start Time:</label>
+                        <input type="time" id="work-start-time" required="">
+
+                        <label for="work-end-time">End Time:</label>
+                        <input type="time" id="work-end-time" required="">
+
+                        <label for="work-description">Description:</label>
+                        <textarea id="work-description" rows="4" required="" placeholder="What work was done?"></textarea>
+
+                        <label for="work-billable">
+                            <input type="checkbox" id="work-billable" checked="checked">
+                            Billable (counts toward rent credit)
+                        </label>
+
+                        <div class="form-actions" style="margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary">Save</button>
+                            <button type="button" id="cancel-work" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div id="delete-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h3>Confirm Delete</h3>
+                    <p>Are you sure you want to delete this work entry? This action cannot be undone.</p>
+                    <input type="hidden" id="delete-work-id">
+                    <div class="form-actions">
+                        <button id="confirm-delete" class="btn btn-danger">Delete</button>
+                        <button id="cancel-delete" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="Work%20Management%20-%20Tenant%20Coordinator_files/auth.js"></script>
+    <script src="Work%20Management%20-%20Tenant%20Coordinator_files/shared-utils.js"></script>
+    <script src="Work%20Management%20-%20Tenant%20Coordinator_files/work.js"></script>
+
+</body></html>

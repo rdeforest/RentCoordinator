@@ -25,7 +25,7 @@ cd infrastructure
 
 :# Manual instance update (SSH to current instance)
 :# Find current instance IP: aws ec2 describe-instances --filters "Name=tag:Name,Values=RentCoordinator-production" --query 'Reservations[*].Instances[*].PublicIpAddress'
-ssh -i ~/.ssh/id_aws_rdeforest ubuntu@<INSTANCE_IP> "sudo systemctl restart rent-coordinator"
+ssh -i ~/.ssh/id_aws_rdeforest admin@<INSTANCE_IP> "sudo systemctl restart rent-coordinator"
 ```
 
 ### Build System
@@ -39,11 +39,11 @@ RentCoordinator supports two deployment models:
 **Automated cloud deployment** using AWS CloudFormation:
 
 **Features:**
-- Auto Scaling Group with automatic instance replacement
+- Auto Scaling Group (ReplaceUnhealthy suspended — instances stay up when unhealthy rather than being terminated)
 - Zero-touch deployment from GitHub
 - IAM roles for secure Secrets Manager access
 - Auto-registration with Application Load Balancer
-- Health checks and automatic rollback
+- Health checks visible via CloudWatch
 - Scale up/down on demand
 
 **Quick Start:**
@@ -56,39 +56,6 @@ cp cloudformation/parameters-example.json cloudformation/parameters.json
 
 See `infrastructure/README.md` for complete AWS deployment guide.
 
-#### 2. Manual Remote Deployment (Legacy)
-**Push-based remote deployment** to individual servers:
-
-**Local Scripts** (run from dev machine):
-- `deploy-install.sh <host>` - First-time installation on remote server
-- `deploy-upgrade.sh <host>` - Safe upgrade with automatic rollback
-- `deploy-uninstall.sh <host>` - Remove installation from remote
-
-**How it works:**
-1. Build project locally on dev machine
-2. Create deployment package
-3. Push to remote server via rsync
-4. Execute remote installation/upgrade script
-5. Automatic health checks and rollback on failure
-
-**Upgrade safety features:**
-- Automatic database backup before upgrade
-- Atomic swap between versions (dist.new → dist, dist.old for rollback)
-- Health check verification after deployment
-- Automatic rollback if health check fails
-- Database and config never touched during upgrades
-
-**Remote structure:**
-```
-~/rent-coordinator/
-├── dist/              # Active version
-├── dist.old/          # Previous version (for rollback)
-├── config.sh          # Configuration (persists across upgrades)
-├── tenant-coordinator.db  # Database (never deleted)
-└── backups/           # Automatic backups
-```
-
-See `scripts/deployment.md` for complete manual deployment documentation.
 See `migrations/README.md` for database migration guide.
 See `docs/disaster-recovery.md` for complete disaster recovery procedures.
 
@@ -150,7 +117,10 @@ static/                   - Frontend assets
 
 scripts/                  - Build and deployment scripts
 ├── build.ts              - CoffeeScript compilation and asset copying
-├── backup.ts             - Database backup CLI
+├── backup.ts             - Backup logic (called by backup service, not directly)
+├── backup-now.sh         - Shell wrapper to trigger a backup manually
+├── backup-list.sh        - List available S3 backups
+├── backup-restore.sh     - Restore from S3 backup
 └── upgrade.sh            - Production upgrade automation
 
 migrations/               - Database migrations (empty for now)
@@ -297,18 +267,28 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 
 ### Backup and Disaster Recovery
 
-**Automated Backups:**
+**Backups:**
+- There is no `npm run backup`. Backups are triggered via API or shell scripts.
+- Local backups land in `./backups/` as timestamped SQLite files
+- S3 backups auto-upload to `rent-coordinator-backups-822812818413` (us-west-2), 30-day retention
+- **TODO:** Daily automated backups are not yet implemented — currently manual only
+
 ```bash
-:# Create database backup
-npm run backup
+:# Trigger a backup via API (requires auth session cookie)
+curl -X POST https://rent.thatsnice.org/api/backup \
+  -H "Cookie: <session-cookie>"
 
-:# Restore from backup
-npm run restore backups/backup-YYYY-MM-DD*.json
+:# Or from the server directly (bypasses auth)
+curl -X POST http://localhost:3000/api/backup
 
-:# Backups include:
-:# - All SQLite database data
-:# - Non-sensitive configuration (port, business rules, etc.)
-:# - Database schema version
+:# Check backup status
+curl https://rent.thatsnice.org/api/backup/status
+
+:# List all S3 backups
+curl https://rent.thatsnice.org/api/backup/list
+
+:# Shell script alternative (runs on the server)
+./scripts/backup-now.sh
 ```
 
 **Secrets Management:**
@@ -345,7 +325,6 @@ No separate build step needed - compilation happens automatically on startup.
 - **Database**: Uses SQLite via Node.js built-in `node:sqlite` module (Node 22+)
 - **Workers**: Hardcoded as ['robert', 'lyndzie'] in config
 - **Frontend**: Loads compiled JavaScript, polls `/timer/status` every second for live updates
-- **Hot Reload**: Available in dev mode with file watching
 
 ### Local Development Setup
 ```bash
@@ -358,7 +337,7 @@ nvm use
 
 :# Install dependencies and run
 npm install
-npm run dev
+npm start
 ```
 
 ## Planned Features

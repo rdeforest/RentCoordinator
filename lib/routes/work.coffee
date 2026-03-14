@@ -89,7 +89,7 @@ setup = (app) ->
       if end_time?    then updates.end_time    = end_time
       if duration?    then updates.duration    = duration
       if description? then updates.description = description.trim()
-      if billable?    then updates.billable    = billable
+      if billable?    then updates.billable    = if billable then 1 else 0
 
       updated = await workLogModel.updateWorkLog id, updates
 

@@ -2,156 +2,133 @@
 
 This directory contains database migrations for RentCoordinator.
 
+The stack is **Node.js + SQLite** (via Node's built-in `node:sqlite` module). There is no external
+migration framework — migrations are plain CoffeeScript scripts that run against the SQLite database.
+
 ## How Migrations Work
 
-Migrations are executed automatically by `scripts/upgrade.sh` in alphabetical order. They are JavaScript files that run once to transform the database schema or data.
+Migrations are executed manually or by `scripts/upgrade.sh` in alphabetical order. Each migration
+is a `.coffee` file that opens the database and performs schema or data changes.
 
 ## Creating a Migration
 
 1. **Name your migration with a timestamp prefix:**
    ```
-   migrations/YYYY-MM-DD_HH-MM-SS_description.js
+   migrations/YYYY-MM-DD_HH-MM-SS_description.coffee
    ```
-   Example: `2025-10-20_15-30-00_add_user_roles.js`
+   Example: `migrations/2026-03-01_12-00-00_add_user_roles.coffee`
 
 2. **Migration template:**
-   ```javascript
-   // migrations/2025-10-20_15-30-00_add_user_roles.js
+   ```coffeescript
+   # migrations/2026-03-01_12-00-00_add_user_roles.coffee
 
-   const db = await Deno.openKv('./tenant-coordinator.db');
+   { DatabaseSync } = require 'node:sqlite'
 
-   console.log('Running migration: add_user_roles');
+   DB_PATH = process.env.DB_PATH or './tenant-coordinator.db'
 
-   try {
-       // Your migration code here
-       // Example: Add new keys, transform data, etc.
+   db = new DatabaseSync DB_PATH
 
-       // Mark migration as complete
-       await db.set(['migration', '2025-10-20_15-30-00_add_user_roles'], {
-           completed: new Date().toISOString(),
-           description: 'Add user roles to auth system'
-       });
+   console.log 'Running migration: add_user_roles'
 
-       console.log('Migration completed successfully');
-   } catch (err) {
-       console.error('Migration failed:', err);
-       throw err;
-   } finally {
-       db.close();
-   }
+   try
+     db.exec '''
+       ALTER TABLE auth_sessions ADD COLUMN role TEXT DEFAULT 'user';
+     '''
+
+     console.log 'Migration completed successfully'
+   catch err
+     console.error 'Migration failed:', err
+     throw err
+   finally
+     db.close()
    ```
 
-3. **Test your migration locally:**
+3. **Test locally before running:**
    ```bash
-   # Create a backup first
-   deno task backup > backups/before-migration.json
+   # Backup first
+   curl -X POST http://localhost:3000/api/backup
 
    # Run the migration
-   deno run --allow-read --allow-write --allow-env --unstable-kv \
-     migrations/YYYY-MM-DD_HH-MM-SS_description.js
+   coffee migrations/YYYY-MM-DD_HH-MM-SS_description.coffee
 
-   # Verify it worked
-   npm run start
-   # Test your app
+   # Verify
+   npm start
+   # Test that the app still works
 
-   # If it failed, restore from backup
-   deno task restore backups/before-migration.json
+   # If it failed, restore from backup via API
+   curl -X POST http://localhost:3000/api/backup/restore
    ```
 
 4. **Commit the migration:**
    ```bash
-   git add migrations/YYYY-MM-DD_HH-MM-SS_description.js
+   git add migrations/YYYY-MM-DD_HH-MM-SS_description.coffee
    git commit -m "Add migration: description"
    ```
 
 ## Migration Best Practices
 
-- **Idempotent:** Migrations should be safe to run multiple times
+- **Idempotent:** Migrations should be safe to run multiple times (use `IF NOT EXISTS`, etc.)
 - **Backward compatible:** Don't break existing functionality
-- **Test thoroughly:** Always test migrations on a backup first
-- **Document changes:** Include comments explaining what the migration does
+- **Test thoroughly:** Always backup first and test on development data
 - **Small and focused:** One logical change per migration
 
 ## Common Migration Patterns
 
-### Adding a new field to existing records
+### Adding a column to an existing table
 
-```javascript
-// Get all work_sessions
-const entries = db.list({ prefix: ['work_session'] });
-
-for await (const entry of entries) {
-    const session = entry.value;
-
-    // Add new field if not present
-    if (!session.hasOwnProperty('newField')) {
-        session.newField = 'default_value';
-        await db.set(entry.key, session);
-        console.log(`Updated session ${entry.key[1]}`);
-    }
-}
+```coffeescript
+db.exec '''
+  ALTER TABLE work_logs ADD COLUMN billable INTEGER DEFAULT 1;
+'''
 ```
 
-### Renaming a key structure
+### Creating a new table
 
-```javascript
-// Move data from old keys to new keys
-const oldEntries = db.list({ prefix: ['old_prefix'] });
-
-for await (const entry of oldEntries) {
-    const newKey = ['new_prefix', entry.key[1]];
-    await db.set(newKey, entry.value);
-    await db.delete(entry.key);
-    console.log(`Migrated ${entry.key} -> ${newKey}`);
-}
+```coffeescript
+db.exec '''
+  CREATE TABLE IF NOT EXISTS work_item_comments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_item_type TEXT NOT NULL,
+    work_item_id INTEGER NOT NULL,
+    author       TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+'''
 ```
 
-### Data transformation
+### Transforming existing data
 
-```javascript
-// Transform existing data
-const entries = db.list({ prefix: ['work_log'] });
+```coffeescript
+stmt = db.prepare 'SELECT id, duration_minutes FROM work_logs WHERE duration_minutes IS NOT NULL'
+update = db.prepare 'UPDATE work_logs SET duration = ? WHERE id = ?'
 
-for await (const entry of entries) {
-    const log = entry.value;
+for row in stmt.all()
+  update.run row.duration_minutes / 60, row.id
 
-    // Convert minutes to hours
-    if (log.duration_minutes) {
-        log.duration_hours = log.duration_minutes / 60;
-        delete log.duration_minutes;
-        await db.set(entry.key, log);
-    }
-}
+console.log 'Converted duration_minutes to hours for all rows'
 ```
 
 ## Rollback Strategy
 
 Migrations don't have automatic rollback. If a migration fails:
 
-1. **Restore from backup:**
+1. **Restore from the pre-migration backup:**
    ```bash
-   deno task restore backups/backup-YYYY-MM-DD_HH-MM-SS.json
+   curl -X POST http://localhost:3000/api/backup/restore
    ```
+   Or from a specific local backup file — restart the app pointing at the backup copy.
 
 2. **Fix the migration and test again**
 
-3. **If deployed to production, use git to rollback:**
+3. **If deployed to production:**
    ```bash
-   cd /path/to/production
-   git reset --hard PREVIOUS_COMMIT
-   npm run build
-   deno task restore backups/backup-YYYY-MM-DD_HH-MM-SS.json
+   # SSH to instance
+   ssh -i ~/.ssh/id_aws_rdeforest ubuntu@<INSTANCE_IP>
+
+   # Restore from latest S3 backup via API
+   curl -X POST http://localhost:3000/api/backup/restore
+
    sudo systemctl restart rent-coordinator
    ```
-
-## Future: SQLite Migration
-
-When we migrate from Deno KV to SQLite:
-
-1. Create a migration that exports all KV data
-2. Create SQLite schema
-3. Import data into SQLite
-4. Update application code to use SQLite
-5. Keep KV backup for safety
-
-This will be a major migration and should be tested extensively in development first.
