@@ -163,11 +163,12 @@ createOrUpdateRentPeriod = (year, month) ->
       hours_from_previous: calculation.hours_from_previous
       hours_to_next:       calculation.hours_to_next
       discount_applied:    calculation.discount_applied
-      amount_paid:         Math.abs calculation.amount_paid
 
-    # Only update amount_due if not manually overridden
     unless existing.amount_due_manual
       updates.amount_due = calculation.amount_due
+
+    unless existing.amount_paid_manual
+      updates.amount_paid = Math.abs calculation.amount_paid
 
     updated = await rentModel.updateRentPeriod year, month, updates
     return updated

@@ -11,9 +11,9 @@ createRentPeriod = (data) ->
     INSERT INTO rent_periods (
       id, year, month, base_rent, hourly_credit, max_monthly_hours,
       hours_worked, hours_from_previous, hours_to_next, manual_adjustments,
-      discount_applied, amount_due, amount_due_manual, amount_paid, created_at, updated_at
+      discount_applied, amount_due, amount_due_manual, amount_paid, amount_paid_manual, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   """).run(
     id,
     data.year,
@@ -27,8 +27,9 @@ createRentPeriod = (data) ->
     data.manual_adjustments or 0,
     data.discount_applied or 0,
     data.amount_due,
-    if data.amount_due_manual? then data.amount_due_manual else 0,
+    if data.amount_due_manual?  then data.amount_due_manual  else 0,
     data.amount_paid or 0,
+    if data.amount_paid_manual? then data.amount_paid_manual else 0,
     now,
     now
   )

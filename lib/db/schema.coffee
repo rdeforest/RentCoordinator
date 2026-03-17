@@ -95,6 +95,7 @@ SCHEMA = """
     amount_due REAL NOT NULL,
     amount_due_manual BOOLEAN DEFAULT 0,
     amount_paid REAL DEFAULT 0,
+    amount_paid_manual BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(year, month)

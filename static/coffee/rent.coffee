@@ -135,16 +135,8 @@ loadAllPeriods = ->
       """
         <tr data-year="#{period.year}" data-month="#{period.month}">
           <td>#{formatMonthYear period.year, period.month}</td>
-          <td class="editable-cell"
-              contenteditable="false"
-              data-field="hours_worked"
-              data-value="#{period.hours_worked}"
-              title="Click to edit">#{period.hours_worked.toFixed 2}</td>
-          <td class="editable-cell"
-              contenteditable="false"
-              data-field="discount_applied"
-              data-value="#{period.discount_applied}"
-              title="Click to edit">#{formatCurrency period.discount_applied}</td>
+          <td>#{period.hours_worked.toFixed 2}</td>
+          <td>#{formatCurrency period.discount_applied}</td>
           <td class="editable-cell"
               contenteditable="false"
               data-field="amount_due"

@@ -114,8 +114,6 @@ setup = (app) ->
         'base_rent'
         'hourly_credit'
         'max_monthly_hours'
-        'hours_worked'
-        'discount_applied'
       ]
 
       filteredUpdates = {}
@@ -123,9 +121,11 @@ setup = (app) ->
         if key in allowedFields
           filteredUpdates[key] = value
 
-      # Mark amount_due as manually set when explicitly updated
       if filteredUpdates.amount_due?
-        filteredUpdates.amount_due_manual = 1
+        filteredUpdates.amount_due_manual  = 1
+
+      if filteredUpdates.amount_paid?
+        filteredUpdates.amount_paid_manual = 1
 
       unless Object.keys(filteredUpdates).length > 0
         return res.status(400).json error: 'No valid fields to update'
