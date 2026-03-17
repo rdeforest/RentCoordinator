@@ -148,8 +148,8 @@ loadAllPeriods = ->
           <td class="editable-cell"
               contenteditable="false"
               data-field="amount_due"
-              data-value="#{displayDue}"
-              title="Click to edit">#{formatCurrency displayDue}</td>
+              data-value="#{period.amount_due}"
+              title="Click to edit">#{formatCurrency period.amount_due}</td>
           <td class="editable-cell"
               contenteditable="false"
               data-field="amount_paid"
@@ -423,7 +423,10 @@ window.deletePeriod = (year, month) ->
 
     if response.ok
       showSuccess "Period #{periodName} deleted successfully"
-      autoRecalculateAndReload()
+      loadRentSummary()
+      loadCurrentMonth()
+      loadAllPeriods()
+      loadEvents currentFilters
     else
       error = await response.json()
       showError "Failed to delete period: #{error.error}"
