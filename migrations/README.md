@@ -125,7 +125,7 @@ Migrations don't have automatic rollback. If a migration fails:
 3. **If deployed to production:**
    ```bash
    # SSH to instance
-   ssh -i ~/.ssh/id_aws_rdeforest ubuntu@<INSTANCE_IP>
+   ssh -i ~/.ssh/id_aws_rdeforest admin@<INSTANCE_IP>
 
    # Restore from latest S3 backup via API
    curl -X POST http://localhost:3000/api/backup/restore
