@@ -40,15 +40,15 @@ aws autoscaling describe-auto-scaling-groups \
   --region us-west-2
 
 # Check S3 bucket exists
-aws s3 ls s3://rent-coordinator-backups/database/
+aws s3 ls s3://rent-coordinator-backups-822812818413/database/
 ```
 
 ### 3. Ensure IAM Permissions
 
 The EC2 instance role needs:
-- `s3:PutObject` on `rent-coordinator-backups/*`
-- `s3:GetObject` on `rent-coordinator-backups/*`
-- `s3:ListBucket` on `rent-coordinator-backups`
+- `s3:PutObject` on `rent-coordinator-backups-822812818413/*`
+- `s3:GetObject` on `rent-coordinator-backups-822812818413/*`
+- `s3:ListBucket` on `rent-coordinator-backups-822812818413`
 
 ## Running the Test
 
@@ -147,7 +147,7 @@ Wait ~10 seconds for S3 upload to complete.
 #### Step 6: Verify Backup in S3
 
 ```bash
-aws s3 ls s3://rent-coordinator-backups/database/ --region us-west-2
+aws s3 ls s3://rent-coordinator-backups-822812818413/database/ --region us-west-2
 ```
 
 You should see a new `.db` file with recent timestamp.

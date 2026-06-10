@@ -15,13 +15,13 @@ getDbPath = -> process.env.DB_PATH or './tenant-coordinator.db'
 
 # S3 Configuration (read dynamically to support test overrides)
 getS3Config = ->
-  bucket:  process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups'
+  bucket:  process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups-822812818413'
   prefix:  process.env.BACKUP_S3_PREFIX || 'database/'
   region:  process.env.AWS_REGION || 'us-west-2'
   enabled: process.env.S3_BACKUP_ENABLED isnt 'false'
 
 # Legacy constants for backwards compatibility
-S3_BUCKET  = process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups'
+S3_BUCKET  = process.env.BACKUP_S3_BUCKET || 'rent-coordinator-backups-822812818413'
 S3_PREFIX  = process.env.BACKUP_S3_PREFIX || 'database/'
 AWS_REGION = process.env.AWS_REGION || 'us-west-2'
 S3_ENABLED = process.env.S3_BACKUP_ENABLED isnt 'false'

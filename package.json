@@ -23,7 +23,7 @@
     "express-session": "^1.17.3",
     "nodemailer": "^8.0.7",
     "stripe": "^17.0.0",
-    "uuid": "^10.0.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "chokidar": "^3.6.0"

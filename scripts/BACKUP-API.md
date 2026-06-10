@@ -24,7 +24,7 @@ curl -X POST https://rent.defore.st/api/backup \
     "timestamp": "2026-02-13T21:30:00.000Z",
     "s3": {
       "enabled": true,
-      "bucket": "rent-coordinator-backups",
+      "bucket": "rent-coordinator-backups-822812818413",
       "key": "database/tenant-coordinator-2026-02-13T21-30-00-000Z.db"
     }
   }
@@ -53,7 +53,7 @@ curl https://rent.defore.st/api/backup/list \
       "filename": "tenant-coordinator-2026-02-13T21-30-00-000Z.db"
     }
   ],
-  "bucket": "rent-coordinator-backups",
+  "bucket": "rent-coordinator-backups-822812818413",
   "count": 1
 }
 ```
@@ -94,7 +94,7 @@ curl https://rent.defore.st/api/backup/status \
 ```json
 {
   "s3Enabled": true,
-  "bucket": "rent-coordinator-backups",
+  "bucket": "rent-coordinator-backups-822812818413",
   "prefix": "database/",
   "region": "us-west-2",
   "backupCount": 5,
@@ -109,7 +109,7 @@ curl https://rent.defore.st/api/backup/status \
 ## Environment Variables
 
 - `S3_BACKUP_ENABLED` - Enable/disable S3 sync (default: `true` in production)
-- `BACKUP_S3_BUCKET` - S3 bucket name (default: `rent-coordinator-backups`)
+- `BACKUP_S3_BUCKET` - S3 bucket name (default: `rent-coordinator-backups-822812818413`)
 - `BACKUP_S3_PREFIX` - S3 key prefix (default: `database/`)
 - `AWS_REGION` - AWS region (default: `us-west-2`)
 
@@ -142,5 +142,5 @@ npm run backup
 npm run restore backups/backup-YYYY-MM-DD*.json
 
 # List backups (requires AWS CLI)
-aws s3 ls s3://rent-coordinator-backups/database/
+aws s3 ls s3://rent-coordinator-backups-822812818413/database/
 ```
