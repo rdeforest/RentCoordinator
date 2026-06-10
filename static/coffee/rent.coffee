@@ -113,7 +113,8 @@ loadCurrentMonth = ->
     document.getElementById('outstanding-balance-current').textContent = formatCurrency outstanding
 
     payOnlineBtn = document.getElementById 'pay-rent-online-btn'
-    if outstanding > 0
+    paidThisMonth = period.amount_paid or 0
+    if paidThisMonth < period.effective_agreed_payment
       payOnlineBtn.style.display = 'inline-block'
       payOnlineBtn.onclick = ->
         window.location.href = "/payment?year=#{currentYear}&month=#{currentMonth}"

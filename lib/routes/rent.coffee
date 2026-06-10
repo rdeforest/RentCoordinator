@@ -6,6 +6,14 @@ rentConfiguration = require '../models/rent_configuration.coffee'
 { AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY, BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } = require '../config.coffee'
 
 
+getEffectiveAgreedPayment = ->
+  rentConfig = rentConfiguration.getConfiguration()
+  if rentConfig?.apply_override and rentConfig?.temporary_rent_amount?
+    rentConfig.temporary_rent_amount
+  else
+    AGREED_MONTHLY_PAYMENT
+
+
 getDisplayAmountDue = (period) ->
   return period.amount_due if period.amount_due_manual
 
@@ -17,11 +25,7 @@ getDisplayAmountDue = (period) ->
   isCurrent = period.year is currentYear and period.month is currentMonth
   isFuture  = period.year > currentYear or (period.year is currentYear and period.month > currentMonth)
 
-  rentConfig = rentConfiguration.getConfiguration()
-  agreedPayment = if rentConfig?.apply_override and rentConfig?.temporary_rent_amount?
-    rentConfig.temporary_rent_amount
-  else
-    AGREED_MONTHLY_PAYMENT
+  agreedPayment = getEffectiveAgreedPayment()
 
   return period.amount_due                                       if isFuture
   return (if currentDay < RENT_DUE_DAY then 0 else agreedPayment) if isCurrent
@@ -44,8 +48,9 @@ getPaymentStatus = (period) ->
 
 decoratePeriod = (period) ->
   Object.assign {}, period,
-    display_amount_due: getDisplayAmountDue(period)
-    payment_status:     getPaymentStatus(period)
+    display_amount_due:       getDisplayAmountDue(period)
+    payment_status:           getPaymentStatus(period)
+    effective_agreed_payment: getEffectiveAgreedPayment()
 
 
 ALLOWED_PERIOD_UPDATE_FIELDS = [
