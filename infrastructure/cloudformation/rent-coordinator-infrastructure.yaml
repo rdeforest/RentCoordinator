@@ -324,6 +324,22 @@ Resources:
               echo "No backups found in S3, starting with fresh database"
             fi
 
+            # Apply database migrations against the restored (or fresh) DB.
+            # Migrations are idempotent — safe to re-run on every boot — and
+            # this is the only place that closes the gap between an old S3
+            # backup's schema and the schema the deployed code expects.
+            echo "Applying database migrations..."
+            sudo -u rent-coordinator bash -c '
+              cd /opt/rent-coordinator
+              . ~/.nvm/nvm.sh
+              nvm use >/dev/null
+              set -a && . .env && set +a
+              for migration in $(ls migrations/*.coffee | sort); do
+                echo "Running migration: $migration"
+                npx coffee "$migration"
+              done
+            '
+
             # Create SysVInit service
             mkdir -p /var/log/rent-coordinator
             chown rent-coordinator:rent-coordinator /var/log/rent-coordinator
