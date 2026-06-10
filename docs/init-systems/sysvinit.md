@@ -12,24 +12,24 @@ Create `/etc/init.d/rentcoordinator`:
 
 ```bash
 #!/bin/bash
-### BEGIN INIT INFO
-# Provides:          rentcoordinator
-# Required-Start:    $network $local_fs
-# Required-Stop:     $network $local_fs
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: RentCoordinator Application
-# Description:       Tenant coordination application for tracking work and rent
-### END INIT INFO
+:### BEGIN INIT INFO
+:# Provides:          rentcoordinator
+:# Required-Start:    $network $local_fs
+:# Required-Stop:     $network $local_fs
+:# Default-Start:     2 3 4 5
+:# Default-Stop:      0 1 6
+:# Short-Description: RentCoordinator Application
+:# Description:       Tenant coordination application for tracking work and rent
+:### END INIT INFO
 
-# Configuration
+:# Configuration
 APP_DIR="/opt/rentcoordinator"
 USER="rentcoordinator"
 PIDFILE="/var/run/rentcoordinator.pid"
 LOGFILE="/var/log/rentcoordinator/app.log"
 COFFEE="/usr/bin/npx coffee"
 
-# Source function library
+:# Source function library
 . /lib/lsb/init-functions
 
 start() {
@@ -76,32 +76,32 @@ esac
 ## Common Commands
 
 ```bash
-# Make script executable
+:# Make script executable
 sudo chmod +x /etc/init.d/rentcoordinator
 
-# Install init script
+:# Install init script
 sudo update-rc.d rentcoordinator defaults
 
-# Or on Red Hat-based systems
+:# Or on Red Hat-based systems
 sudo chkconfig --add rentcoordinator
 sudo chkconfig rentcoordinator on
 
-# Start service
+:# Start service
 sudo service rentcoordinator start
-# or
+:# or
 sudo /etc/init.d/rentcoordinator start
 
-# Stop service
+:# Stop service
 sudo service rentcoordinator stop
 
-# Restart service
+:# Restart service
 sudo service rentcoordinator restart
 
-# Check status
+:# Check status
 sudo service rentcoordinator status
 
-# Remove from startup
+:# Remove from startup
 sudo update-rc.d -f rentcoordinator remove
-# or on Red Hat
+:# or on Red Hat
 sudo chkconfig rentcoordinator off
 ```

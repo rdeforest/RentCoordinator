@@ -45,24 +45,24 @@ stop() {
 ## Common Commands
 
 ```bash
-# Make script executable
+:# Make script executable
 sudo chmod +x /etc/init.d/rentcoordinator
 
-# Add to default runlevel
+:# Add to default runlevel
 sudo rc-update add rentcoordinator default
 
-# Start service
+:# Start service
 sudo rc-service rentcoordinator start
 
-# Stop service
+:# Stop service
 sudo rc-service rentcoordinator stop
 
-# Restart service
+:# Restart service
 sudo rc-service rentcoordinator restart
 
-# Check status
+:# Check status
 sudo rc-service rentcoordinator status
 
-# Remove from runlevel
+:# Remove from runlevel
 sudo rc-update del rentcoordinator
 ```

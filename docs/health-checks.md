@@ -131,7 +131,7 @@ Keep using `/health` for ALB health checks. The improved validation now ensures:
 Update ALB target group to use `/health/ready` for even stricter checks.
 
 ```bash
-# Update target group health check path
+:# Update target group health check path
 aws elbv2 modify-target-group \
   --target-group-arn "arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106" \
   --health-check-path "/health/ready" \
@@ -152,7 +152,7 @@ aws elbv2 modify-target-group \
 Keep `/health` but reduce the healthy threshold from 5 to 2:
 
 ```bash
-# Reduce healthy threshold
+:# Reduce healthy threshold
 aws elbv2 modify-target-group \
   --target-group-arn "arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106" \
   --healthy-threshold-count 2 \
@@ -166,12 +166,12 @@ aws elbv2 modify-target-group \
 ### Check Instance Health
 
 ```bash
-# Via ALB
+:# Via ALB
 aws elbv2 describe-target-health \
   --target-group-arn "arn:aws:elasticloadbalancing:us-west-2:822812818413:targetgroup/RentCoordinator/faeeb51824fa4106" \
   --region us-west-2
 
-# Via direct curl
+:# Via direct curl
 curl https://rent.defore.st/health
 curl https://rent.defore.st/health/ready
 ```
@@ -207,15 +207,15 @@ This helps verify which version is running on each instance, useful for:
 ## Testing
 
 ```bash
-# Local testing
+:# Local testing
 curl http://localhost:3000/health
 curl http://localhost:3000/health/ready
 
-# Production testing
+:# Production testing
 curl https://rent.defore.st/health
 curl https://rent.defore.st/health/ready
 
-# Test unhealthy state (requires direct instance access)
+:# Test unhealthy state (requires direct instance access)
 ssh ubuntu@INSTANCE_IP
 sudo systemctl stop rent-coordinator
 curl http://localhost:3000/health  # Should timeout or fail

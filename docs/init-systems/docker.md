@@ -98,10 +98,10 @@ services:
 ### Using Docker
 
 ```bash
-# Build image
+:# Build image
 docker build -t rentcoordinator .
 
-# Run container
+:# Run container
 docker run -d \
   --name rentcoordinator \
   -p 3000:3000 \
@@ -110,35 +110,35 @@ docker run -d \
   --restart unless-stopped \
   rentcoordinator
 
-# View logs
+:# View logs
 docker logs -f rentcoordinator
 
-# Stop container
+:# Stop container
 docker stop rentcoordinator
 
-# Start container
+:# Start container
 docker start rentcoordinator
 
-# Remove container
+:# Remove container
 docker rm rentcoordinator
 ```
 
 ### Using Docker Compose
 
 ```bash
-# Start services
+:# Start services
 docker-compose up -d
 
-# View logs
+:# View logs
 docker-compose logs -f
 
-# Stop services
+:# Stop services
 docker-compose down
 
-# Rebuild and restart
+:# Rebuild and restart
 docker-compose up -d --build
 
-# Scale service (if configured)
+:# Scale service (if configured)
 docker-compose up -d --scale rentcoordinator=3
 ```
 
@@ -184,21 +184,21 @@ networks:
 Deploy to swarm:
 
 ```bash
-# Initialize swarm (if not already)
+:# Initialize swarm (if not already)
 docker swarm init
 
-# Deploy stack
+:# Deploy stack
 docker stack deploy -c docker-stack.yml rentcoordinator
 
-# List services
+:# List services
 docker service ls
 
-# View service logs
+:# View service logs
 docker service logs -f rentcoordinator_rentcoordinator
 
-# Update service
+:# Update service
 docker service update --image rentcoordinator:v2 rentcoordinator_rentcoordinator
 
-# Remove stack
+:# Remove stack
 docker stack rm rentcoordinator
 ```

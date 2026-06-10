@@ -9,7 +9,7 @@
 ## Installation
 
 ```bash
-# Install PM2 globally via npm
+:# Install PM2 globally via npm
 npm install -g pm2
 ```
 
@@ -47,41 +47,41 @@ module.exports = {
 ## Common Commands
 
 ```bash
-# Start application
+:# Start application
 pm2 start ecosystem.config.js
 
-# Or directly
+:# Or directly
 pm2 start main.coffee --name rentcoordinator --interpreter npx --interpreter-args coffee
 
-# List processes
+:# List processes
 pm2 list
 
-# Monitor processes
+:# Monitor processes
 pm2 monit
 
-# View logs
+:# View logs
 pm2 logs rentcoordinator
 
-# Stop application
+:# Stop application
 pm2 stop rentcoordinator
 
-# Restart application
+:# Restart application
 pm2 restart rentcoordinator
 
-# Delete from PM2
+:# Delete from PM2
 pm2 delete rentcoordinator
 
-# Save PM2 process list
+:# Save PM2 process list
 pm2 save
 
-# Setup PM2 to start on boot
+:# Setup PM2 to start on boot
 pm2 startup
-# Follow the instructions it provides
+:# Follow the instructions it provides
 
-# View detailed information
+:# View detailed information
 pm2 describe rentcoordinator
 
-# Zero-downtime reload
+:# Zero-downtime reload
 pm2 reload rentcoordinator
 ```
 
@@ -98,9 +98,9 @@ exec_mode: 'cluster'
 ## Monitoring
 
 ```bash
-# Real-time monitoring dashboard
+:# Real-time monitoring dashboard
 pm2 monit
 
-# Web-based monitoring (PM2 Plus)
+:# Web-based monitoring (PM2 Plus)
 pm2 link <secret_key> <public_key>
 ```

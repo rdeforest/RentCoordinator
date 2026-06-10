@@ -9,13 +9,13 @@
 ## Installation
 
 ```bash
-# Ubuntu/Debian
+:# Ubuntu/Debian
 sudo apt-get install supervisor
 
-# RHEL/CentOS
+:# RHEL/CentOS
 sudo yum install supervisor
 
-# Or via pip
+:# Or via pip
 pip install supervisor
 ```
 
@@ -42,35 +42,35 @@ killasgroup=true
 ## Common Commands
 
 ```bash
-# Reload supervisor configuration
+:# Reload supervisor configuration
 sudo supervisorctl reread
 sudo supervisorctl update
 
-# Start application
+:# Start application
 sudo supervisorctl start rentcoordinator
 
-# Stop application
+:# Stop application
 sudo supervisorctl stop rentcoordinator
 
-# Restart application
+:# Restart application
 sudo supervisorctl restart rentcoordinator
 
-# Check status
+:# Check status
 sudo supervisorctl status rentcoordinator
 
-# View logs
+:# View logs
 sudo supervisorctl tail -f rentcoordinator
 
-# Interactive shell
+:# Interactive shell
 sudo supervisorctl
-# Then use commands like: status, start rentcoordinator, stop rentcoordinator
+:# Then use commands like: status, start rentcoordinator, stop rentcoordinator
 
-# Start supervisor service
+:# Start supervisor service
 sudo service supervisor start
 
-# Enable supervisor on boot
+:# Enable supervisor on boot
 sudo systemctl enable supervisor  # systemd
-# or
+:# or
 sudo update-rc.d supervisor enable  # SysV
 ```
 

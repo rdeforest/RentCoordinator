@@ -39,27 +39,27 @@ WantedBy=multi-user.target
 ## Common Commands
 
 ```bash
-# Reload systemd configuration
+:# Reload systemd configuration
 sudo systemctl daemon-reload
 
-# Enable service (auto-start on boot)
+:# Enable service (auto-start on boot)
 sudo systemctl enable rentcoordinator
 
-# Start service
+:# Start service
 sudo systemctl start rentcoordinator
 
-# Stop service
+:# Stop service
 sudo systemctl stop rentcoordinator
 
-# Restart service
+:# Restart service
 sudo systemctl restart rentcoordinator
 
-# Check status
+:# Check status
 sudo systemctl status rentcoordinator
 
-# View logs
+:# View logs
 sudo journalctl -u rentcoordinator -f
 
-# View logs from last boot
+:# View logs from last boot
 sudo journalctl -u rentcoordinator -b
 ```

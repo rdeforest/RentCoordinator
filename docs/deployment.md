@@ -48,12 +48,12 @@ aws logs tail /rent-coordinator/application --follow
 To manually suspend/resume termination behavior:
 
 ```bash
-# Suspend (current default — already applied)
+:# Suspend (current default — already applied)
 aws autoscaling suspend-processes \
   --auto-scaling-group-name RentCoordinator-production \
   --scaling-processes ReplaceUnhealthy
 
-# Re-enable if desired
+:# Re-enable if desired
 aws autoscaling resume-processes \
   --auto-scaling-group-name RentCoordinator-production \
   --scaling-processes ReplaceUnhealthy
@@ -70,10 +70,10 @@ The CloudFormation user data script handles all of this automatically on instanc
 ## Running Locally
 
 ```bash
-# Install dependencies
+:# Install dependencies
 npm install
 
-# Start server (also compiles client CoffeeScript on startup)
+:# Start server (also compiles client CoffeeScript on startup)
 npm start
 ```
 
@@ -108,16 +108,16 @@ Production secrets are stored in AWS Secrets Manager under `rent-coordinator/con
 Backups are triggered on-demand — there is no automatic scheduler yet.
 
 ```bash
-# Trigger backup (local + S3 upload)
+:# Trigger backup (local + S3 upload)
 curl -X POST http://localhost:3000/api/backup
 
-# Check status / last backup time
+:# Check status / last backup time
 curl http://localhost:3000/api/backup/status
 
-# List all S3 backups
+:# List all S3 backups
 curl http://localhost:3000/api/backup/list
 
-# Restore from latest S3 backup
+:# Restore from latest S3 backup
 curl -X POST http://localhost:3000/api/backup/restore
 ```
 

@@ -31,28 +31,28 @@ exec svlogd -tt /var/log/rentcoordinator
 ## Common Commands
 
 ```bash
-# Make scripts executable
+:# Make scripts executable
 sudo chmod +x /etc/sv/rentcoordinator/run
 sudo chmod +x /etc/sv/rentcoordinator/log/run
 
-# Enable service (create symlink)
+:# Enable service (create symlink)
 sudo ln -s /etc/sv/rentcoordinator /var/service/
 
-# Check status
+:# Check status
 sudo sv status rentcoordinator
 
-# Start service
+:# Start service
 sudo sv start rentcoordinator
 
-# Stop service
+:# Stop service
 sudo sv stop rentcoordinator
 
-# Restart service
+:# Restart service
 sudo sv restart rentcoordinator
 
-# Disable service
+:# Disable service
 sudo rm /var/service/rentcoordinator
 
-# View logs
+:# View logs
 tail -f /var/log/rentcoordinator/current
 ```

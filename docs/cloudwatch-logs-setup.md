@@ -25,7 +25,7 @@ CloudWatch Logs provides centralized logging for the RentCoordinator application
 ### 1. Deploy Configuration Files
 
 ```bash
-# From your local machine
+:# From your local machine
 scp infrastructure/cloudwatch-agent-config.json ubuntu@<instance-ip>:/tmp/
 scp infrastructure/setup-cloudwatch-logs.sh ubuntu@<instance-ip>:/tmp/
 ```
@@ -35,23 +35,23 @@ scp infrastructure/setup-cloudwatch-logs.sh ubuntu@<instance-ip>:/tmp/
 ```bash
 ssh ubuntu@<instance-ip>
 
-# Move files to application directory
+:# Move files to application directory
 sudo cp /tmp/cloudwatch-agent-config.json /opt/rent-coordinator/infrastructure/
 sudo cp /tmp/setup-cloudwatch-logs.sh /opt/rent-coordinator/infrastructure/
 sudo chown -R rent-coordinator:rent-coordinator /opt/rent-coordinator/infrastructure/
 
-# Run setup
+:# Run setup
 sudo bash /opt/rent-coordinator/infrastructure/setup-cloudwatch-logs.sh
 ```
 
 ### 3. Verify Installation
 
 ```bash
-# Check agent status
+:# Check agent status
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a query -m ec2 -c default -s
 
-# View local test
+:# View local test
 sudo journalctl -u rent-coordinator -n 50
 ```
 
@@ -67,19 +67,19 @@ sudo journalctl -u rent-coordinator -n 50
 ### AWS CLI
 
 ```bash
-# Tail logs in real-time
+:# Tail logs in real-time
 aws logs tail /rent-coordinator/application --follow
 
-# Tail logs for specific instance
+:# Tail logs for specific instance
 aws logs tail /rent-coordinator/application --follow \
   --log-stream-names i-1234567890abcdef0
 
-# Search logs
+:# Search logs
 aws logs filter-log-events \
   --log-group-name /rent-coordinator/application \
   --filter-pattern "ERROR"
 
-# Get recent payment logs
+:# Get recent payment logs
 aws logs filter-log-events \
   --log-group-name /rent-coordinator/application \
   --filter-pattern "payment" \
@@ -139,13 +139,13 @@ sudo systemctl restart amazon-cloudwatch-agent
 ### Logs not appearing in CloudWatch
 
 ```bash
-# Check agent logs
+:# Check agent logs
 sudo tail -f /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log
 
-# Verify IAM permissions
+:# Verify IAM permissions
 aws sts get-caller-identity
 
-# Check journald has logs
+:# Check journald has logs
 sudo journalctl -u rent-coordinator -n 20
 ```
 
@@ -158,7 +158,7 @@ Ensure the EC2 instance has the `CloudWatchAgentServerPolicy` attached via its I
 Create metric filters to track specific events:
 
 ```bash
-# Track payment errors
+:# Track payment errors
 aws logs put-metric-filter \
   --log-group-name /rent-coordinator/application \
   --filter-name PaymentErrors \
@@ -166,7 +166,7 @@ aws logs put-metric-filter \
   --metric-transformations \
     metricName=PaymentErrors,metricNamespace=RentCoordinator,metricValue=1
 
-# Track server errors
+:# Track server errors
 aws logs put-metric-filter \
   --log-group-name /rent-coordinator/application \
   --filter-name ServerErrors \
@@ -180,7 +180,7 @@ aws logs put-metric-filter \
 For future instance launches, add to user-data script:
 
 ```bash
-# In CloudFormation LaunchTemplate UserData
+:# In CloudFormation LaunchTemplate UserData
 cd /opt/rent-coordinator
 sudo bash infrastructure/setup-cloudwatch-logs.sh
 ```

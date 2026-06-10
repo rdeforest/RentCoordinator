@@ -37,14 +37,14 @@ Your init system is typically determined by your Linux distribution:
 
 To check your init system:
 ```bash
-# Method 1: Check for systemd
+:# Method 1: Check for systemd
 if [ -d /run/systemd/system ]; then
     echo "systemd"
 fi
 
-# Method 2: Check init process
+:# Method 2: Check init process
 ls -l /sbin/init
 
-# Method 3: Check process 1
+:# Method 3: Check process 1
 ps -p 1
 ```

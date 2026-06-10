@@ -86,7 +86,7 @@ RentCoordinator runs on AWS infrastructure managed by CloudFormation:
 
 **What you'll see:**
 ```bash
-# New instance will appear in target group
+:# New instance will appear in target group
 aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=RentCoordinator-production" \
   --query 'Reservations[*].Instances[*].[InstanceId,State.Name,LaunchTime]'
@@ -101,24 +101,24 @@ aws ec2 describe-instances \
 
 **Recovery procedure:**
 ```bash
-# 1. Find current instance
+:# 1. Find current instance
 INSTANCE_IP=$(aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=RentCoordinator-production" \
   "Name=instance-state-name,Values=running" \
   --query 'Reservations[0].Instances[0].PublicIpAddress' \
   --output text)
 
-# 2. SSH to instance and restore from S3
+:# 2. SSH to instance and restore from S3
 ssh -i ~/.ssh/id_aws_rdeforest ubuntu@$INSTANCE_IP
 
-# 3. Stop application
+:# 3. Stop application
 sudo systemctl stop rent-coordinator
 
-# 4. Backup corrupted database (just in case)
+:# 4. Backup corrupted database (just in case)
 sudo -u rent-coordinator cp /opt/rent-coordinator/tenant-coordinator.db \
   /opt/rent-coordinator/tenant-coordinator.db.corrupted
 
-# 5. Restore from S3
+:# 5. Restore from S3
 sudo -u rent-coordinator bash -c '
   cd /opt/rent-coordinator
   source ~/.nvm/nvm.sh
@@ -130,10 +130,10 @@ sudo -u rent-coordinator bash -c '
   "
 '
 
-# 6. Restart application
+:# 6. Restart application
 sudo systemctl start rent-coordinator
 
-# 7. Verify
+:# 7. Verify
 curl http://localhost:8080/health
 ```
 
@@ -148,25 +148,25 @@ curl http://localhost:8080/health
 
 **Recovery procedure:**
 ```bash
-# 1. Verify S3 backups still exist
+:# 1. Verify S3 backups still exist
 aws s3 ls s3://rent-coordinator-backups-822812818413/database/
 
-# 2. Verify secrets still exist
+:# 2. Verify secrets still exist
 aws secretsmanager get-secret-value \
   --secret-id rent-coordinator/config \
   --region us-west-2 \
   --query 'SecretString' \
   --output text | jq .
 
-# 3. Rebuild CloudFormation stack
+:# 3. Rebuild CloudFormation stack
 cd infrastructure/cloudformation
 ./deploy.sh deploy
 
-# 4. Wait for stack creation (15-20 minutes)
+:# 4. Wait for stack creation (15-20 minutes)
 ./deploy.sh status
 
-# 5. New instance will auto-restore from S3
-# 6. Verify application is healthy
+:# 5. New instance will auto-restore from S3
+:# 6. Verify application is healthy
 curl https://rent.thatsnice.org/health
 ```
 
@@ -183,13 +183,13 @@ curl https://rent.thatsnice.org/health
 
 **Option A: Reconstruct from other sources**
 ```bash
-# 1. Check if old vault2 server still has data
+:# 1. Check if old vault2 server still has data
 ssh vault2 "ls -lh ~/rent-coordinator/tenant-coordinator.db"
 
-# 2. Copy database from old server if available
+:# 2. Copy database from old server if available
 scp vault2:~/rent-coordinator/tenant-coordinator.db ./tenant-coordinator.db
 
-# 3. Upload to S3
+:# 3. Upload to S3
 aws s3 cp tenant-coordinator.db \
   s3://rent-coordinator-backups-822812818413/database/manual-recovery-$(date +%Y%m%d).db
 ```
@@ -206,7 +206,7 @@ aws s3 cp tenant-coordinator.db \
 ### Create On-Demand S3 Backup
 
 ```bash
-# From your local machine with AWS credentials
+:# From your local machine with AWS credentials
 INSTANCE_IP=$(aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=RentCoordinator-production" \
   "Name=instance-state-name,Values=running" \
@@ -223,14 +223,14 @@ ssh -i ~/.ssh/id_aws_rdeforest ubuntu@$INSTANCE_IP \
 ### Download Latest Backup Locally
 
 ```bash
-# List available backups
+:# List available backups
 aws s3 ls s3://rent-coordinator-backups-822812818413/database/ --recursive
 
-# Download specific backup
+:# Download specific backup
 aws s3 cp s3://rent-coordinator-backups-822812818413/database/backup-YYYY-MM-DD.db \
   ./local-backup.db
 
-# Or download most recent
+:# Or download most recent
 LATEST=$(aws s3 ls s3://rent-coordinator-backups-822812818413/database/ \
   --recursive | sort | tail -n 1 | awk '{print $4}')
 aws s3 cp s3://rent-coordinator-backups-822812818413/$LATEST ./latest-backup.db
@@ -245,22 +245,22 @@ aws s3 cp s3://rent-coordinator-backups-822812818413/$LATEST ./latest-backup.db
 ```bash
 cd infrastructure/cloudformation
 
-# Copy parameters and modify for test stack
+:# Copy parameters and modify for test stack
 cp parameters.json parameters-dr-test.json
 
-# Edit parameters-dr-test.json:
-# - Change StackName to "RentCoordinator-DR-Test"
-# - Use separate target group or create new ALB
-# - Can use same secrets (test only)
+:# Edit parameters-dr-test.json:
+:# - Change StackName to "RentCoordinator-DR-Test"
+:# - Use separate target group or create new ALB
+:# - Can use same secrets (test only)
 
-# Deploy test stack
+:# Deploy test stack
 aws cloudformation create-stack \
   --stack-name RentCoordinator-DR-Test \
   --template-body file://rent-coordinator-infrastructure.yaml \
   --parameters file://parameters-dr-test.json \
   --capabilities CAPABILITY_IAM
 
-# Monitor creation
+:# Monitor creation
 aws cloudformation wait stack-create-complete \
   --stack-name RentCoordinator-DR-Test
 ```
@@ -268,27 +268,27 @@ aws cloudformation wait stack-create-complete \
 ### Step 2: Verify Test Stack
 
 ```bash
-# Get test instance IP
+:# Get test instance IP
 TEST_IP=$(aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=RentCoordinator-DR-Test" \
   "Name=instance-state-name,Values=running" \
   --query 'Reservations[0].Instances[0].PublicIpAddress' \
   --output text)
 
-# Test health endpoint
+:# Test health endpoint
 curl http://$TEST_IP:8080/health
 
-# Test login (should restore from S3 backup)
+:# Test login (should restore from S3 backup)
 curl -I http://$TEST_IP:8080/login.html
 ```
 
 ### Step 3: Validate Data
 
 ```bash
-# SSH to test instance
+:# SSH to test instance
 ssh -i ~/.ssh/id_aws_rdeforest ubuntu@$TEST_IP
 
-# Check database was restored
+:# Check database was restored
 sudo -u rent-coordinator bash -c '
   cd /opt/rent-coordinator
   source ~/.nvm/nvm.sh
@@ -296,22 +296,22 @@ sudo -u rent-coordinator bash -c '
   sqlite3 tenant-coordinator.db "SELECT COUNT(*) FROM rent_periods;"
 '
 
-# Should match production count
+:# Should match production count
 ```
 
 ### Step 4: Tear Down Test Stack
 
 ```bash
-# Delete test stack
+:# Delete test stack
 aws cloudformation delete-stack --stack-name RentCoordinator-DR-Test
 
-# Wait for deletion
+:# Wait for deletion
 aws cloudformation wait stack-delete-complete \
   --stack-name RentCoordinator-DR-Test
 
-# Verify deletion
+:# Verify deletion
 aws cloudformation describe-stacks --stack-name RentCoordinator-DR-Test
-# Should return error: Stack does not exist
+:# Should return error: Stack does not exist
 ```
 
 **Recommendation:** Run DR dry run every 6 months or after major changes
@@ -342,23 +342,23 @@ aws cloudformation describe-stacks --stack-name RentCoordinator-DR-Test
 ### Updating Secrets
 
 ```bash
-# Get current secrets
+:# Get current secrets
 aws secretsmanager get-secret-value \
   --secret-id rent-coordinator/config \
   --region us-west-2 \
   --query 'SecretString' \
   --output text > /tmp/secrets.json
 
-# Edit secrets
+:# Edit secrets
 vim /tmp/secrets.json
 
-# Update in Secrets Manager
+:# Update in Secrets Manager
 aws secretsmanager update-secret \
   --secret-id rent-coordinator/config \
   --region us-west-2 \
   --secret-string file:///tmp/secrets.json
 
-# Restart application to pick up new secrets
+:# Restart application to pick up new secrets
 INSTANCE_IP=$(aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=RentCoordinator-production" \
   --query 'Reservations[0].Instances[0].PublicIpAddress' \
@@ -367,7 +367,7 @@ INSTANCE_IP=$(aws ec2 describe-instances \
 ssh -i ~/.ssh/id_aws_rdeforest ubuntu@$INSTANCE_IP \
   "sudo systemctl restart rent-coordinator"
 
-# Clean up
+:# Clean up
 rm /tmp/secrets.json
 ```
 
@@ -380,7 +380,7 @@ rm /tmp/secrets.json
 ```bash
 ssh -i ~/.ssh/id_aws_rdeforest ubuntu@$INSTANCE_IP
 sudo vim /opt/rent-coordinator/.env
-# Update relevant secrets
+:# Update relevant secrets
 sudo systemctl restart rent-coordinator
 ```
 

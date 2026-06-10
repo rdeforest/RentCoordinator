@@ -102,7 +102,7 @@ sqlite3 -header -csv tenant-coordinator.db \
   "SELECT year, month, hours_worked, discount_applied, amount_due FROM rent_periods ORDER BY year, month" \
   > /tmp/rent_before.csv
 
-# ...apply fix, restart, hit Recalculate All...
+:# ...apply fix, restart, hit Recalculate All...
 
 sqlite3 -header -csv tenant-coordinator.db \
   "SELECT year, month, hours_worked, discount_applied, amount_due FROM rent_periods ORDER BY year, month" \
