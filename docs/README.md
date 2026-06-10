@@ -20,22 +20,9 @@ Tool for coordinating efforts, reimbursements, plans and rent payments with Lynd
 
 - **Backend:** Node.js, CoffeeScript, Express
 - **Database:** SQLite with S3 backups
-- **Frontend:** Vanilla JavaScript, CoffeeScript
+- **Frontend:** CoffeeScript compiled to JavaScript (no bundler)
 - **Infrastructure:** AWS (EC2, ALB, CloudFormation, CloudWatch)
 - **Payments:** Stripe (ACH Direct Debit)
-
-## Recent Updates
-
-### 2025-12-29
-- Fixed payment error handling for ACH payments
-- Added comprehensive Stripe API status handling
-- Fixed SQL parameter binding bug in manual work entry
-- Deployed CloudWatch Logs for centralized logging
-- Enhanced error logging on client and server
-
-### 2025-11-05
-- Implemented disaster recovery with automated backups
-- Added backup/restore system with S3 versioning
 
 ## Status
 
@@ -44,4 +31,7 @@ Tool for coordinating efforts, reimbursements, plans and rent payments with Lynd
 - Timer for current task doesn't change dynamically
 - Cannot change 'selected' task without resuming first
 - Switching between 'timer' and 'work management' could be more intuitive
+
+For the up-to-date bug list with reproduction steps and proposed fixes,
+see `docs/bugs/` and `docs/fixes/`. For commit history, use `git log`.
 

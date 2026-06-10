@@ -2,9 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation Index
+
+If you're investigating a problem, start with these before diving into code:
+
+- **[docs/architecture.md](docs/architecture.md)** — one-page tour of how
+  the pieces fit together. Read this when you need to remember where a
+  thing lives.
+- **[docs/bugs/](docs/bugs/)** — active known bugs, one file each, with
+  reproduction steps and root cause.
+- **[docs/fixes/](docs/fixes/)** — proposed patches for the known bugs.
+- **[docs/code-review-2026-05.md](docs/code-review-2026-05.md)** — most
+  recent code review with structural concerns and recommended cleanups.
+- **[docs/disaster-recovery.md](docs/disaster-recovery.md)** — full
+  disaster recovery procedures.
+- **[docs/deployment.md](docs/deployment.md)** — deployment procedures.
+- **[migrations/README.md](migrations/README.md)** — how migrations work
+  in this project (manual, no framework).
+
+When adding a new bug or fix, follow the patterns in `docs/bugs/README.md`
+and put the corresponding patch in `docs/fixes/`.
+
 ## Project Overview
 
 RentCoordinator is a Node.js-based tenant coordination application for tracking work hours, calculating rent credits, and managing reimbursements between Robert and Lyndzie. Built with CoffeeScript on both server and client sides.
+
+GitHub: `rdeforest/RentCoordinator`.
 
 ## Development Commands
 
@@ -28,8 +51,11 @@ cd infrastructure
 ssh -i ~/.ssh/id_aws_rdeforest admin@<INSTANCE_IP> "sudo systemctl restart rent-coordinator"
 ```
 
+The SSH user is `admin` on the current Debian-based AMI. If you're working
+against an Ubuntu instance, use `ubuntu` instead.
+
 ### Build System
-The server automatically compiles client-side CoffeeScript to JavaScript on startup. Server-side CoffeeScript runs directly via the `coffee` command. No separate build step needed - just start the server.
+The server automatically compiles client-side CoffeeScript to JavaScript on startup. Server-side CoffeeScript runs directly via the `coffee` command. No separate build step needed — just start the server.
 
 ### Deployment System
 
@@ -77,63 +103,99 @@ See `docs/disaster-recovery.md` for complete disaster recovery procedures.
 
 - **Runtime**: Node.js 24 LTS (managed via nvm) with CoffeeScript
 - **Backend**: Express.js server with CoffeeScript source, compiled to JavaScript
-- **Frontend**: Compiled JavaScript (from CoffeeScript) - no longer browser-compiled
+- **Frontend**: Compiled JavaScript (from CoffeeScript) — no longer browser-compiled
 - **Database**: SQLite (using node:sqlite built-in module)
 - **Build**: CoffeeScript compiler for client-side code
 
 ## Architecture
 
+For the full layered architecture and data flow diagrams, see
+[docs/architecture.md](docs/architecture.md). The summary below is
+preserved for quick reference.
+
 ### Project Structure
 ```
 lib/
 ├── config.coffee          - Environment config and constants
-├── db/schema.coffee       - Database initialization and KV setup
+├── logger.coffee          - Structured error logging with PII tokenization
 ├── middleware.coffee      - Express middleware and auth middleware
-├── routing.coffee         - Main route definitions and timer API
-├── services/             - Business logic layer
-│   ├── timer.coffee      - Timer operations and session management
-│   ├── rent.coffee       - Rent calculation logic
+├── routing.coffee         - Main route definitions, health checks, timer API
+├── db/
+│   ├── schema.coffee      - Database initialization and table definitions
+│   └── utils.coffee       - SQL parameter formatting helper
+├── services/              - Business logic layer
+│   ├── timer.coffee       - Timer operations and session management
+│   ├── rent.coffee        - Rent calculation logic
 │   ├── recurring_events.coffee - Recurring events processing
-│   ├── backup.coffee     - Database backup/restore
-│   └── email.coffee      - Email verification codes
-├── models/               - Data access layer
+│   ├── backup.coffee      - Database backup/restore
+│   ├── email.coffee       - Email verification codes
+│   ├── payment.coffee     - Stripe payment processing
+│   └── tokenization.coffee - PII tokenization for logs
+├── models/                - Data access layer
 │   ├── work_session.coffee - Work session CRUD operations
-│   ├── work_log.coffee   - Work log management
-│   ├── rent.coffee       - Rent periods, events, audit logs
-│   └── auth.coffee       - Auth verification codes and validation
-└── routes/               - Route handlers
-    ├── work.coffee       - Work management routes
-    ├── rent.coffee       - Rent-related endpoints
+│   ├── work_log.coffee    - Work log management
+│   ├── rent.coffee        - Rent periods, events, audit logs
+│   ├── rent_configuration.coffee - Singleton rent configuration
+│   ├── recurring_events.coffee - Recurring events CRUD
+│   └── auth.coffee        - Auth verification codes and validation
+└── routes/                - Route handlers
+    ├── work.coffee        - Work management routes
+    ├── rent.coffee        - Rent-related endpoints
     ├── recurring_events.coffee - Recurring events API
-    └── auth.coffee       - Authentication endpoints
+    ├── auth.coffee        - Authentication endpoints
+    ├── payment.coffee     - Stripe checkout flow
+    ├── payments.coffee    - Payment history CRUD (NOTE: different from payment.coffee)
+    ├── backup.coffee      - Backup endpoints
+    └── admin.coffee       - Admin endpoints
 
-static/                   - Frontend assets
-├── coffee/               - Frontend CoffeeScript (source)
-│   ├── auth.coffee       - Shared auth utilities
-│   └── login.coffee      - Login page logic
-├── js/                   - Compiled JavaScript (served to browser)
-├── css/                  - Stylesheets
-└── *.html               - HTML pages (index, work, rent, login)
+static/                    - Frontend assets
+├── coffee/                - Frontend CoffeeScript (source)
+│   ├── auth.coffee        - Shared auth utilities
+│   ├── login.coffee       - Login page logic
+│   ├── rent.coffee        - Rent dashboard logic
+│   ├── work.coffee        - Work page logic
+│   ├── timer.coffee       - Timer logic
+│   ├── payment.coffee     - Stripe checkout page logic
+│   ├── payments.coffee    - Payment history page logic
+│   └── shared-utils.coffee - Shared frontend utilities
+├── js/                    - Compiled JavaScript (served to browser)
+├── css/                   - Stylesheets
+└── *.html                 - HTML pages (index, work, rent, login, payment, payments, admin)
 
-scripts/                  - Build and deployment scripts
-├── build.ts              - CoffeeScript compilation and asset copying
-├── backup.ts             - Backup logic (called by backup service, not directly)
-├── backup-now.sh         - Shell wrapper to trigger a backup manually
-├── backup-list.sh        - List available S3 backups
-├── backup-restore.sh     - Restore from S3 backup
-└── upgrade.sh            - Production upgrade automation
+scripts/                   - Build and deployment scripts
+├── build.ts               - CoffeeScript compilation and asset copying
+├── backup.ts              - Backup logic (called by backup service, not directly)
+├── backup-now.sh          - Shell wrapper to trigger a backup manually
+├── backup-list.sh         - List available S3 backups
+├── backup-restore.sh      - Restore from S3 backup
+└── upgrade.sh             - Production upgrade automation
 
-migrations/               - Database migrations (empty for now)
-└── README.md             - Migration documentation
+migrations/                - Database migrations (see migrations/README.md)
+├── 001-add-discount-applied.sql
+├── 002-add-amount-due-manual.sql
+└── 2026-03-17_add_amount_paid_manual.coffee
 
-backups/                  - Database backups (gitignored)
+docs/                      - Project documentation (see Documentation Index above)
+├── architecture.md
+├── code-review-2026-05.md
+├── bugs/                  - Known bugs, one file each
+├── fixes/                 - Proposed patches
+├── disaster-recovery.md
+├── deployment.md
+├── cloudwatch-logs-setup.md
+├── health-checks.md
+├── nginx.md
+├── todo.md
+└── troubleshooting.md
 
-test/                     - Test suite
-├── integration/          - Integration tests
-│   ├── auth.coffee       - Authentication flow tests (including session race conditions)
-│   └── timer.coffee      - Timer system tests
-├── services/             - Unit tests for services
-└── helper.coffee         - Test utilities
+backups/                   - Database backups (gitignored)
+
+test/                      - Test suite
+├── integration/           - Integration tests
+│   ├── auth.coffee        - Authentication flow tests (including session race conditions)
+│   └── timer.coffee       - Timer system tests
+├── services/              - Unit tests for services
+└── helper.coffee          - Test utilities
 ```
 
 ### Testing
@@ -152,7 +214,10 @@ test/                     - Test suite
 - Use native `node:sqlite` DatabaseSync for test database inspection
 
 ### Database Design
-Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, work_events, work_logs, timer_state, rent_periods, rent_events, audit_logs, recurring_events, and auth_sessions. Designed with proper foreign key constraints and indexes for performance.
+Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, work_events, work_logs, timer_state, rent_periods, rent_events, audit_logs, recurring_events, recurring_event_logs, rent_configuration, auth_sessions, and pii_tokens. Designed with proper foreign key constraints and indexes for performance.
+
+See [docs/architecture.md](docs/architecture.md) for the data model with
+computed-vs-authoritative column notes.
 
 ### Core Domains
 
@@ -162,7 +227,7 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 - Real-time status updates via polling API
 - Automatic session timeout after 8 hours
 - Manual work entry via POST /work-logs endpoint
-- **Bug Fix** (2025-12-29): Fixed SQL parameter binding for `billable` field - must pass 0/1 integers, not JavaScript booleans
+- **Bug Fix** (2025-12-29): Fixed SQL parameter binding for `billable` field — must pass 0/1 integers, not JavaScript booleans
 
 #### Rent Coordination
 
@@ -178,11 +243,16 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 **Stress-Free Display Logic:**
 - Current/past months show $950 as "amount due" (not full $1600)
 - Current month shows $0 before the 15th, $950 after the 15th
-- Future months show full calculation ($1600 - work credits)
-- Payment status shows PAID when >= $950 paid (green, stress-free)
+- Future months show full calculation ($1600 − work credits)
+- Payment status shows PAID when ≥ $950 paid (green, stress-free)
 - "Outstanding Balance" and "Total Paid" hidden behind "Show Full Details" button
 - Real debt tracked in background for gradual catch-up over 1-3 years
 - Constants: AGREED_MONTHLY_PAYMENT = 950, RENT_DUE_DAY = 15
+
+The server-side implementation lives in
+`lib/routes/rent.coffee::getDisplayAmountDue` and is the source of truth.
+The client must not duplicate this logic — fetch `display_amount_due` from
+the period payload instead.
 
 **Stripe Integration:**
 - Live mode enabled (pk_live_... and sk_live_... keys)
@@ -253,17 +323,17 @@ Uses SQLite (via node:sqlite) with tables for projects, tasks, work_sessions, wo
 - Timer polling interval: 1000ms client-side
 
 ### Environment Variables
-- `PORT` - Server port (default: 3000)
-- `NODE_ENV` - Environment mode (development/production)
-- `DB_PATH` - SQLite database path (default: ./tenant-coordinator.db)
-- `SESSION_SECRET` - Secret for session encryption (required for production)
-- `SMTP_HOST` - SMTP server for sending verification emails (optional in dev)
-- `SMTP_PORT` - SMTP port (default: 587)
-- `SMTP_USER` - SMTP username
-- `SMTP_PASS` - SMTP password
-- `EMAIL_FROM` - From address for emails (default: noreply@thatsnice.org)
-- `STRIPE_SECRET_KEY` - Stripe API secret key (sk_test_... or sk_live_...)
-- `STRIPE_PUBLISHABLE_KEY` - Stripe publishable key (pk_test_... or pk_live_...)
+- `PORT` — Server port (default: 3000)
+- `NODE_ENV` — Environment mode (development/production)
+- `DB_PATH` — SQLite database path (default: ./tenant-coordinator.db)
+- `SESSION_SECRET` — Secret for session encryption (required for production)
+- `SMTP_HOST` — SMTP server for sending verification emails (optional in dev)
+- `SMTP_PORT` — SMTP port (default: 587)
+- `SMTP_USER` — SMTP username
+- `SMTP_PASS` — SMTP password
+- `EMAIL_FROM` — From address for emails (default: noreply@thatsnice.org)
+- `STRIPE_SECRET_KEY` — Stripe API secret key (sk_test_... or sk_live_...)
+- `STRIPE_PUBLISHABLE_KEY` — Stripe publishable key (pk_test_... or pk_live_...)
 
 ### Backup and Disaster Recovery
 
@@ -308,14 +378,15 @@ aws secretsmanager get-secret-value \
   --output text
 ```
 
-See `DISASTER-RECOVERY.md` for complete restoration procedures.
+See `docs/disaster-recovery.md` for complete restoration procedures.
 
 ### Startup Process
 1. Server startup compiles client-side CoffeeScript to `static/js/`
 2. Server runs directly from source via `coffee main.coffee`
 3. Static files served from `static/`
+4. Recurring events scheduler initializes and processes any due events
 
-No separate build step needed - compilation happens automatically on startup.
+No separate build step needed — compilation happens automatically on startup.
 
 ## Development Notes
 
@@ -366,13 +437,17 @@ Add commenting functionality to work items with bidirectional notifications:
 
 ## Known Issues
 
-### Work Hours Not Appearing in Rent Periods (2026-01-01)
-**Reported:** Lyndzie entered 48.75 hours in production, but they're not showing up in the rent periods list.
+The active list lives in [docs/bugs/](docs/bugs/). At time of last review
+(2026-05-19) the open bugs were:
 
-**Investigation needed:**
-- Verify work logs are being saved correctly in database
-- Check if rent calculation is pulling work logs for the correct date range
-- Verify rent period recalculation is including the hours
-- Check if there's a worker name mismatch or filtering issue
-- Review `lib/services/rent.coffee` calculateRent function
-- Review work log queries in `lib/models/work_log.coffee`
+- **01** — Periods table shows raw amount instead of stress-free display
+- **02** — Cannot delete rent period (FK constraint)
+- **03** — Soft-delete UI wired to hard-delete model
+- **04** — Lyndzie's work hours not appearing in rent periods (the 48.75-hour case)
+- **05** — Recalculate-all discards retroactive logic
+
+Each has a proposed fix in [docs/fixes/](docs/fixes/).
+
+When a new issue is discovered, add a file to `docs/bugs/` rather than
+appending to this list — that way the index stays the source of truth and
+this section doesn't drift out of date.
