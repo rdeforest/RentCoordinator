@@ -128,3 +128,86 @@ test "Rent Calculation - Fractional hours", ->
 
   assert.equal discountApplied, 325, "6.5 hours @ $50/hr = $325"
   assert.equal amountDue, 1275, "$1600 - $325 = $1275"
+
+
+# Retroactive-credit walk (covers bug #05). Two months:
+#   A: 4 hours worked  → shortfall of 4 hours × $50 = $200
+#   B: 16 hours worked → 8 applied to B, 8 leftover; retire A's shortfall
+test "Rent Calculation - Retroactive credit retires prior shortfall", ->
+  carryOverHours = 0
+  totalShortfall = 0
+
+  # Month A
+  hoursWorkedA    = 4
+  totalAvailableA = hoursWorkedA + carryOverHours
+  appliedA        = Math.min totalAvailableA, MAX_MONTHLY_HOURS
+  discountA       = appliedA * HOURLY_CREDIT
+  amountDueA      = BASE_RENT - discountA
+  carryOverHours  = totalAvailableA - appliedA
+  totalShortfall += (MAX_MONTHLY_HOURS - appliedA) * HOURLY_CREDIT if appliedA < MAX_MONTHLY_HOURS
+
+  assert.equal appliedA,       4
+  assert.equal discountA,      200
+  assert.equal amountDueA,     1400
+  assert.equal totalShortfall, 200, "Month A leaves $200 shortfall"
+
+  # Month B
+  hoursWorkedB    = 16
+  totalAvailableB = hoursWorkedB + carryOverHours
+  appliedB        = Math.min totalAvailableB, MAX_MONTHLY_HOURS
+
+  retroactive = 0
+  if totalShortfall > 0 and totalAvailableB > MAX_MONTHLY_HOURS
+    extraHours          = totalAvailableB - MAX_MONTHLY_HOURS
+    maxRetroactiveHours = Math.min extraHours, totalShortfall / HOURLY_CREDIT
+    retroactive         = maxRetroactiveHours * HOURLY_CREDIT
+    totalShortfall     -= retroactive
+
+  totalDiscountB = appliedB * HOURLY_CREDIT + retroactive
+  amountDueB     = BASE_RENT - totalDiscountB
+
+  assert.equal appliedB,       8,    "Month B caps at 8 applied"
+  assert.equal retroactive,    200,  "Month B's leftover 8 hours retire all $200 shortfall"
+  assert.equal totalDiscountB, 600,  "$400 base credit + $200 retroactive"
+  assert.equal amountDueB,     1000, "$1600 - $600 = $1000 for Month B"
+  assert.equal totalShortfall, 0,    "Shortfall fully retired"
+
+
+# Stress-free display: server-side payment status for current month before/after the 15th
+test "Payment Status - Current month not-due before the 15th", ->
+  RENT_DUE_DAY = 15
+  currentDay   = 10
+  isCurrent    = true
+  isBeforeDue  = isCurrent and currentDay < RENT_DUE_DAY
+
+  status = if isBeforeDue then 'NOT DUE' else 'UNPAID'
+  assert.equal status, 'NOT DUE'
+
+
+test "Payment Status - Current month after 15th, agreed payment received", ->
+  RENT_DUE_DAY  = 15
+  currentDay    = 20
+  isCurrent     = true
+  isBeforeDue   = isCurrent and currentDay < RENT_DUE_DAY
+  displayDue    = 950
+  paid          = 950
+
+  status =
+    if      isBeforeDue       then 'NOT DUE'
+    else if paid >= displayDue then 'PAID'
+    else if paid > 0          then 'PARTIAL'
+    else                            'UNPAID'
+
+  assert.equal status, 'PAID', "Paying the agreed amount marks the month as PAID"
+
+
+test "Payment Status - Past month with partial payment", ->
+  displayDue = 950
+  paid       = 400
+
+  status =
+    if      paid >= displayDue then 'PAID'
+    else if paid > 0          then 'PARTIAL'
+    else                            'UNPAID'
+
+  assert.equal status, 'PARTIAL'

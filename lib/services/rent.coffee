@@ -4,20 +4,17 @@ workLogModel       = require '../models/work_log.coffee'
 config             = require '../config.coffee'
 
 
-BASE_RENT         = config.BASE_RENT or 1600
-HOURLY_CREDIT     = config.HOURLY_CREDIT or 50
-MAX_MONTHLY_HOURS = config.MAX_MONTHLY_HOURS or 8
+{ BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } = config
 
 
 calculateRent = (year, month) ->
-  startDate = new Date year, month - 1, 1
-  endDate   = new Date year, month, 0, 23, 59, 59
+  startISO = new Date(year, month - 1, 1).toISOString()
+  endISO   = new Date(year, month, 1).toISOString()
 
-  allLogs = await workLogModel.getWorkLogs worker: 'lyndzie'
-
-  monthLogs = allLogs.filter (log) ->
-    logDate = new Date log.start_time
-    logDate >= startDate and logDate <= endDate
+  monthLogs = await workLogModel.getWorkLogs
+    worker:       'lyndzie'
+    start_after:  startISO
+    start_before: endISO
 
   hoursWorked = monthLogs.reduce ((total, log) ->
     total + (log.duration / 60)
@@ -140,6 +137,27 @@ recalculateAllRent = ->
       amount_due:             finalAmountDue
       amount_paid:            Math.abs totalPayments
       cumulative_shortfall:   totalShortfall
+
+  for period in periods
+    existing = await rentModel.getRentPeriod period.year, period.month
+
+    updates =
+      hours_worked:        period.hours_worked
+      hours_from_previous: period.hours_from_previous
+      hours_to_next:       period.hours_to_next
+      discount_applied:    period.total_discount
+      manual_adjustments:  period.manual_adjustments
+
+    unless existing?.amount_due_manual
+      updates.amount_due = period.amount_due
+
+    unless existing?.amount_paid_manual
+      updates.amount_paid = Math.abs period.amount_paid
+
+    if existing
+      await rentModel.updateRentPeriod period.year, period.month, updates
+    else
+      await rentModel.createRentPeriod Object.assign {}, period, updates
 
   return periods
 

@@ -26,12 +26,20 @@ getWorkLogs = (filters = {}) ->
   params = []
 
   if filters.worker
-    query += " AND worker = ?"
+    query += " AND LOWER(worker) = LOWER(?)"
     params.push filters.worker
 
   if filters.project_id
     query += " AND project_id = ?"
     params.push filters.project_id
+
+  if filters.start_after
+    query += " AND start_time >= ?"
+    params.push filters.start_after
+
+  if filters.start_before
+    query += " AND start_time < ?"
+    params.push filters.start_before
 
   query += " ORDER BY start_time DESC"
 
