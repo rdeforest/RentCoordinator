@@ -103,7 +103,7 @@ SCHEMA = """
 
   CREATE TABLE IF NOT EXISTS rent_events (
     id TEXT PRIMARY KEY,
-    period_id TEXT NOT NULL REFERENCES rent_periods(id),
+    period_id TEXT NOT NULL REFERENCES rent_periods(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     amount REAL NOT NULL,
     description TEXT,
@@ -112,7 +112,7 @@ SCHEMA = """
   );
 
   CREATE INDEX IF NOT EXISTS idx_rent_events_period ON rent_events(period_id);
-  CREATE INDEX IF NOT EXISTS idx_rent_events_type ON rent_events(type);
+  CREATE INDEX IF NOT EXISTS idx_rent_events_type   ON rent_events(type);
 
   CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,
@@ -144,8 +144,8 @@ SCHEMA = """
 
   CREATE TABLE IF NOT EXISTS recurring_event_logs (
     id TEXT PRIMARY KEY,
-    recurring_event_id TEXT NOT NULL REFERENCES recurring_events(id),
-    period_id TEXT NOT NULL REFERENCES rent_periods(id),
+    recurring_event_id TEXT NOT NULL REFERENCES recurring_events(id) ON DELETE CASCADE,
+    period_id TEXT NOT NULL REFERENCES rent_periods(id) ON DELETE CASCADE,
     amount REAL NOT NULL,
     processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
