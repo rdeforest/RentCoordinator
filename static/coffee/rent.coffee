@@ -7,9 +7,9 @@ allEvents        = []
 eventToDelete    = null
 showingDeleted   = false
 
-AGREED_MONTHLY_PAYMENT = 950
-RENT_DUE_DAY          = 15
-rentConfiguration     = null  # Loaded from API
+AGREED_MONTHLY_PAYMENT = null  # Loaded from /rent/constants
+RENT_DUE_DAY           = null  # Loaded from /rent/constants
+rentConfiguration      = null  # Loaded from /rent/configuration
 
 eventModal       = document.getElementById 'event-modal'
 eventForm        = document.getElementById 'event-form'
@@ -37,6 +37,7 @@ cancelPaymentBtn = document.getElementById 'cancel-payment'
 paymentForm      = document.getElementById 'payment-form'
 
 window.addEventListener 'load', ->
+  await loadRentConstants()
   loadRentSummary()
   loadCurrentMonth()
   loadAllPeriods()
@@ -44,6 +45,16 @@ window.addEventListener 'load', ->
   loadRentConfiguration()
   populateFilterYears()
   setupSpoilerToggle()
+
+
+loadRentConstants = ->
+  try
+    response = await fetch '/rent/constants'
+    constants = await response.json()
+    AGREED_MONTHLY_PAYMENT = constants.AGREED_MONTHLY_PAYMENT
+    RENT_DUE_DAY           = constants.RENT_DUE_DAY
+  catch err
+    console.error 'Failed to load rent constants:', err
 
 
 loadRentConfiguration = ->
@@ -141,7 +152,7 @@ loadAllPeriods = ->
               contenteditable="false"
               data-field="amount_due"
               data-value="#{period.amount_due}"
-              title="Click to edit">#{formatCurrency period.amount_due}</td>
+              title="Underlying value: #{formatCurrency period.amount_due} (click to edit)">#{formatCurrency displayDue}</td>
           <td class="editable-cell"
               contenteditable="false"
               data-field="amount_paid"
@@ -659,11 +670,7 @@ document.getElementById('save-override-btn').addEventListener 'click', ->
   catch err
     showError "Error updating configuration: #{err.message}"
 
-formatCurrency = (amount) ->
-  new Intl.NumberFormat 'en-US',
-    style    : 'currency'
-    currency : 'USD'
-  .format amount
+{ formatCurrency, formatDate, formatMonthYear, escapeHtml } = window.SharedUtils
 
 autoRecalculateAndReload = ->
   try
@@ -676,19 +683,6 @@ autoRecalculateAndReload = ->
   catch err
     console.error 'Auto-recalculation failed:', err
 
-formatDate = (dateStr) ->
-  date = new Date dateStr
-  date.toLocaleDateString 'en-US',
-    year  : 'numeric'
-    month : 'short'
-    day   : 'numeric'
-
-formatMonthYear = (year, month) ->
-  date = new Date year, month - 1
-  date.toLocaleDateString 'en-US',
-    year  : 'numeric'
-    month : 'long'
-
 formatEventType = (type) ->
   switch type
     when 'payment'            then 'Payment'
@@ -697,27 +691,13 @@ formatEventType = (type) ->
     when 'manual'             then 'Manual Entry'
     else type
 
-escapeHtml = (text) ->
-  div = document.createElement 'div'
-  div.textContent = text
-  return div.innerHTML
-
 getDisplayAmountDue = (period) ->
   # Server provides the display value (with stress-free logic applied)
   return period.display_amount_due
 
 getPaymentStatus = (period) ->
-  displayDue = getDisplayAmountDue period
-  paid = period.amount_paid or 0
-
-  # Check if rent is not due yet (before 15th of current month)
-  isCurrent = period.year is currentYear and period.month is currentMonth
-  if isCurrent and currentDay < RENT_DUE_DAY
-    return 'NOT DUE'
-
-  if      paid >= displayDue then 'PAID'
-  else if paid > 0           then 'PARTIAL'
-  else                            'UNPAID'
+  # Server is the source of truth; this is a thin accessor.
+  period.payment_status
 
 showSuccess = (message) -> alert message
 showError   = (message) -> alert message

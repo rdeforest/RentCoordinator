@@ -12,6 +12,17 @@ window.SharedUtils =
       hour   : '2-digit'
       minute : '2-digit'
 
+  formatDate: (dateStr) ->
+    new Date(dateStr).toLocaleDateString 'en-US',
+      year  : 'numeric'
+      month : 'short'
+      day   : 'numeric'
+
+  formatMonthYear: (year, month) ->
+    new Date(year, month - 1).toLocaleDateString 'en-US',
+      year  : 'numeric'
+      month : 'long'
+
   formatDuration: (seconds) ->
     hours   = Math.floor seconds / 3600
     minutes = Math.floor (seconds % 3600) / 60
