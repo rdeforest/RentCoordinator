@@ -11,9 +11,11 @@ MIN_WORK_LOG_DURATION = if NODE_ENV is 'test' then 1 else 60
 WORKERS              = ['robert', 'lyndzie']
 DEFAULT_STAKEHOLDERS = ['robert', 'lyndzie']
 
-BASE_RENT         = 1600
-HOURLY_CREDIT     = 50
-MAX_MONTHLY_HOURS = 8
+BASE_RENT              = 1600
+HOURLY_CREDIT          = 50
+MAX_MONTHLY_HOURS      = 8
+AGREED_MONTHLY_PAYMENT = 950
+RENT_DUE_DAY           = 15
 
 ALLOWED_EMAILS  = ['robert@defore.st', 'lynz57@hotmail.com']
 SESSION_SECRET  = process.env.SESSION_SECRET or 'dev-secret-change-in-production'
@@ -43,6 +45,8 @@ module.exports = {
   BASE_RENT
   HOURLY_CREDIT
   MAX_MONTHLY_HOURS
+  AGREED_MONTHLY_PAYMENT
+  RENT_DUE_DAY
   ALLOWED_EMAILS
   SESSION_SECRET
   SESSION_MAX_AGE

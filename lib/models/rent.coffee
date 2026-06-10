@@ -5,8 +5,25 @@ config                               = require '../config.coffee'
 
 
 createRentPeriod = (data) ->
-  id  = v1()
-  now = new Date().toISOString()
+  now    = new Date().toISOString()
+  params = formatSQLParameters
+    id:                  v1()
+    year:                data.year
+    month:               data.month
+    base_rent:           data.base_rent         or config.BASE_RENT
+    hourly_credit:       data.hourly_credit     or config.HOURLY_CREDIT
+    max_monthly_hours:   data.max_monthly_hours or config.MAX_MONTHLY_HOURS
+    hours_worked:        data.hours_worked        or 0
+    hours_from_previous: data.hours_from_previous or 0
+    hours_to_next:       data.hours_to_next       or 0
+    manual_adjustments:  data.manual_adjustments  or 0
+    discount_applied:    data.discount_applied    or 0
+    amount_due:          data.amount_due
+    amount_due_manual:   if data.amount_due_manual?  then data.amount_due_manual  else 0
+    amount_paid:         data.amount_paid or 0
+    amount_paid_manual:  if data.amount_paid_manual? then data.amount_paid_manual else 0
+    created_at:          now
+    updated_at:          now
 
   db.prepare("""
     INSERT INTO rent_periods (
@@ -14,28 +31,14 @@ createRentPeriod = (data) ->
       hours_worked, hours_from_previous, hours_to_next, manual_adjustments,
       discount_applied, amount_due, amount_due_manual, amount_paid, amount_paid_manual, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  """).run(
-    id,
-    data.year,
-    data.month,
-    data.base_rent or config.BASE_RENT or 1600,
-    data.hourly_credit or config.HOURLY_CREDIT or 50,
-    data.max_monthly_hours or config.MAX_MONTHLY_HOURS or 8,
-    data.hours_worked or 0,
-    data.hours_from_previous or 0,
-    data.hours_to_next or 0,
-    data.manual_adjustments or 0,
-    data.discount_applied or 0,
-    data.amount_due,
-    if data.amount_due_manual?  then data.amount_due_manual  else 0,
-    data.amount_paid or 0,
-    if data.amount_paid_manual? then data.amount_paid_manual else 0,
-    now,
-    now
-  )
+    VALUES (
+      :id, :year, :month, :base_rent, :hourly_credit, :max_monthly_hours,
+      :hours_worked, :hours_from_previous, :hours_to_next, :manual_adjustments,
+      :discount_applied, :amount_due, :amount_due_manual, :amount_paid, :amount_paid_manual, :created_at, :updated_at
+    )
+  """).run params
 
-  return db.prepare("SELECT * FROM rent_periods WHERE id = ?").get id
+  return db.prepare("SELECT * FROM rent_periods WHERE id = ?").get params[':id']
 
 
 getRentPeriod = (year, month) ->
@@ -49,10 +52,10 @@ getOrCreateRentPeriod = (year, month) ->
   existing = getRentPeriod year, month
   return existing if existing
 
-  return await createRentPeriod
+  return createRentPeriod
     year:       year
     month:      month
-    amount_due: config.BASE_RENT or 1600
+    amount_due: config.BASE_RENT
 
 
 getAllRentPeriods = ->

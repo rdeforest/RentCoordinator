@@ -67,4 +67,22 @@ requireAuth = (req, res, next) ->
         redirect: '/login.html'
 
 
-module.exports = { setup, requireAuth }
+asyncRoute = (name, handler) -> (req, res) ->
+  try
+    await handler req, res
+  catch err
+    logger.error name, err,
+      { body: req.body, query: req.query, params: req.params },
+      req.id
+
+    statusCode = if err.message?.match /not found/i
+      404
+    else if err.message?.match /already deleted|not deleted/i
+      400
+    else
+      500
+
+    res.status(statusCode).json error: err.message
+
+
+module.exports = { setup, requireAuth, asyncRoute }
