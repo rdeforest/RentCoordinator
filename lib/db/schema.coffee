@@ -108,11 +108,13 @@ SCHEMA = """
     amount REAL NOT NULL,
     description TEXT,
     metadata TEXT, -- JSON
+    deleted_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
-  CREATE INDEX IF NOT EXISTS idx_rent_events_period ON rent_events(period_id);
-  CREATE INDEX IF NOT EXISTS idx_rent_events_type   ON rent_events(type);
+  CREATE INDEX IF NOT EXISTS idx_rent_events_period     ON rent_events(period_id);
+  CREATE INDEX IF NOT EXISTS idx_rent_events_type       ON rent_events(type);
+  CREATE INDEX IF NOT EXISTS idx_rent_events_deleted_at ON rent_events(deleted_at);
 
   CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,

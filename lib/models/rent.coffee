@@ -1,6 +1,7 @@
-{ v1 } = require 'uuid'
-{ db } = require '../db/schema.coffee'
-config = require '../config.coffee'
+{ v1 }                               = require 'uuid'
+{ db }                               = require '../db/schema.coffee'
+{ formatSQLParameters, transaction } = require '../db/utils.coffee'
+config                               = require '../config.coffee'
 
 
 createRentPeriod = (data) ->
@@ -121,31 +122,33 @@ createRentEvent = (data) ->
   unless period_id
     throw new Error "Cannot create rent event: period not found for #{data.year}-#{data.month}"
 
-  db.prepare("""
-    INSERT INTO rent_events (id, period_id, type, amount, description, metadata, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  """).run(
-    id,
-    period_id,
-    data.type,
-    data.amount,
-    data.description or null,
-    JSON.stringify(data.metadata or {}),
-    now
-  )
+  transaction ->
+    db.prepare("""
+      INSERT INTO rent_events (id, period_id, type, amount, description, metadata, created_at)
+      VALUES (:id, :period_id, :type, :amount, :description, :metadata, :created_at)
+    """).run formatSQLParameters
+      id:          id
+      period_id:   period_id
+      type:        data.type
+      amount:      data.amount
+      description: data.description or null
+      metadata:    JSON.stringify(data.metadata or {})
+      created_at:  now
 
-  await createAuditLog
-    action:      'create'
-    entity_type: 'rent_event'
-    entity_id:   id
-    old_value:   null
-    new_value:   data
-    user:        data.created_by or 'user'
+    createAuditLog
+      action:      'create'
+      entity_type: 'rent_event'
+      entity_id:   id
+      old_value:   null
+      new_value:   data
+      user:        data.created_by or 'user'
 
   return db.prepare("SELECT * FROM rent_events WHERE id = ?").get id
 
 
 getAllRentEvents = (includeDeleted = false) ->
+  whereClause = if includeDeleted then '' else 'WHERE e.deleted_at IS NULL'
+
   events = db.prepare("""
     SELECT
       e.*,
@@ -153,11 +156,13 @@ getAllRentEvents = (includeDeleted = false) ->
       p.month
     FROM rent_events e
     LEFT JOIN rent_periods p ON e.period_id = p.id
+    #{whereClause}
     ORDER BY e.created_at DESC
   """).all()
 
   for event in events
     event.metadata = JSON.parse event.metadata if event.metadata
+    event.deleted  = event.deleted_at?
 
   return events
 
@@ -197,15 +202,16 @@ updateRentEvent = (id, updates) ->
     WHERE id = ?
   """
 
-  db.prepare(query).run values...
+  transaction ->
+    db.prepare(query).run values...
 
-  await createAuditLog
-    action:      'update'
-    entity_type: 'rent_event'
-    entity_id:   id
-    old_value:   existing
-    new_value:   updates
-    user:        updates.updated_by or 'user'
+    createAuditLog
+      action:      'update'
+      entity_type: 'rent_event'
+      entity_id:   id
+      old_value:   existing
+      new_value:   updates
+      user:        updates.updated_by or 'user'
 
   return getRentEvent id
 
@@ -216,17 +222,46 @@ deleteRentEvent = (id, deletedBy = 'user') ->
   unless existing
     throw new Error "Rent event not found: #{id}"
 
-  db.prepare("DELETE FROM rent_events WHERE id = ?").run id
+  if existing.deleted_at
+    throw new Error "Rent event already deleted: #{id}"
 
-  await createAuditLog
-    action:      'delete'
-    entity_type: 'rent_event'
-    entity_id:   id
-    old_value:   existing
-    new_value:   null
-    user:        deletedBy
+  now = new Date().toISOString()
 
-  return deleted: true, id: id
+  transaction ->
+    db.prepare("UPDATE rent_events SET deleted_at = ? WHERE id = ?").run now, id
+
+    createAuditLog
+      action:      'delete'
+      entity_type: 'rent_event'
+      entity_id:   id
+      old_value:   existing
+      new_value:   { deleted_at: now }
+      user:        deletedBy
+
+  return deleted: true, id: id, deleted_at: now
+
+
+undeleteRentEvent = (id, undeletedBy = 'user') ->
+  existing = db.prepare('SELECT * FROM rent_events WHERE id = ?').get id
+
+  unless existing
+    throw new Error "Rent event not found: #{id}"
+
+  unless existing.deleted_at
+    throw new Error "Rent event is not deleted: #{id}"
+
+  transaction ->
+    db.prepare('UPDATE rent_events SET deleted_at = NULL WHERE id = ?').run id
+
+    createAuditLog
+      action:      'undelete'
+      entity_type: 'rent_event'
+      entity_id:   id
+      old_value:   { deleted_at: existing.deleted_at }
+      new_value:   { deleted_at: null }
+      user:        undeletedBy
+
+  return getRentEvent id
 
 
 getRentEventsForPeriod = (year, month, includeDeleted = false) ->
@@ -235,14 +270,20 @@ getRentEventsForPeriod = (year, month, includeDeleted = false) ->
   unless period
     return []
 
+  whereClause = if includeDeleted
+    'WHERE period_id = ?'
+  else
+    'WHERE period_id = ? AND deleted_at IS NULL'
+
   events = db.prepare("""
     SELECT * FROM rent_events
-    WHERE period_id = ?
+    #{whereClause}
     ORDER BY created_at DESC
   """).all period.id
 
   for event in events
     event.metadata = JSON.parse event.metadata if event.metadata
+    event.deleted  = event.deleted_at?
 
   return events
 
@@ -260,7 +301,7 @@ recordPayment = (data) ->
 
   paymentDate = new Date().toISOString()
 
-  event = await createRentEvent
+  event = createRentEvent
     period_id:   period.id
     year:        year
     month:       month
@@ -351,6 +392,7 @@ module.exports = {
   getRentEvent
   updateRentEvent
   deleteRentEvent
+  undeleteRentEvent
   getRentEventsForPeriod
   recordPayment
   createAuditLog
