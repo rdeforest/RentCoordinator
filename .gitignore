@@ -2,6 +2,9 @@
 .*.sw?
 .sw?
 
+# Scratch / review bundles / drafts
+tmp/
+
 # Logs
 logs
 *.log
