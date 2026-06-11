@@ -1,127 +1,166 @@
-rentService       = require '../services/rent.coffee'
-rentModel         = require '../models/rent.coffee'
-rentConfiguration = require '../models/rent_configuration.coffee'
-{ asyncRoute }    = require '../middleware.coffee'
+# Rent routes — event-sourced. See docs/event-model.md.
+#
+# All reads go through period_viewer (which folds events). All writes emit
+# events into the events table. The legacy rent_periods / rent_events tables
+# are no longer touched here — they remain in the DB only as a fallback
+# until the cleanup migration runs.
 
-{ AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY, BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } = require '../config.coffee'
+periodViewer  = require '../services/period_viewer.coffee'
+period        = require '../services/period.coffee'
+eventsModel   = require '../models/events.coffee'
+{ asyncRoute } = require '../middleware.coffee'
 
-
-getEffectiveAgreedPayment = ->
-  rentConfig = rentConfiguration.getConfiguration()
-  if rentConfig?.apply_override and rentConfig?.temporary_rent_amount?
-    rentConfig.temporary_rent_amount
-  else
-    AGREED_MONTHLY_PAYMENT
-
-
-getDisplayAmountDue = (period) ->
-  return period.amount_due if period.amount_due_manual
-
-  now          = new Date()
-  currentYear  = now.getFullYear()
-  currentMonth = now.getMonth() + 1
-  currentDay   = now.getDate()
-
-  isCurrent = period.year is currentYear and period.month is currentMonth
-  isFuture  = period.year > currentYear or (period.year is currentYear and period.month > currentMonth)
-
-  agreedPayment = getEffectiveAgreedPayment()
-
-  return period.amount_due                                       if isFuture
-  return (if currentDay < RENT_DUE_DAY then 0 else agreedPayment) if isCurrent
-  return agreedPayment
+{ AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY, BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } =
+  require '../config.coffee'
 
 
-getPaymentStatus = (period) ->
-  displayDue = getDisplayAmountDue period
-  paid       = period.amount_paid or 0
-
-  now         = new Date()
-  isCurrent   = period.year is now.getFullYear() and period.month is (now.getMonth() + 1)
-  isBeforeDue = isCurrent and now.getDate() < RENT_DUE_DAY
-
-  return 'NOT DUE' if isBeforeDue
-  return 'PAID'    if paid >= displayDue
-  return 'PARTIAL' if paid > 0
-  return 'UNPAID'
+# Map the new period view onto the response shape the front-end already
+# consumes. Keeps the wire contract stable while the model changes underneath.
+toWireShape = (p) ->
+  return null unless p
+  Object.assign {}, p,
+    amount_due_manual:  if p.amount_due_override  then 1 else 0
+    amount_paid_manual: if p.amount_paid_override then 1 else 0
+    manual_adjustments: 0   # legacy field; always 0 in the new model
 
 
-decoratePeriod = (period) ->
-  Object.assign {}, period,
-    display_amount_due:       getDisplayAmountDue(period)
-    payment_status:           getPaymentStatus(period)
-    effective_agreed_payment: getEffectiveAgreedPayment()
-
-
-ALLOWED_PERIOD_UPDATE_FIELDS = [
-  'manual_adjustments'
-  'amount_due'
-  'amount_paid'
-  'base_rent'
-  'hourly_credit'
-  'max_monthly_hours'
-]
+actorFromRequest = (req, fallback = 'landlord') ->
+  email = req.session?.email or 'unknown@unknown'
+  actor = if email is 'lynz57@hotmail.com' then 'tenant' else fallback
+  { actor, actor_user: email }
 
 
 setup = (app) ->
+
+  # ---- constants & config --------------------------------------------------
+
   app.get '/rent/constants', (req, res) ->
-    res.json {
-      BASE_RENT
-      HOURLY_CREDIT
-      MAX_MONTHLY_HOURS
-      AGREED_MONTHLY_PAYMENT
-      RENT_DUE_DAY
-    }
+    res.json { BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS, AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY }
 
   app.get '/rent/configuration', asyncRoute 'rent.getConfiguration', (req, res) ->
-    res.json rentConfiguration.getConfiguration()
+    cfg = periodViewer.getConfig()
+    # Match the legacy response shape
+    res.json
+      id:                    'singleton'
+      temporary_rent_amount: cfg.temporary_rent_amount
+      apply_override:        if cfg.apply_override then 1 else 0
 
   app.put '/rent/configuration', asyncRoute 'rent.updateConfiguration', (req, res) ->
-    res.json rentConfiguration.updateConfiguration req.body
+    { actor, actor_user } = actorFromRequest req, 'landlord'
+    now = new Date().toISOString()
+
+    if req.body.temporary_rent_amount?
+      eventsModel.recordEvent
+        occurred_at: now
+        actor:       actor
+        actor_user:  actor_user
+        action:      'config-changed'
+        payload:
+          field:     'temporary_rent_amount'
+          new_value: req.body.temporary_rent_amount
+
+    if req.body.apply_override?
+      eventsModel.recordEvent
+        occurred_at: now
+        actor:       actor
+        actor_user:  actor_user
+        action:      'config-changed'
+        payload:
+          field:     'apply_override'
+          new_value: Boolean req.body.apply_override
+
+    cfg = periodViewer.getConfig()
+    res.json
+      id:                    'singleton'
+      temporary_rent_amount: cfg.temporary_rent_amount
+      apply_override:        if cfg.apply_override then 1 else 0
+
+  # ---- period reads --------------------------------------------------------
 
   app.get '/rent/calculate', asyncRoute 'rent.calculate', (req, res) ->
     now   = new Date()
     year  = parseInt(req.query.year)  or now.getFullYear()
     month = parseInt(req.query.month) or (now.getMonth() + 1)
-
-    res.json await rentService.calculateRent year, month
+    res.json toWireShape periodViewer.getPeriod year, month
 
   app.get '/rent/period/:year/:month', asyncRoute 'rent.getPeriod', (req, res) ->
     year  = parseInt req.params.year
     month = parseInt req.params.month
+    p     = periodViewer.getPeriod year, month
+    # If there's truly no activity for this month, synthesize a zero-state
+    # view rather than 404 — the page expects a period object.
+    unless p
+      p = period.computeMonth year, month, [], 0, 0, new Date()
+    res.json toWireShape p
 
-    period = await rentModel.getRentPeriod year, month
-    period ?= await rentService.createOrUpdateRentPeriod year, month
+  app.get '/rent/periods', asyncRoute 'rent.getPeriods', (req, res) ->
+    periods = periodViewer.getAllPeriods()
+    rows = (toWireShape p for key, p of periods)
+    rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
+    res.json rows
 
-    res.json decoratePeriod period
+  # ---- period writes (overrides) ------------------------------------------
+
+  ALLOWED_OVERRIDE_FIELDS = ['amount_due', 'amount_paid']
 
   app.post '/rent/period/:year/:month', asyncRoute 'rent.createOrUpdatePeriod', (req, res) ->
     year  = parseInt req.params.year
     month = parseInt req.params.month
-
-    res.json await rentService.createOrUpdateRentPeriod year, month
+    # In the event-sourced model "create or update" a period is a no-op —
+    # the view exists implicitly. Just return the current computed value.
+    res.json toWireShape (periodViewer.getPeriod(year, month) or
+                          period.computeMonth(year, month, [], 0, 0, new Date()))
 
   app.put '/rent/period/:year/:month', asyncRoute 'rent.updatePeriod', (req, res) ->
     year    = parseInt req.params.year
     month   = parseInt req.params.month
     updates = req.body or {}
 
-    filteredUpdates = {}
-    for key, value of updates
-      filteredUpdates[key] = value if key in ALLOWED_PERIOD_UPDATE_FIELDS
+    { actor, actor_user } = actorFromRequest req, 'landlord'
+    now = new Date().toISOString()
+    ymKey = period.monthKey year, month
 
-    filteredUpdates.amount_due_manual  = 1 if filteredUpdates.amount_due?
-    filteredUpdates.amount_paid_manual = 1 if filteredUpdates.amount_paid?
+    for field in ALLOWED_OVERRIDE_FIELDS when updates[field]?
+      eventsModel.recordEvent
+        occurred_at:   now
+        effective_for: ymKey
+        actor:         actor
+        actor_user:    actor_user
+        action:        'override'
+        payload:
+          target_kind: 'period-field'
+          target:      { year, month, field }
+          new_value:   updates[field]
 
-    unless Object.keys(filteredUpdates).length > 0
-      return res.status(400).json error: 'No valid fields to update'
-
-    res.json await rentModel.updateRentPeriod year, month, filteredUpdates
+    res.json toWireShape periodViewer.getPeriod year, month
 
   app.delete '/rent/period/:year/:month', asyncRoute 'rent.deletePeriod', (req, res) ->
+    # Periods are computed in the new model — deleting one means clearing
+    # any override events that target it. Other events (work, payment)
+    # remain. The tenant's payment history shouldn't vanish because the
+    # landlord 'deleted a period.'
     year  = parseInt req.params.year
     month = parseInt req.params.month
-    res.json await rentModel.deleteRentPeriod year, month
+    ymKey = period.monthKey year, month
+    { actor, actor_user } = actorFromRequest req, 'landlord'
+    now = new Date().toISOString()
+
+    overrides = eventsModel.listEventsByMonth(ymKey).filter (e) ->
+      e.action is 'override' and e.payload?.target_kind is 'period-field'
+
+    for o in overrides
+      eventsModel.recordEvent
+        occurred_at:     now
+        effective_for:   ymKey
+        actor:           actor
+        actor_user:      actor_user
+        action:          'deleted'
+        target_event_id: o.id
+        payload:         { reason: 'Period delete via PUT /rent/period' }
+
+    res.json deleted: true, year: year, month: month
+
+  # ---- payments ------------------------------------------------------------
 
   app.post '/rent/payment', asyncRoute 'rent.recordPayment', (req, res) ->
     { year, month, amount, payment_method, notes } = req.body
@@ -129,37 +168,74 @@ setup = (app) ->
     unless year and month and amount
       return res.status(400).json error: 'Year, month, and amount required'
 
-    res.json rentModel.recordPayment
-      year:           parseInt year
-      month:          parseInt month
-      amount:         parseFloat amount
-      payment_method: payment_method
-      notes:          notes
+    ymKey = period.monthKey parseInt(year), parseInt(month)
+    { actor, actor_user } = actorFromRequest req, 'tenant'
+
+    event = eventsModel.recordEvent
+      occurred_at:   new Date().toISOString()
+      effective_for: ymKey
+      actor:         actor
+      actor_user:    actor_user
+      action:        'payment-made'
+      payload:
+        amount:                   parseFloat amount
+        method:                   payment_method or 'manual'
+        stripe_payment_intent_id: null
+        note:                     notes or null
+
+    res.json
+      id:         event.id
+      year:       parseInt year
+      month:      parseInt month
+      amount:     parseFloat amount
+      method:     payment_method or 'manual'
+
+  # ---- summary / recalculate ----------------------------------------------
 
   app.get '/rent/summary', asyncRoute 'rent.summary', (req, res) ->
-    res.json await rentService.getRentSummary()
+    periods = periodViewer.getAllPeriods()
+    rows    = Object.values periods
+    res.json
+      total_periods:     rows.length
+      total_amount_due:  rows.reduce ((s, p) -> s + p.amount_due),         0
+      total_amount_paid: rows.reduce ((s, p) -> s + p.amount_paid),         0
+      total_discount:    rows.reduce ((s, p) -> s + p.discount_applied),    0
+      outstanding_balance: rows.reduce ((s, p) -> s + p.amount_due - p.amount_paid), 0
+      periods:           rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
 
   app.post '/rent/recalculate-all', asyncRoute 'rent.recalculateAll', (req, res) ->
-    periods = await rentService.recalculateAllRent()
+    # Recalculation is implicit in the new model — every GET recomputes.
+    # Kept for API stability; returns the current state.
+    periods = periodViewer.getAllPeriods()
+    rows = (toWireShape p for key, p of periods).sort (a, b) -> (a.year - b.year) or (a.month - b.month)
     res.json
-      message:         'Recalculation complete'
-      periods_updated: periods.length
-      periods:         periods
+      message:         'Recalculation is on-demand in the new model; current state returned.'
+      periods_updated: rows.length
+      periods:         rows
 
-  app.get '/rent/periods', asyncRoute 'rent.getPeriods', (req, res) ->
-    periods = await rentModel.getAllRentPeriods()
-    res.json periods.map decoratePeriod
+  # ---- events CRUD --------------------------------------------------------
 
   app.get '/rent/events', asyncRoute 'rent.getEvents', (req, res) ->
     { year, month, includeDeleted } = req.query
     showDeleted = includeDeleted is 'true'
 
-    events = if year and month
-      rentModel.getRentEventsForPeriod parseInt(year), parseInt(month), showDeleted
-    else
-      rentModel.getAllRentEvents showDeleted
+    all = eventsModel.listAllEvents()
 
-    res.json events
+    # Build set of event ids that are deleted
+    deletedIds = new Set()
+    for e in all when e.action is 'deleted'
+      deletedIds.add e.target_event_id
+
+    filtered = all.filter (e) ->
+      return false if e.action in ['edited', 'deleted']
+      return false if deletedIds.has(e.id) and not showDeleted
+      if year and month
+        return e.effective_for is period.monthKey parseInt(year), parseInt(month)
+      true
+
+    res.json filtered.map (e) ->
+      Object.assign {}, e,
+        deleted: deletedIds.has e.id
 
   app.post '/rent/events', asyncRoute 'rent.createEvent', (req, res) ->
     { type, year, month, amount, description } = req.body
@@ -167,55 +243,119 @@ setup = (app) ->
     unless type and year and month and amount and description
       return res.status(400).json error: 'Type, year, month, amount, and description required'
 
-    res.json rentModel.createRentEvent
-      type:        type
-      date:        req.body.date
-      year:        parseInt year
-      month:       parseInt month
-      amount:      parseFloat amount
-      description: description
-      notes:       req.body.notes
-      metadata:    req.body.metadata or {}
+    ymKey = period.monthKey parseInt(year), parseInt(month)
+    { actor, actor_user } = actorFromRequest req, 'landlord'
 
-  app.get '/rent/events/:id', asyncRoute 'rent.getEvent', (req, res) ->
-    event = rentModel.getRentEvent req.params.id
+    # Map legacy 'type' onto the new action vocabulary
+    action = switch type
+      when 'payment'    then 'payment-made'
+      when 'adjustment' then 'override'
+      when 'manual'     then 'override'
+      else 'payment-made'   # safest fallback
 
-    unless event
-      return res.status(404).json error: 'Event not found'
+    payload =
+      if action is 'payment-made'
+        amount:                   parseFloat amount
+        method:                   req.body.method or 'manual'
+        stripe_payment_intent_id: null
+        note:                     description
+      else
+        target_kind: 'period-field'
+        target:      { year: parseInt(year), month: parseInt(month), field: 'amount_due' }
+        new_value:   parseFloat amount
+        note:        description
+
+    event = eventsModel.recordEvent
+      occurred_at:   new Date().toISOString()
+      effective_for: ymKey
+      actor:         actor
+      actor_user:    actor_user
+      action:        action
+      payload:       payload
 
     res.json event
 
-  app.put '/rent/events/:id', asyncRoute 'rent.updateEvent', (req, res) ->
-    { type, date, year, month, amount, description, notes, metadata } = req.body
+  app.get '/rent/events/:id', asyncRoute 'rent.getEvent', (req, res) ->
+    event = eventsModel.getEvent req.params.id
+    unless event
+      return res.status(404).json error: 'Event not found'
+    res.json event
 
-    res.json rentModel.updateRentEvent req.params.id,
-      type:        type
-      date:        date
-      year:        if year   then parseInt year     else undefined
-      month:       if month  then parseInt month    else undefined
-      amount:      if amount then parseFloat amount else undefined
-      description: description
-      notes:       notes
-      metadata:    metadata
+  app.put '/rent/events/:id', asyncRoute 'rent.updateEvent', (req, res) ->
+    existing = eventsModel.getEvent req.params.id
+    unless existing
+      return res.status(404).json error: 'Event not found'
+
+    { actor, actor_user } = actorFromRequest req, 'landlord'
+
+    new_payload = {}
+    new_payload.amount = parseFloat req.body.amount if req.body.amount?
+    new_payload.note   = req.body.description if req.body.description?
+
+    eventsModel.recordEvent
+      occurred_at:     new Date().toISOString()
+      effective_for:   existing.effective_for
+      actor:           actor
+      actor_user:      actor_user
+      action:          'edited'
+      target_event_id: existing.id
+      payload:         { new_payload }
+
+    res.json eventsModel.getEvent existing.id
 
   app.delete '/rent/events/:id', asyncRoute 'rent.deleteEvent', (req, res) ->
-    deletedEvent = rentModel.deleteRentEvent req.params.id
-    res.json message: 'Event deleted', event: deletedEvent
+    existing = eventsModel.getEvent req.params.id
+    unless existing
+      return res.status(404).json error: 'Event not found'
+
+    { actor, actor_user } = actorFromRequest req, 'landlord'
+
+    eventsModel.recordEvent
+      occurred_at:     new Date().toISOString()
+      effective_for:   existing.effective_for
+      actor:           actor
+      actor_user:      actor_user
+      action:          'deleted'
+      target_event_id: existing.id
+      payload:         { reason: req.body?.reason or null }
+
+    res.json message: 'Event deleted', event: existing
 
   app.post '/rent/events/:id/undelete', asyncRoute 'rent.undeleteEvent', (req, res) ->
-    undeletedEvent = rentModel.undeleteRentEvent req.params.id
-    res.json message: 'Event undeleted', event: undeletedEvent
+    # Undeleting is a delete-of-the-delete-event.
+    deletes = eventsModel.listAllEvents().filter (e) ->
+      e.action is 'deleted' and e.target_event_id is req.params.id
+    unless deletes.length > 0
+      return res.status(400).json error: 'Event is not deleted'
+
+    { actor, actor_user } = actorFromRequest req, 'landlord'
+    latest = deletes[deletes.length - 1]
+
+    eventsModel.recordEvent
+      occurred_at:     new Date().toISOString()
+      effective_for:   latest.effective_for
+      actor:           actor
+      actor_user:      actor_user
+      action:          'deleted'
+      target_event_id: latest.id
+      payload:         { reason: 'Undelete via POST /rent/events/:id/undelete' }
+
+    res.json message: 'Event undeleted', event: eventsModel.getEvent req.params.id
+
+  # ---- audit logs ---------------------------------------------------------
 
   app.get '/rent/audit-logs', asyncRoute 'rent.getAuditLogs', (req, res) ->
-    { entity_type, entity_id, action, user } = req.query
+    # The events table IS the audit log. Surface edits and deletes.
+    all = eventsModel.listAllEvents()
+    audits = all.filter (e) -> e.action in ['edited', 'deleted', 'override']
 
-    filters = {}
-    filters.entity_type = entity_type if entity_type
-    filters.entity_id   = entity_id   if entity_id
-    filters.action      = action      if action
-    filters.user        = user        if user
-
-    res.json rentModel.getAuditLogs filters
+    res.json audits.map (e) ->
+      action:      e.action
+      entity_type: 'event'
+      entity_id:   e.target_event_id or e.id
+      user:        e.actor_user
+      changes:     JSON.stringify e.payload
+      created_at:  e.occurred_at
 
 
 module.exports = { setup }

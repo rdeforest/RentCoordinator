@@ -1,6 +1,6 @@
 Stripe    = require 'stripe'
 config    = require '../config.coffee'
-rentModel = require '../models/rent.coffee'
+eventsModel = require '../models/events.coffee'
 
 stripe = null
 
@@ -52,12 +52,19 @@ confirmPayment = (paymentIntentId, year, month) ->
 
   amount = paymentIntent.amount / 100
 
-  await rentModel.recordPayment
-    year:           year
-    month:          month
-    amount:         amount
-    payment_method: 'stripe_ach'
-    notes:          "Stripe payment #{paymentIntentId}"
+  monthKey = "#{year}-#{String(month).padStart 2, '0'}"
+
+  eventsModel.recordEvent
+    occurred_at:   new Date().toISOString()
+    effective_for: monthKey
+    actor:         'tenant'
+    actor_user:    'lynz57@hotmail.com'
+    action:        'payment-made'
+    payload:
+      amount:                   amount
+      method:                   'stripe_ach'
+      stripe_payment_intent_id: paymentIntentId
+      note:                     "Stripe payment #{paymentIntentId}"
 
   return
     success: true

@@ -1,5 +1,5 @@
 paymentService = require '../services/payment.coffee'
-rentModel      = require '../models/rent.coffee'
+periodViewer   = require '../services/period_viewer.coffee'
 config         = require '../config.coffee'
 logger         = require '../logger.coffee'
 
@@ -12,12 +12,19 @@ setup = (app) ->
       return res.status(400).json error: 'Year, month, and amount required'
 
     try
-      period = await rentModel.getRentPeriod year, month
+      period = periodViewer.getPeriod parseInt(year), parseInt(month)
 
       unless period
         return res.status(404).json error: 'Rent period not found'
 
-      amountDue = period.amount_due - (period.amount_paid or 0)
+      # In the new model, "outstanding for the current installment" is what
+      # the tenant pays — display_amount_due reflects stress-free logic
+      # plus the agreed/override amount.
+      amountDue = period.display_amount_due - (period.amount_paid or 0)
+      # Before the 15th, display is 0 — but tenant may still want to pay
+      # the agreed amount early. Fall back to the agreed payment minus paid.
+      if amountDue <= 0 and period.amount_paid < period.effective_agreed_payment
+        amountDue = period.effective_agreed_payment - period.amount_paid
 
       if Math.abs(amount - amountDue) > 0.01
         return res.status(400).json
