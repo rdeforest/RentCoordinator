@@ -66,7 +66,7 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
 
   hours_worked = 0
   amount_paid  = 0
-  for e in monthEvents
+  for e in monthEvents when e.actor is 'tenant'
     switch e.action
       when 'work-reported' then hours_worked += e.payload.hours
       when 'payment-made'  then amount_paid  += e.payload.amount

@@ -229,6 +229,13 @@ test "resolveConfig returns defaults if no config events", ->
   assert.equal snap.agreed_monthly_payment, 950
 
 
+test "non-tenant work-reported events don't count toward credit", ->
+  tenantWork   = work '2026-04', 5
+  landlordWork = Object.assign {}, work('2026-04', 100), { actor: 'landlord', actor_user: 'robert@defore.st' }
+  apr = computeAllPeriods([ tenantWork, landlordWork ], NOW)['2026-04']
+  assert.equal apr.hours_worked, 5, "only the tenant's 5 hours count"
+
+
 test "resolveEditsAndDeletes preserves non-edit events untouched", ->
   events = [ work('2026-04', 5), payment('2026-04', 100) ]
   out    = resolveEditsAndDeletes events
