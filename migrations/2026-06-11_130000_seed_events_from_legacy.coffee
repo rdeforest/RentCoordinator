@@ -121,7 +121,7 @@ try
   # the credit math.
 
   logs = db.prepare("""
-    SELECT id, worker, start_time, end_time, duration, project_id, task_id, notes
+    SELECT id, worker, start_time, end_time, duration, project_id, task_id, description
     FROM work_logs
     ORDER BY start_time
   """).all()
@@ -140,9 +140,9 @@ try
         hours:      (log.duration or 0) / 60
         started_at: log.start_time
         ended_at:   log.end_time
-        project:    log.project_id or null
-        task:       log.task_id    or null
-        note:       log.notes      or null
+        project:    log.project_id   or null
+        task:       log.task_id      or null
+        note:       log.description  or null
     emitted['work-reported'] += 1
 
   # --- Overrides --------------------------------------------------------------
