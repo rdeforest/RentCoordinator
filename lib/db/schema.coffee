@@ -128,6 +128,26 @@ SCHEMA = """
 
   CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
 
+  -- See docs/event-model.md. Single source of truth for the rent system:
+  -- payments, work reports, config changes, overrides, edits, deletes. The
+  -- per-period state shown in the UI is computed from this table on demand.
+  CREATE TABLE IF NOT EXISTS events (
+    id              TEXT PRIMARY KEY,
+    occurred_at     DATETIME NOT NULL,
+    effective_for   TEXT,  -- 'YYYY-MM' or NULL for events that apply globally
+    actor           TEXT NOT NULL,  -- 'tenant' | 'landlord'
+    actor_user      TEXT NOT NULL,  -- email
+    action          TEXT NOT NULL,  -- see docs/event-model.md
+    payload         TEXT NOT NULL,  -- JSON, shape depends on action
+    target_event_id TEXT REFERENCES events(id) ON DELETE CASCADE,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_events_effective_for   ON events(effective_for);
+  CREATE INDEX IF NOT EXISTS idx_events_actor_user      ON events(actor_user);
+  CREATE INDEX IF NOT EXISTS idx_events_target_event_id ON events(target_event_id);
+  CREATE INDEX IF NOT EXISTS idx_events_action          ON events(action);
+
   CREATE TABLE IF NOT EXISTS recurring_events (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
