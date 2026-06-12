@@ -94,7 +94,8 @@ setup = (app) ->
     res.json toWireShape p
 
   app.get '/rent/periods', asyncRoute 'rent.getPeriods', (req, res) ->
-    periods = periodViewer.getAllPeriods()
+    includeSuppressed = req.query.includeSuppressed is 'true'
+    periods = periodViewer.getAllPeriods({ includeSuppressed })
     rows = (toWireShape p for key, p of periods)
     # Newest first — matches the legacy ORDER BY year DESC, month DESC.
     rows.sort (a, b) -> (b.year - a.year) or (b.month - a.month)
@@ -157,28 +158,26 @@ setup = (app) ->
     res.json toWireShape periodViewer.getPeriod year, month
 
   app.delete '/rent/period/:year/:month', asyncRoute 'rent.deletePeriod', (req, res) ->
-    # Periods are computed in the new model — deleting one means clearing
-    # any override events that target it. Other events (work, payment)
-    # remain. The tenant's payment history shouldn't vanish because the
-    # landlord 'deleted a period.'
+    # In the event-sourced model a period is a derived view: it exists for
+    # every month that has events with that effective_for. "Deleting" a
+    # period therefore can't mean "remove the events" — those are facts
+    # (work was reported, payments were made). What the landlord actually
+    # wants is "this month isn't part of the rent arrangement; hide it
+    # from the dashboard." We express that as a period-suppressed event.
+    # Work hours still carry over to the next month; the row just doesn't
+    # show. Reversible by deleting (or undeleting) the suppression event.
     year  = parseInt req.params.year
     month = parseInt req.params.month
     ymKey = period.monthKey year, month
     { actor, actor_user } = actorFromRequest req, 'landlord'
-    now = new Date().toISOString()
 
-    overrides = eventsModel.listEventsByMonth(ymKey).filter (e) ->
-      e.action is 'override' and e.payload?.target_kind is 'period-field'
-
-    for o in overrides
-      eventsModel.recordEvent
-        occurred_at:     now
-        effective_for:   ymKey
-        actor:           actor
-        actor_user:      actor_user
-        action:          'deleted'
-        target_event_id: o.id
-        payload:         { reason: 'Period delete via PUT /rent/period' }
+    eventsModel.recordEvent
+      occurred_at:   new Date().toISOString()
+      effective_for: ymKey
+      actor:         actor
+      actor_user:    actor_user
+      action:        'period-suppressed'
+      payload:       { reason: req.body?.reason or 'Period removed from dashboard' }
 
     res.json deleted: true, year: year, month: month
 

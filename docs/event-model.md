@@ -56,8 +56,25 @@ Seven kinds. The third column says which payload fields are required.
 | `config-changed`      | landlord | `{field, new_value, note?}`                          |
 | `work-acknowledged`   | landlord | `{}` — `target_event_id` points at the work-reported |
 | `override`            | landlord | `{target_kind, target, new_value, note?}`            |
+| `period-suppressed`   | landlord | `{reason?}` — `effective_for=YYYY-MM`                |
 | `edited`              | either   | `{new_payload}` — `target_event_id` set              |
 | `deleted`             | either   | `{reason?}` — `target_event_id` set                  |
+
+### `period-suppressed` semantics
+
+A `period-suppressed` event removes a month from the rent arrangement
+entirely. The work-reported, payment-made, and override events for
+that month are *not* destroyed — they remain in the log as historical
+fact — but the calculation skips that month: its work doesn't credit
+toward rent, its payments don't apply, and its carry-over passes
+through to the next month unchanged.
+
+Used when the landlord says "this month isn't part of the rent deal"
+(e.g., Lyndzie did work for a separate project, or rent was waived).
+
+Reversible by emitting a `deleted` event targeting the suppression
+event. `GET /rent/periods?includeSuppressed=true` exposes suppressed
+months for that purpose.
 
 ### `override` payload detail
 

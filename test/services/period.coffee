@@ -256,6 +256,50 @@ test "non-tenant work-reported events don't count toward credit", ->
   assert.equal apr.hours_worked, 5, "only the tenant's 5 hours count"
 
 
+test "period-suppressed hides month from default output", ->
+  suppress = (ym) ->
+    evt 'period-suppressed', ym, { reason: 'test' }, "#{ym}-15T00:00:00Z",
+      { actor: 'landlord', actor_user: 'robert@defore.st' }
+
+  events = [
+    work '2026-03', 4
+    work '2026-04', 4
+    suppress '2026-04'
+  ]
+  result = computeAllPeriods events, NOW
+  assert.equal result['2026-03']?, true,  "March still visible"
+  assert.equal result['2026-04']?, false, "April hidden by suppression"
+
+
+test "period-suppressed: carry-over still flows through hidden month", ->
+  suppress = (ym) ->
+    evt 'period-suppressed', ym, { reason: 'test' }, "#{ym}-15T00:00:00Z",
+      { actor: 'landlord', actor_user: 'robert@defore.st' }
+
+  events = [
+    work '2026-03', 12         # 8 applied, 4 carry to April
+    work '2026-04', 0
+    suppress '2026-04'
+    work '2026-05', 3          # April's 4 carry + 3 worked = 7 applied if April carries
+  ]
+  result = computeAllPeriods events, NOW
+  # April carries 4 hours of credit forward despite being suppressed
+  assert.equal result['2026-05'].hours_from_previous, 4
+  assert.equal result['2026-05'].hours_applied,        7
+  assert.equal result['2026-05'].discount_applied,    350
+
+
+test "period-suppressed: includeSuppressed=true brings it back", ->
+  suppress = (ym) ->
+    evt 'period-suppressed', ym, { reason: 'test' }, "#{ym}-15T00:00:00Z",
+      { actor: 'landlord', actor_user: 'robert@defore.st' }
+
+  events = [ work('2026-04', 5), suppress('2026-04') ]
+  result = computeAllPeriods events, NOW, { includeSuppressed: true }
+  assert.equal result['2026-04']?, true
+  assert.equal result['2026-04'].suppressed, true
+
+
 test "resolveEditsAndDeletes preserves non-edit events untouched", ->
   events = [ work('2026-04', 5), payment('2026-04', 100) ]
   out    = resolveEditsAndDeletes events

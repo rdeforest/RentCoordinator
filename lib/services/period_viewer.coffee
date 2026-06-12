@@ -6,12 +6,12 @@ eventsModel  = require '../models/events.coffee'
 period       = require './period.coffee'
 
 
-getAllPeriods = (now = new Date()) ->
-  period.computeAllPeriods eventsModel.listAllEvents(), now
+getAllPeriods = (opts = {}, now = new Date()) ->
+  period.computeAllPeriods eventsModel.listAllEvents(), now, opts
 
 
 getPeriod = (year, month, now = new Date()) ->
-  periods = getAllPeriods now
+  periods = getAllPeriods { includeSuppressed: true }, now
   periods[period.monthKey year, month]
 
 

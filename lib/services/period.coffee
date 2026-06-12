@@ -153,8 +153,20 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
 # from the first month with activity through the current month, so months
 # with only carry-over (no work-reported, no payment-made) still appear.
 # Future months are not computed here — caller can computeMonth for those.
-computeAllPeriods = (events, now = new Date()) ->
+#
+# opts.includeSuppressed (default false): if true, include months that have
+# a `period-suppressed` event; otherwise skip them. Suppression hides a
+# period from the dashboard ("this month isn't part of the rent arrangement")
+# without destroying the underlying work-reported events.
+#
+# Carry-over still flows through suppressed months — the hours Lyndzie
+# worked are still hers, even if the landlord said "don't bill this month."
+computeAllPeriods = (events, now = new Date(), opts = {}) ->
   resolved = resolveEditsAndDeletes events
+
+  suppressed = new Set()
+  for e in resolved when e.action is 'period-suppressed' and e.effective_for
+    suppressed.add e.effective_for
 
   monthKeys = new Set()
   for e in resolved when e.effective_for
@@ -177,10 +189,22 @@ computeAllPeriods = (events, now = new Date()) ->
   { year, month } = first
 
   loop
-    period = computeMonth year, month, resolved, carryOver, shortfall, now
-    result[monthKey year, month] = period
-    carryOver = period.hours_to_next
-    shortfall = period.cumulative_shortfall
+    key = monthKey year, month
+    if suppressed.has key
+      # Suppression takes the month out of the rent calculation entirely:
+      # work hours don't credit, payments don't apply, carry-over from the
+      # previous month passes through unchanged. Conceptually: "this month
+      # isn't part of the rent arrangement; whatever Lyndzie did that month
+      # was for some other reason." includeSuppressed surfaces it in the
+      # output for display (with `suppressed: true`) without affecting math.
+      if opts.includeSuppressed
+        period = computeMonth year, month, resolved, carryOver, shortfall, now
+        result[key] = Object.assign {}, period, suppressed: true
+    else
+      period = computeMonth year, month, resolved, carryOver, shortfall, now
+      result[key] = period
+      carryOver  = period.hours_to_next
+      shortfall  = period.cumulative_shortfall
 
     break if year is last.year and month is last.month
     month += 1
