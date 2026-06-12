@@ -418,8 +418,8 @@ Resources:
             echo "Setting up CloudWatch Logs..."
             # Log directory and file already created by init script above
 
-            # Install CloudWatch agent
-            wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/debian/amd64/latest/amazon-cloudwatch-agent.deb
+            # Install CloudWatch agent (curl, since the Devuan AMI doesn't ship wget by default)
+            curl -fsSLO https://s3.amazonaws.com/amazoncloudwatch-agent/debian/amd64/latest/amazon-cloudwatch-agent.deb
             dpkg -i -E ./amazon-cloudwatch-agent.deb
             rm amazon-cloudwatch-agent.deb
 
