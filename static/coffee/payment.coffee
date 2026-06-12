@@ -18,34 +18,27 @@ document.addEventListener 'DOMContentLoaded', ->
 
   { year, month } = getPaymentPeriod()
 
-  unless year and month
-    showMessage 'Invalid payment period', 'error'
-    return
+  success = if year and month
+    currentYear  = year
+    currentMonth = month
+    await loadRentPeriod year, month
+  else
+    await loadOutstanding()
 
-  currentYear  = year
-  currentMonth = month
-
-  success = await loadRentPeriod year, month
   return unless success
-
   await initializeStripe()
+
 
 loadRentPeriod = (year, month) ->
   try
-    console.log "Loading rent period for #{year}-#{month}..."
     response = await fetch "/rent/period/#{year}/#{month}"
     data     = await response.json()
-
-    console.log 'Rent period data received:', data
-
     throw new Error (data.error or 'Failed to load rent period') unless response.ok
 
     monthName = new Date(year, month - 1).toLocaleString 'default', month: 'long'
     document.getElementById('payment-period').textContent = "#{monthName} #{year}"
 
     amountDue     = data.amount_due - (data.amount_paid or 0)
-    console.log "Calculated amount due: #{amountDue} (#{data.amount_due} - #{data.amount_paid or 0})"
-
     currentAmount = amountDue
     document.getElementById('payment-amount').textContent = "$#{amountDue.toFixed 2}"
 
@@ -58,6 +51,42 @@ loadRentPeriod = (year, month) ->
 
   catch err
     console.error 'Load rent period error:', err
+    showMessage err.message, 'error'
+    return false
+
+
+# "Pay everything outstanding" — used when the payment page is opened
+# without year/month query params. Renders the total + per-month
+# breakdown so Lyndzie can see what she's covering.
+loadOutstanding = ->
+  try
+    response = await fetch '/rent/outstanding'
+    data     = await response.json()
+    throw new Error (data.error or 'Failed to load outstanding total') unless response.ok
+
+    if data.total_outstanding <= 0
+      showMessage 'No outstanding rent — you are paid up.', 'success'
+      document.getElementById('pay-button').disabled = true
+      return false
+
+    months = data.months
+    label  = if months.length is 1
+      m = months[0]
+      "#{new Date(m.year, m.month - 1).toLocaleString 'default', month: 'long'} #{m.year}"
+    else
+      first = months[0]
+      last  = months[months.length - 1]
+      "#{first.year}-#{String(first.month).padStart 2, '0'} through #{last.year}-#{String(last.month).padStart 2, '0'}"
+
+    document.getElementById('payment-period').textContent = label
+
+    currentAmount = data.total_outstanding
+    document.getElementById('payment-amount').textContent = "$#{currentAmount.toFixed 2}"
+
+    return true
+
+  catch err
+    console.error 'Load outstanding error:', err
     showMessage err.message, 'error'
     return false
 
@@ -128,13 +157,14 @@ processPayment = ->
     throw new Error submitResult.error.message if submitResult.error
 
     console.log 'Step 2: Creating payment intent...'
+    intentBody = { amount: currentAmount }
+    if currentYear and currentMonth
+      intentBody.year  = currentYear
+      intentBody.month = currentMonth
     response = await fetch '/payment/create-intent',
       method  : 'POST'
       headers : 'Content-Type': 'application/json'
-      body    : JSON.stringify
-        year   : currentYear
-        month  : currentMonth
-        amount : currentAmount
+      body    : JSON.stringify intentBody
 
     data = await response.json()
 
@@ -145,11 +175,16 @@ processPayment = ->
     console.log 'Step 3: Confirming payment...'
     user = await getCurrentUser()
 
+    returnUrl = if currentYear and currentMonth
+      "#{window.location.origin}/payment/confirm?year=#{currentYear}&month=#{currentMonth}"
+    else
+      "#{window.location.origin}/payment/confirm"
+
     result = await stripe.confirmPayment
       elements      : elements
       clientSecret  : clientSecret
       confirmParams :
-        return_url : "#{window.location.origin}/payment/confirm?year=#{currentYear}&month=#{currentMonth}"
+        return_url : returnUrl
         payment_method_data:
           billing_details:
             name  : user.email
@@ -233,13 +268,14 @@ checkPaymentStatus = (paymentIntentId) ->
 
 confirmPayment = (paymentIntentId) ->
   try
+    confirmBody = { paymentIntentId }
+    if currentYear and currentMonth
+      confirmBody.year  = currentYear
+      confirmBody.month = currentMonth
     response = await fetch '/payment/confirm',
       method  : 'POST'
       headers : 'Content-Type': 'application/json'
-      body    : JSON.stringify
-        paymentIntentId : paymentIntentId
-        year            : currentYear
-        month           : currentMonth
+      body    : JSON.stringify confirmBody
 
     data = await response.json()
 

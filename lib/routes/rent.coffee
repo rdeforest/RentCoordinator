@@ -100,6 +100,27 @@ setup = (app) ->
     rows.sort (a, b) -> (b.year - a.year) or (b.month - a.month)
     res.json rows
 
+  # Total outstanding across every month that's actually due. Used by the
+  # "Pay Rent Online" flow so the tenant sees one combined number rather
+  # than one month at a time. Months still in NOT DUE status (current month
+  # before the 15th) are excluded — they can be paid early but they aren't
+  # part of the "what do I owe" total.
+  app.get '/rent/outstanding', asyncRoute 'rent.getOutstanding', (req, res) ->
+    periods = periodViewer.getAllPeriods()
+    rows    = Object.values(periods)
+      .filter (p) -> p.payment_status isnt 'NOT DUE'
+      .map (p) ->
+        owed = p.display_amount_due
+        paid = p.amount_paid or 0
+        outstanding = Math.max 0, owed - paid
+        { year: p.year, month: p.month, owed, paid, outstanding }
+      .filter (r) -> r.outstanding > 0
+      .sort   (a, b) -> (a.year - b.year) or (a.month - b.month)   # oldest first
+
+    res.json
+      total_outstanding: rows.reduce ((s, r) -> s + r.outstanding), 0
+      months:            rows
+
   # ---- period writes (overrides) ------------------------------------------
 
   ALLOWED_OVERRIDE_FIELDS = ['amount_due', 'amount_paid']

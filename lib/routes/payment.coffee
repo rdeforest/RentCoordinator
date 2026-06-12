@@ -4,40 +4,70 @@ config         = require '../config.coffee'
 logger         = require '../logger.coffee'
 
 
+computeOutstanding = ->
+  periods = periodViewer.getAllPeriods()
+  rows    = Object.values(periods)
+    .filter (p) -> p.payment_status isnt 'NOT DUE'
+    .map (p) ->
+      owed = p.display_amount_due
+      paid = p.amount_paid or 0
+      outstanding = Math.max 0, owed - paid
+      { year: p.year, month: p.month, owed, paid, outstanding }
+    .filter (r) -> r.outstanding > 0
+    .sort   (a, b) -> (a.year - b.year) or (a.month - b.month)
+  total: rows.reduce ((s, r) -> s + r.outstanding), 0
+  months: rows
+
+
 setup = (app) ->
+  # If year/month are supplied, the tenant is paying a specific month
+  # (legacy flow + the Stripe checkout link in the rent UI). If they're
+  # absent, the tenant is paying everything outstanding in one shot —
+  # confirmPayment will split the result across months oldest-first.
   app.post '/payment/create-intent', (req, res) ->
     { year, month, amount } = req.body
 
-    unless year and month and amount
-      return res.status(400).json error: 'Year, month, and amount required'
+    unless amount
+      return res.status(400).json error: 'Amount required'
 
     try
-      period = periodViewer.getPeriod parseInt(year), parseInt(month)
+      if year and month
+        period = periodViewer.getPeriod parseInt(year), parseInt(month)
+        return res.status(404).json error: 'Rent period not found' unless period
 
-      unless period
-        return res.status(404).json error: 'Rent period not found'
+        expected = period.display_amount_due - (period.amount_paid or 0)
+        # Before the 15th, display is 0 — but tenant may still want to pay
+        # the agreed amount early.
+        if expected <= 0 and period.amount_paid < period.effective_agreed_payment
+          expected = period.effective_agreed_payment - period.amount_paid
 
-      # In the new model, "outstanding for the current installment" is what
-      # the tenant pays — display_amount_due reflects stress-free logic
-      # plus the agreed/override amount.
-      amountDue = period.display_amount_due - (period.amount_paid or 0)
-      # Before the 15th, display is 0 — but tenant may still want to pay
-      # the agreed amount early. Fall back to the agreed payment minus paid.
-      if amountDue <= 0 and period.amount_paid < period.effective_agreed_payment
-        amountDue = period.effective_agreed_payment - period.amount_paid
+        if Math.abs(amount - expected) > 0.01
+          return res.status(400).json
+            error:     'Amount mismatch'
+            expected:  expected
+            requested: amount
 
-      if Math.abs(amount - amountDue) > 0.01
-        return res.status(400).json
-          error:     'Amount mismatch'
-          expected:  amountDue
-          requested: amount
+        description = "Rent payment for #{year}-#{String(month).padStart 2, '0'}"
+        meta        = { year, month, tenant: req.session.email }
+      else
+        # "Pay everything outstanding" flow.
+        outstanding = computeOutstanding()
+        expected    = outstanding.total
 
-      result = await paymentService.createPaymentIntent(
-        amount,
-        "Rent payment for #{year}-#{String(month).padStart 2, '0'}",
-        { year, month, tenant: req.session.email }
-      )
+        if expected <= 0
+          return res.status(400).json error: 'Nothing outstanding to pay'
 
+        if Math.abs(amount - expected) > 0.01
+          return res.status(400).json
+            error:     'Amount mismatch'
+            expected:  expected
+            requested: amount
+
+        ymList      = (m.year + '-' + String(m.month).padStart(2,'0') for m in outstanding.months).join ','
+        description = "Rent payment covering #{ymList}"
+        meta        = { covers: ymList, tenant: req.session.email }
+
+      result = await paymentService.createPaymentIntent amount, description, meta
       res.json result
 
     catch err
@@ -46,14 +76,20 @@ setup = (app) ->
         req.id
       res.status(500).json error: err.message
 
+  # confirm accepts the same shape with year/month optional. When absent,
+  # the Stripe intent's amount is allocated across outstanding months
+  # oldest-first, emitting one payment-made event per covered month.
   app.post '/payment/confirm', (req, res) ->
     { paymentIntentId, year, month } = req.body
 
-    unless paymentIntentId and year and month
-      return res.status(400).json error: 'Payment intent ID, year, and month required'
+    unless paymentIntentId
+      return res.status(400).json error: 'Payment intent ID required'
 
     try
-      result = await paymentService.confirmPayment paymentIntentId, year, month
+      if year and month
+        result = await paymentService.confirmPayment paymentIntentId, parseInt(year), parseInt(month)
+      else
+        result = await paymentService.confirmPaymentAllocated paymentIntentId, computeOutstanding()
 
       res.json result
 

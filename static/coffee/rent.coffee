@@ -112,10 +112,20 @@ loadCurrentMonth = ->
     outstanding = displayDue - (period.amount_paid or 0)
     document.getElementById('outstanding-balance-current').textContent = formatCurrency outstanding
 
+    # Pay button covers everything outstanding across months (past arrears
+    # + current month if past the due date). Server computes the total.
     payOnlineBtn = document.getElementById 'pay-rent-online-btn'
-    paidThisMonth = period.amount_paid or 0
-    if paidThisMonth < period.effective_agreed_payment
+    outstandingResp = await fetch '/rent/outstanding'
+    out = await outstandingResp.json()
+    if out.total_outstanding > 0
       payOnlineBtn.style.display = 'inline-block'
+      payOnlineBtn.textContent   = "Pay Rent Online (#{formatCurrency out.total_outstanding})"
+      payOnlineBtn.onclick = -> window.location.href = '/payment'
+    else if (period.amount_paid or 0) < period.effective_agreed_payment
+      # Nothing past-due, but the current month's installment isn't paid
+      # yet (e.g. before the 15th). Let her pay early for the current month.
+      payOnlineBtn.style.display = 'inline-block'
+      payOnlineBtn.textContent   = 'Pay Rent Online'
       payOnlineBtn.onclick = ->
         window.location.href = "/payment?year=#{currentYear}&month=#{currentMonth}"
     else
