@@ -223,12 +223,15 @@ Resources:
             apt-get update
 
             # Install dependencies
+            # cron — needed for the daily backup crontab line further down
+            # curl is preferred over wget for downloads (Devuan AMI ships curl, not wget)
             apt-get install -y \
               git \
               curl \
               jq \
               awscli \
-              build-essential
+              build-essential \
+              cron
 
             # Create application user
             useradd -r -m -s /bin/bash rent-coordinator || true
