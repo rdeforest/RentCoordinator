@@ -240,19 +240,25 @@ computed-vs-authoritative column notes.
 - Rent calculation based on work logs with manual adjustments
 - Audit logging for all rent events
 
-**Stress-Free Display Logic:**
-- Current/past months show $950 as "amount due" (not full $1600)
-- Current month shows $0 before the 15th, $950 after the 15th
-- Future months show full calculation ($1600 − work credits)
-- Payment status shows PAID when ≥ $950 paid (green, stress-free)
-- "Outstanding Balance" and "Total Paid" hidden behind "Show Full Details" button
-- Real debt tracked in background for gradual catch-up over 1-3 years
-- Constants: AGREED_MONTHLY_PAYMENT = 950, RENT_DUE_DAY = 15
+**Display Logic (event-sourced, 2026-06):**
+- Past months: show the real amount owed (calculated from work credits;
+  if the landlord pinned a different value via an `override` event, that
+  pinned value shows instead). The temporary $950 agreement that ran
+  through Feb 2026 lives in history as `override` events on those
+  specific months — there is no global "$950 mask" on past months.
+- Current month: $0 before the 15th, agreed_payment after.
+- Future months: full calculation.
+- Payment status: NOT DUE (current month before 15th), PAID (paid ≥
+  display_amount_due), PARTIAL, UNPAID.
+- Constants: AGREED_MONTHLY_PAYMENT = 950, RENT_DUE_DAY = 15.
 
 The server-side implementation lives in
-`lib/routes/rent.coffee::getDisplayAmountDue` and is the source of truth.
-The client must not duplicate this logic — fetch `display_amount_due` from
-the period payload instead.
+`lib/services/period.coffee::computeMonth` and is the source of truth.
+The route handlers (`lib/routes/rent.coffee`) consume it via
+`period_viewer`. The client must not duplicate this logic — fetch
+`display_amount_due` from the period payload instead.
+
+See `docs/event-model.md` for the full event model.
 
 **Stripe Integration:**
 - Live mode enabled (pk_live_... and sk_live_... keys)

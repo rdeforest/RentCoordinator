@@ -183,18 +183,38 @@ test "current month before the 15th: display_amount_due = 0, status NOT DUE", ->
   assert.equal jun.payment_status,     'NOT DUE'
 
 
-test "past month with no payment: display=$950, status UNPAID", ->
+test "past month with no payment: display = full calculated, status UNPAID", ->
+  # Past months show the real amount owed, not the stress-free agreed_payment.
+  # The temporary $950 arrangement that the dashboard used to mask with is
+  # not a permanent fixture — when it's not active, past months must be honest.
   events = [ work '2026-04', 0 ]
   apr    = computeAllPeriods(events, NOW)['2026-04']
-  assert.equal apr.display_amount_due, 950
+  assert.equal apr.display_amount_due, 1600
   assert.equal apr.payment_status,     'UNPAID'
 
 
-test "past month fully paid agreed_payment: PAID", ->
-  events = [ work('2026-04', 0), payment('2026-04', 950) ]
+test "past month fully paid against override: PAID", ->
+  # The agreed-payment masking is now expressed as an explicit override
+  # event, not a global fallback. This still lets historical months pinned
+  # at $950 display as such, while uncovered months show their calculation.
+  events = [ work('2026-04', 0), payment('2026-04', 950), override('2026-04', 'amount_due', 950) ]
   apr    = computeAllPeriods(events, NOW)['2026-04']
   assert.equal apr.display_amount_due, 950
   assert.equal apr.payment_status,     'PAID'
+
+
+test "past month with calc=$1200 and no override: shows $1200 (the bug 2026-06-12)", ->
+  # April 2026: 16h carry from March + 4h worked = 8 applied = $400 credit
+  # → $1600 - $400 = $1200. No override events. Used to display $950
+  # because the stress-free fallback applied agreed_monthly_payment to past
+  # months. Now displays the real $1200.
+  events = [
+    work '2026-03', 16
+    work '2026-04', 4
+  ]
+  apr = computeAllPeriods(events, NOW)['2026-04']
+  assert.equal apr.amount_due_calculated, 1200
+  assert.equal apr.display_amount_due,    1200, "no more $950 mask on uncovered past months"
 
 
 # --- regression: no phantom "rent_due" event biting the calc ------------------

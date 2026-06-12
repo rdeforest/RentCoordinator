@@ -96,7 +96,8 @@ setup = (app) ->
   app.get '/rent/periods', asyncRoute 'rent.getPeriods', (req, res) ->
     periods = periodViewer.getAllPeriods()
     rows = (toWireShape p for key, p of periods)
-    rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
+    # Newest first — matches the legacy ORDER BY year DESC, month DESC.
+    rows.sort (a, b) -> (b.year - a.year) or (b.month - a.month)
     res.json rows
 
   # ---- period writes (overrides) ------------------------------------------

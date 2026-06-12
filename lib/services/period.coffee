@@ -109,11 +109,16 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   is_current = year is now.getFullYear() and month is (now.getMonth() + 1)
   is_future  = year > now.getFullYear() or (year is now.getFullYear() and month > (now.getMonth() + 1))
 
+  # Past months show the real amount owed (calculated, or override if pinned).
+  # The "stress-free agreed_payment" mask only applies to the current month —
+  # and only after the due date — so the dashboard doesn't broadcast
+  # "$1600 overdue!" the moment the new month rolls over. For historical
+  # months, honesty wins.
   display_amount_due =
     if      amount_due_override then amount_due
     else if is_future           then amount_due
     else if is_current          then (if now.getDate() < config.rent_due_day then 0 else agreed_payment)
-    else                             agreed_payment
+    else                             amount_due
 
   payment_status =
     if      is_current and now.getDate() < config.rent_due_day then 'NOT DUE'
