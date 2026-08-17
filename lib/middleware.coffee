@@ -10,7 +10,11 @@ setup = (app) ->
   app.set 'trust proxy', 1
 
   app.use cors()
-  app.use express.json()
+  # Capture the raw request bytes so the Stripe webhook can verify its
+  # signature (a re-serialized body won't match). JSON parsing for every
+  # other route is unchanged.
+  app.use express.json
+    verify: (req, res, buf) -> req.rawBody = buf
   app.use express.urlencoded extended: true
 
   app.use session

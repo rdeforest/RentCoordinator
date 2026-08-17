@@ -124,6 +124,10 @@ setup = (app, getServer) ->
   app.get '/payment/config', (req, res) ->
     res.json publishableKey: config.STRIPE_PUBLISHABLE_KEY
 
+  # Stripe webhook: no session cookie, authenticated by signature instead, so
+  # it must be registered ahead of the auth gate.
+  paymentRoutes.setupWebhook app
+
   app.use middleware.requireAuth
 
   app.get '/',         (req, res) -> res.sendFile 'index.html',    root: config.STATIC_DIR

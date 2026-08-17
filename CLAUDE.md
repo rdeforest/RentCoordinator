@@ -340,6 +340,7 @@ See `docs/event-model.md` for the full event model.
 - `EMAIL_FROM` — From address for emails (default: noreply@thatsnice.org)
 - `STRIPE_SECRET_KEY` — Stripe API secret key (sk_test_... or sk_live_...)
 - `STRIPE_PUBLISHABLE_KEY` — Stripe publishable key (pk_test_... or pk_live_...)
+- `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret (whsec_...); required for `POST /payment/webhook` to accept ACH settlement events
 
 ### Backup and Disaster Recovery
 

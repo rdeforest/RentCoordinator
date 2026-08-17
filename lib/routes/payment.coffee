@@ -48,7 +48,8 @@ setup = (app) ->
             requested: amount
 
         description = "Rent payment for #{year}-#{String(month).padStart 2, '0'}"
-        meta        = { year, month, tenant: req.session.email }
+        allocation  = [ { year: parseInt(year), month: parseInt(month), amount } ]
+        meta        = { year, month, tenant: req.session.email, allocation: JSON.stringify allocation }
       else
         # "Pay everything outstanding" flow.
         outstanding = computeOutstanding()
@@ -65,7 +66,10 @@ setup = (app) ->
 
         ymList      = (m.year + '-' + String(m.month).padStart(2,'0') for m in outstanding.months).join ','
         description = "Rent payment covering #{ymList}"
-        meta        = { covers: ymList, tenant: req.session.email }
+        # Freeze the oldest-first split now so confirm and the webhook credit
+        # the same months later, whatever "outstanding" looks like by then.
+        allocation  = ({ year: m.year, month: m.month, amount: m.outstanding } for m in outstanding.months)
+        meta        = { covers: ymList, tenant: req.session.email, allocation: JSON.stringify allocation }
 
       result = await paymentService.createPaymentIntent amount, description, meta
       res.json result
@@ -76,26 +80,23 @@ setup = (app) ->
         req.id
       res.status(500).json error: err.message
 
-  # confirm accepts the same shape with year/month optional. When absent,
-  # the Stripe intent's amount is allocated across outstanding months
-  # oldest-first, emitting one payment-made event per covered month.
+  # Client confirm. Only fires when the intent already settled; recording
+  # replays the allocation frozen into the intent's metadata at create time,
+  # so year/month in the body are no longer needed. Idempotent on the intent
+  # id, so it's safe alongside the webhook.
   app.post '/payment/confirm', (req, res) ->
-    { paymentIntentId, year, month } = req.body
+    { paymentIntentId } = req.body
 
     unless paymentIntentId
       return res.status(400).json error: 'Payment intent ID required'
 
     try
-      if year and month
-        result = await paymentService.confirmPayment paymentIntentId, parseInt(year), parseInt(month)
-      else
-        result = await paymentService.confirmPaymentAllocated paymentIntentId, computeOutstanding()
-
+      result = await paymentService.confirmPayment paymentIntentId
       res.json result
 
     catch err
       logger.error 'payment.confirmPayment', err,
-        { paymentIntentId, year, month },
+        { paymentIntentId },
         req.id
       res.status(400).json error: err.message
 
@@ -129,4 +130,27 @@ setup = (app) ->
         req.id
       res.status(500).json error: err.message
 
-module.exports = { setup }
+# The Stripe webhook is the authoritative record of ACH settlement (the
+# client poll gives up long before an ACH clears). It must be registered
+# BEFORE requireAuth — Stripe sends no session cookie — so it lives in its
+# own setup that routing.coffee calls ahead of the auth gate. Authenticity
+# comes from the signature check, verified against the raw request body.
+setupWebhook = (app) ->
+  app.post '/payment/webhook', (req, res) ->
+    signature = req.headers['stripe-signature']
+
+    try
+      event = paymentService.constructWebhookEvent req.rawBody, signature
+    catch err
+      logger.error 'payment.webhook.signature', err, {}, req.id
+      return res.status(400).json error: 'Webhook signature verification failed'
+
+    try
+      if event.type is 'payment_intent.succeeded'
+        paymentService.recordPaymentFromIntent event.data.object
+      res.json received: true
+    catch err
+      logger.error 'payment.webhook.handle', err, { type: event.type }, req.id
+      res.status(500).json error: err.message
+
+module.exports = { setup, setupWebhook }

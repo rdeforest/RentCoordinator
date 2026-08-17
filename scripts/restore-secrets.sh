@@ -54,19 +54,38 @@ fi
 
 success "Secrets retrieved"
 
+# The single source of truth for which secrets we manage. Add a key here and
+# it flows through parse, delete, and append automatically — on both sides.
+# Anything present in Secrets Manager but absent from this list is ignored;
+# anything in this list but absent from the secret is skipped (not written as
+# the literal "null", which the old per-key version did).
+SECRET_KEYS=(
+  SESSION_SECRET
+  SMTP_HOST
+  SMTP_PORT
+  SMTP_USER
+  SMTP_PASS
+  EMAIL_FROM
+  STRIPE_SECRET_KEY
+  STRIPE_PUBLISHABLE_KEY
+  STRIPE_WEBHOOK_SECRET
+)
+
 # Step 2: Parse secrets
 info "Step 2/3: Parsing secrets..."
 
-SESSION_SECRET=$(echo "$SECRETS" | jq -r '.SESSION_SECRET')
-SMTP_HOST=$(echo "$SECRETS" | jq -r '.SMTP_HOST')
-SMTP_PORT=$(echo "$SECRETS" | jq -r '.SMTP_PORT')
-SMTP_USER=$(echo "$SECRETS" | jq -r '.SMTP_USER')
-SMTP_PASS=$(echo "$SECRETS" | jq -r '.SMTP_PASS')
-EMAIL_FROM=$(echo "$SECRETS" | jq -r '.EMAIL_FROM')
-STRIPE_SECRET_KEY=$(echo "$SECRETS" | jq -r '.STRIPE_SECRET_KEY')
-STRIPE_PUBLISHABLE_KEY=$(echo "$SECRETS" | jq -r '.STRIPE_PUBLISHABLE_KEY')
+# Build the KEY=VALUE block to write, skipping any key not in the secret.
+SECRET_BLOCK=""
+for key in "${SECRET_KEYS[@]}"; do
+  value=$(echo "$SECRETS" | jq -r --arg k "$key" '.[$k] // empty')
+  if [ -z "$value" ]; then
+    warn "  $key not present in secret — skipping"
+    continue
+  fi
+  SECRET_BLOCK+="${key}=${value}"$'\n'
+done
 
-if [ "$SESSION_SECRET" = "null" ] || [ -z "$SESSION_SECRET" ]; then
+if ! printf '%s' "$SECRET_BLOCK" | grep -q '^SESSION_SECRET='; then
   error "Failed to parse SESSION_SECRET from secrets"
   exit 1
 fi
@@ -76,109 +95,42 @@ success "Secrets parsed successfully"
 # Step 3: Deploy to server
 info "Step 3/3: Deploying secrets to $SERVER..."
 
-# Create temporary script to run on remote server
-REMOTE_SCRIPT=$(cat <<'EOFREMOTE'
-#!/bin/bash
+# Ship the block base64-encoded: a single shell-safe line, so values with
+# spaces or special characters survive the trip (the old per-var command
+# line broke on those), and the remote script derives the key list from the
+# block itself — no second copy to keep in sync.
+SECRETS_B64=$(printf '%s' "$SECRET_BLOCK" | base64 | tr -d '\n')
+
+if ! ssh "$SERVER" SECRETS_B64="$SECRETS_B64" bash -s <<'EOFREMOTE'
 set -euo pipefail
 
-# Read secrets from stdin
-read -r SESSION_SECRET
-read -r SMTP_HOST
-read -r SMTP_PORT
-read -r SMTP_USER
-read -r SMTP_PASS
-read -r EMAIL_FROM
-read -r STRIPE_SECRET_KEY
-read -r STRIPE_PUBLISHABLE_KEY
-
-# Check if config.sh exists
 CONFIG_FILE="/home/admin/rent-coordinator/config.sh"
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "Error: $CONFIG_FILE not found"
   exit 1
 fi
 
+SECRET_BLOCK=$(printf '%s' "$SECRETS_B64" | base64 -d)
+
 # Backup existing config
 sudo -u rent-coordinator cp "$CONFIG_FILE" "$CONFIG_FILE.backup-$(date +%Y%m%d-%H%M%S)"
 
-# Remove old secret lines if they exist
-sudo -u rent-coordinator sed -i '/^SESSION_SECRET=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_HOST=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_PORT=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_USER=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_PASS=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^EMAIL_FROM=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^STRIPE_SECRET_KEY=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^STRIPE_PUBLISHABLE_KEY=/d' "$CONFIG_FILE"
+# Remove any existing line for each key we're about to set
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  key="${line%%=*}"
+  sudo -u rent-coordinator sed -i "/^${key}=/d" "$CONFIG_FILE"
+done <<< "$SECRET_BLOCK"
 
-# Append new secrets
+# Append the fresh values
 {
   echo ""
   echo "# Secrets from AWS Secrets Manager (restored $(date))"
-  echo "SESSION_SECRET=$SESSION_SECRET"
-  echo "SMTP_HOST=$SMTP_HOST"
-  echo "SMTP_PORT=$SMTP_PORT"
-  echo "SMTP_USER=$SMTP_USER"
-  echo "SMTP_PASS=$SMTP_PASS"
-  echo "EMAIL_FROM=$EMAIL_FROM"
-  echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY"
-  echo "STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY"
+  printf '%s\n' "$SECRET_BLOCK"
 } | sudo -u rent-coordinator tee -a "$CONFIG_FILE" > /dev/null
 
 echo "Secrets configured successfully"
 EOFREMOTE
-)
-
-# Execute on remote server - send secrets as environment variables
-if ! ssh "$SERVER" \
-  SESSION_SECRET="$SESSION_SECRET" \
-  SMTP_HOST="$SMTP_HOST" \
-  SMTP_PORT="$SMTP_PORT" \
-  SMTP_USER="$SMTP_USER" \
-  SMTP_PASS="$SMTP_PASS" \
-  EMAIL_FROM="$EMAIL_FROM" \
-  STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
-  STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
-  bash -s <<'EOFREMOTE2'
-#!/bin/bash
-set -euo pipefail
-
-# Check if config.sh exists
-CONFIG_FILE="/home/admin/rent-coordinator/config.sh"
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "Error: $CONFIG_FILE not found"
-  exit 1
-fi
-
-# Backup existing config
-sudo -u rent-coordinator cp "$CONFIG_FILE" "$CONFIG_FILE.backup-$(date +%Y%m%d-%H%M%S)"
-
-# Remove old secret lines if they exist
-sudo -u rent-coordinator sed -i '/^SESSION_SECRET=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_HOST=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_PORT=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_USER=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^SMTP_PASS=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^EMAIL_FROM=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^STRIPE_SECRET_KEY=/d' "$CONFIG_FILE"
-sudo -u rent-coordinator sed -i '/^STRIPE_PUBLISHABLE_KEY=/d' "$CONFIG_FILE"
-
-# Append new secrets
-{
-  echo ""
-  echo "# Secrets from AWS Secrets Manager (restored $(date))"
-  echo "SESSION_SECRET=$SESSION_SECRET"
-  echo "SMTP_HOST=$SMTP_HOST"
-  echo "SMTP_PORT=$SMTP_PORT"
-  echo "SMTP_USER=$SMTP_USER"
-  echo "SMTP_PASS=$SMTP_PASS"
-  echo "EMAIL_FROM=$EMAIL_FROM"
-  echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY"
-  echo "STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY"
-} | sudo -u rent-coordinator tee -a "$CONFIG_FILE" > /dev/null
-
-echo "Secrets configured successfully"
-EOFREMOTE2
 then
   error "Failed to deploy secrets to $SERVER"
   exit 1

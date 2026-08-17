@@ -142,6 +142,8 @@ dist
 .yarn/install-state.gz
 .pnp.*
 # Project-specific
+# Never track credential dumps
+current-aws-keys
 tenant-coordinator*
 test-*.db
 test-*.log

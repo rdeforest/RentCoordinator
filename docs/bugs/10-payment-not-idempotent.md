@@ -1,7 +1,28 @@
 # Bug 10 — Payment confirmation is not idempotent (double-credit)
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** fixed 2026-08-17 (ships with bug 09)
+
+## Resolution
+
+Recording is now funnelled through one function,
+`paymentService.recordPaymentFromIntent`, used by both the client confirm and
+the webhook. Before inserting it looks up
+`eventsModel.paymentEventsForIntent` — a `json_extract` query on
+`stripe_payment_intent_id` — and no-ops if any event for that intent already
+exists. The two former `confirm*` functions (which each recorded
+unconditionally) are gone.
+
+The check and the inserts run with **no `await` between them**, so on the
+single-threaded event loop a concurrent caller (client retry racing the
+webhook) can't interleave: whichever reaches the recorder first completes its
+check-and-insert synchronously, and the second sees the existing event and
+no-ops. The multi-month allocation inserts are wrapped in a transaction so a
+retry can't observe or leave a partial set. Note the lookup scans JSON
+payloads — O(events), fine at this project's scale.
+
+Regression test: `test/integration/payment-webhook.coffee` (replayed webhook
+credits the month once, not twice).
 
 ## Symptom
 

@@ -1,7 +1,30 @@
 # Bug 09 — ACH payments are never recorded (no webhook)
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** fixed 2026-08-17 (ships with bug 10)
+
+## Resolution
+
+Added `POST /payment/webhook` (`lib/routes/payment.coffee::setupWebhook`),
+registered in `routing.coffee` **before** `requireAuth` since Stripe sends no
+cookie. It verifies `stripe-signature` against the raw body — `middleware`
+now captures `req.rawBody` via `express.json`'s `verify` hook — and on
+`payment_intent.succeeded` records the payment through the shared
+`recordPaymentFromIntent`. Recording replays the allocation plan frozen into
+the intent's `metadata` at create time, so the webhook credits the exact
+months chosen at checkout even though it fires days later. The client poll is
+now best-effort UI; the webhook is authoritative. Idempotency is bug 10.
+
+**Deploy step:** register `https://rent.thatsnice.org/payment/webhook` in
+Stripe for the `payment_intent.succeeded` event, then add the endpoint's
+signing secret to the `rent-coordinator/config` Secrets Manager entry under
+`STRIPE_WEBHOOK_SECRET`. `scripts/restore-secrets.sh <server>` now carries
+that key through automatically (it's in the `SECRET_KEYS` list); run it and
+restart the service. Without the secret the endpoint returns 400 for every
+call.
+
+Regression test: `test/integration/payment-webhook.coffee` (offline, signs
+with Stripe's `generateTestHeaderString`).
 
 ## Symptom
 

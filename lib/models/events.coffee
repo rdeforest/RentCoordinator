@@ -57,6 +57,19 @@ listEventsByActor = (actor_user) ->
   hydrate row for row in rows
 
 
+# Every payment-made event carrying a given Stripe PaymentIntent id. Lets
+# payment recording be idempotent (bug 10): one settled intent credits once,
+# no matter how many times confirm/webhook fire for it.
+paymentEventsForIntent = (intentId) ->
+  rows = db.prepare("""
+    SELECT * FROM events
+    WHERE action = 'payment-made'
+      AND json_extract(payload, '$.stripe_payment_intent_id') = ?
+    ORDER BY occurred_at, id
+  """).all intentId
+  hydrate row for row in rows
+
+
 # Atomic batch insert. Used by the seed migration and any route that needs
 # to emit multiple related events together (e.g. an edit + a follow-on).
 recordEvents = (events) ->
@@ -71,4 +84,5 @@ module.exports = {
   listAllEvents
   listEventsByMonth
   listEventsByActor
+  paymentEventsForIntent
 }
