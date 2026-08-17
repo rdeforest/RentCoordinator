@@ -1,7 +1,19 @@
 # Bug 08 — DELETE /work-logs/:id always returns 500
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** fixed 2026-08-17
+
+## Resolution
+
+Added `deleteWorkLog` to `lib/models/work_log.coffee`. It deletes the row
+and, because bug 06 is now fixed, also retracts the rent credit: it emits a
+`deleted` event targeting the work-reported event. That target is just the
+log's id — bug 06's fix made the work-reported event reuse the log id — so
+`resolveEditsAndDeletes` in `period.coffee` drops those hours from the fold.
+If the row is already gone it emits nothing, so a double delete can't
+retract twice (and the route 404s on the second call). The DELETE route
+needed no change; it was already calling the (previously missing) function.
+Regression test: `test/integration/work-delete.coffee`.
 
 ## Symptom
 

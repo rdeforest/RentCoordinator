@@ -11,6 +11,14 @@ MIN_WORK_LOG_DURATION = if NODE_ENV is 'test' then 1 else 60
 WORKERS              = ['robert', 'lyndzie']
 DEFAULT_STAKEHOLDERS = ['robert', 'lyndzie']
 
+# Who each worker is in the rent event model. A created work log emits a
+# work-reported event under this identity; only 'tenant' hours credit rent
+# (see lib/services/period.coffee). Mirrors the seed migration's mapping so
+# live and seeded events agree.
+WORKER_IDENTITY =
+  robert:  { actor: 'landlord', user: 'robert@defore.st' }
+  lyndzie: { actor: 'tenant',   user: 'lynz57@hotmail.com' }
+
 BASE_RENT              = 1600
 HOURLY_CREDIT          = 50
 MAX_MONTHLY_HOURS      = 8
@@ -30,6 +38,7 @@ EMAIL_FROM = process.env.EMAIL_FROM or 'noreply@thatsnice.org'
 
 STRIPE_SECRET_KEY      = process.env.STRIPE_SECRET_KEY
 STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY
+STRIPE_WEBHOOK_SECRET  = process.env.STRIPE_WEBHOOK_SECRET
 
 
 module.exports = {
@@ -42,6 +51,7 @@ module.exports = {
   MIN_WORK_LOG_DURATION
   WORKERS
   DEFAULT_STAKEHOLDERS
+  WORKER_IDENTITY
   BASE_RENT
   HOURLY_CREDIT
   MAX_MONTHLY_HOURS
@@ -58,4 +68,5 @@ module.exports = {
   EMAIL_FROM
   STRIPE_SECRET_KEY
   STRIPE_PUBLISHABLE_KEY
+  STRIPE_WEBHOOK_SECRET
 }

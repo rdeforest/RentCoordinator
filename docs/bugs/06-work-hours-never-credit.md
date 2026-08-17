@@ -1,7 +1,28 @@
 # Bug 06 — Work hours never credit rent (event model)
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** fixed 2026-08-17 (create path)
+
+## Resolution
+
+`workLogModel.createWorkLog` now emits a `work-reported` event
+(`lib/models/work_log.coffee`). Both producers — `POST /work-logs` and the
+timer's `stopTimer` — go through that single function, so both are covered
+by one change. The event reuses the work_log `id` as its own id (the seed
+migration's convention), giving a one-log-⟺-one-event invariant, no
+double-count with already-seeded historical logs, and a stable handle for
+future edit/delete reversals. Actor is derived from the `worker` field via
+`config.WORKER_IDENTITY` (lyndzie → tenant, robert → landlord); only tenant
+hours credit. Regression test: `test/integration/work-credit.coffee`.
+
+**Delete** is now handled too — see **bug 08** (fixed 2026-08-17); it emits
+a `deleted` event targeting the work-reported event.
+
+**Still open:** *editing* a work log does not yet adjust the credit. Edit
+needs a compensating `edited` event against the work-reported event (now
+findable by shared id, following the same pattern as the delete reversal).
+Because create now emits, this staleness case newly *matters* — track it as
+a follow-up.
 
 ## Symptom
 
