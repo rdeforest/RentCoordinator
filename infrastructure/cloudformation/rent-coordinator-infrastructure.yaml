@@ -367,7 +367,7 @@ Resources:
               start-stop-daemon --start --quiet --pidfile $PIDFILE \
                 --chuid $USER --background --make-pidfile \
                 --exec /bin/bash -- -c \
-                "cd $APP_DIR && set -a && . $APP_DIR/.env && set +a && . $NVM_DIR/nvm.sh && nvm use && exec npx coffee main.coffee >> $LOGFILE 2>&1"
+                "cd $APP_DIR && set -a && . $APP_DIR/.env && set +a && . $NVM_DIR/nvm.sh && nvm use >/dev/null && exec node ./node_modules/.bin/coffee main.coffee >> $LOGFILE 2>&1"
             }
             do_stop() {
               start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE
@@ -377,7 +377,7 @@ Resources:
               start)   do_start ;;
               stop)    do_stop ;;
               restart) do_stop; sleep 1; do_start ;;
-              status)  status_of_proc -p $PIDFILE /bin/bash rent-coordinator && exit 0 || exit $? ;;
+              status)  status_of_proc -p $PIDFILE node rent-coordinator && exit 0 || exit $? ;;
               *)       echo "Usage: $0 {start|stop|restart|status}" >&2; exit 3 ;;
             esac
             INITEOF
