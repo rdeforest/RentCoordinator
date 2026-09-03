@@ -355,8 +355,12 @@ See `docs/event-model.md` for the full event model.
 curl -X POST https://rent.thatsnice.org/api/backup \
   -H "Cookie: <session-cookie>"
 
-:# Or from the server directly (bypasses auth)
-curl -X POST http://localhost:3000/api/backup
+:# NOTE: /api/backup is behind requireAuth even on localhost — an
+:# unauthenticated curl gets 302'd to /login.html and backs up nothing.
+:# (This silently broke the nightly cron; fixed 2026-08-17 to use the
+:# script below.) For a server-side backup with no session, use the
+:# script — it calls the backup service directly, no HTTP:
+:#   ./scripts/backup-now.sh
 
 :# Check backup status
 curl https://rent.thatsnice.org/api/backup/status
