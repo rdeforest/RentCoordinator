@@ -8,6 +8,11 @@ TIMER_POLL_INTERVAL   = 1000
 SESSION_TIMEOUT       = 8 * 60 * 60 * 1000
 MIN_WORK_LOG_DURATION = if NODE_ENV is 'test' then 1 else 60
 
+# Auto-backup once the DB has changed but gone quiet (no writes) for this
+# long — catches data between the nightly cron backups.
+BACKUP_IDLE_MS       = 60 * 60 * 1000    # 1h of write-inactivity
+BACKUP_IDLE_CHECK_MS = 10 * 60 * 1000    # check every 10 min
+
 WORKERS              = ['robert', 'lyndzie']
 DEFAULT_STAKEHOLDERS = ['robert', 'lyndzie']
 
@@ -49,6 +54,8 @@ module.exports = {
   TIMER_POLL_INTERVAL
   SESSION_TIMEOUT
   MIN_WORK_LOG_DURATION
+  BACKUP_IDLE_MS
+  BACKUP_IDLE_CHECK_MS
   WORKERS
   DEFAULT_STAKEHOLDERS
   WORKER_IDENTITY

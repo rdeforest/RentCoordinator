@@ -36,6 +36,9 @@ startServer = ->
     recurringEventsService.scheduleDailyProcessing()
     console.log 'Recurring events daily processing scheduled'
 
+    backupService = require './lib/services/backup.coffee'
+    backupService.startIdleBackup()
+
     # Mark application as fully ready (for health checks)
     routing.markAppReady()
     console.log 'Application ready - health checks will pass'

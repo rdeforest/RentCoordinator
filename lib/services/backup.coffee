@@ -4,9 +4,10 @@
 # multi-instance deployments.
 
 { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = require '@aws-sdk/client-s3'
-{ createReadStream, createWriteStream, copyFileSync, existsSync, mkdirSync } = require 'node:fs'
+{ createReadStream, createWriteStream, copyFileSync, existsSync, mkdirSync, readdirSync, statSync } = require 'node:fs'
 { readFile } = require 'node:fs/promises'
 { join, dirname, basename } = require 'node:path'
+config = require '../config.coffee'
 
 BACKUP_VERSION = '2.0.0'  # SQLite-based backups
 
@@ -239,6 +240,59 @@ createBackup = (backupDir = './backups') ->
   result
 
 
+# --- Idle auto-backup -------------------------------------------------------
+# Take a backup once the DB has changed since the last one AND has gone quiet
+# (no writes) for a while — so recent work survives even between the nightly
+# cron backups. The quiescence requirement also means the raw file copy is
+# consistent (nothing is mid-write).
+
+# Last-write time of the database, in ms. With the default rollback journal
+# (no WAL) the .db file's mtime moves on every commit; we also consider a
+# -wal file if one ever appears, so this stays correct if WAL is enabled later.
+dbLastWriteMs = ->
+  dbPath = getDbPath()
+  return 0 unless existsSync dbPath
+  newest = statSync(dbPath).mtimeMs
+  walPath = "#{dbPath}-wal"
+  newest = Math.max newest, statSync(walPath).mtimeMs if existsSync walPath
+  newest
+
+
+# Newest local backup's mtime in ms (0 if none). Seeds "last backup" on
+# startup so a restart doesn't re-back-up already-saved state.
+newestLocalBackupMs = (backupDir = './backups') ->
+  return 0 unless existsSync backupDir
+  times = (statSync(join backupDir, f).mtimeMs for f in readdirSync backupDir when f.endsWith '.db')
+  if times.length then Math.max times... else 0
+
+
+# Pure decision: back up iff the DB changed since the last backup and it's
+# been idle (no writes) for at least idleMs. Exported for testing.
+shouldIdleBackup = (dbMtime, lastBackupAt, now, idleMs) ->
+  return false unless dbMtime > lastBackupAt   # nothing new since last backup
+  (now - dbMtime) >= idleMs                     # quiet long enough to be safe
+
+
+# Start the idle-backup loop. Fire-and-forget; safe to call once at startup.
+startIdleBackup = (opts = {}) ->
+  idleMs     = opts.idleMs     ? config.BACKUP_IDLE_MS
+  checkEvery = opts.checkEvery ? config.BACKUP_IDLE_CHECK_MS
+  backupDir  = opts.backupDir  ? './backups'
+  lastBackupAt = newestLocalBackupMs backupDir
+
+  console.log "Idle auto-backup armed: after #{Math.round idleMs / 60000}min quiet, checking every #{Math.round checkEvery / 60000}min"
+
+  setInterval ->
+    try
+      if shouldIdleBackup dbLastWriteMs(), lastBackupAt, Date.now(), idleMs
+        console.log 'Idle auto-backup: DB changed and quiet — backing up'
+        await createBackup backupDir
+        lastBackupAt = Date.now()
+    catch error
+      console.error 'Idle auto-backup failed:', error.message
+  , checkEvery
+
+
 # Restore from local file
 restoreFromFile = (filepath) ->
   unless existsSync filepath
@@ -272,6 +326,10 @@ module.exports = {
   restoreFromFile
   generateBackupFilename
   ensureBackupDir
+  shouldIdleBackup
+  startIdleBackup
+  dbLastWriteMs
+  newestLocalBackupMs
 
   # Config
   S3_BUCKET
