@@ -1,7 +1,16 @@
 # Bug 19 — Summary "total credits" renders undefined
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** fixed 2026-09-04 (rendered as `$NaN`, not blank — `Intl.NumberFormat.format(undefined)` → "$NaN")
+
+## Resolution
+
+Fixed the client accessor: `static/coffee/rent.coffee:87` now reads
+`summary.total_discount` (the key the route actually sends) instead of
+`summary.total_discount_applied`. Chose the client side over renaming the
+server key so the wire contract stays stable and `total_discount` (which no
+other consumer reads) is untouched. Verified against the real summary path:
+the old key formats to `$NaN`, the new key to `$250.00` for a 5-hour month.
 
 ## Symptom
 

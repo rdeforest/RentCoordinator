@@ -84,7 +84,7 @@ loadRentSummary = ->
     summary  = await response.json()
 
     document.getElementById('outstanding-balance').textContent = formatCurrency summary.outstanding_balance
-    document.getElementById('total-credits')       .textContent = formatCurrency summary.total_discount_applied
+    document.getElementById('total-credits')       .textContent = formatCurrency summary.total_discount
     document.getElementById('total-paid')          .textContent = formatCurrency summary.total_amount_paid
     document.getElementById('months-tracked')      .textContent = summary.total_periods
 
