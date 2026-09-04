@@ -306,12 +306,17 @@ loadEvents = (filters = {}) ->
       url += '?' + queryParams.toString()
 
     response = await fetch url
-    events = await response.json()
+    received = await response.json()
 
     # Filter out malformed events first
-    events = events.filter (event) ->
+    events = received.filter (event) ->
       event.type? and event.date? and event.year? and event.month? and
       event.amount? and event.description? and event.id?
+
+    # Canary: the server sent events but none are renderable — the shape the
+    # client expects drifted from what the server sends (this was bug 17).
+    if received.length > 0 and events.length is 0
+      window.SharedUtils.reportClientError 'events-all-filtered', received: received.length
 
     # Apply client-side filters
     if filters.type

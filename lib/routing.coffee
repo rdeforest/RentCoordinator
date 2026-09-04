@@ -9,6 +9,7 @@ paymentRoutes         = require './routes/payment.coffee'
 paymentsRoutes        = require './routes/payments.coffee'
 backupRoutes          = require './routes/backup.coffee'
 adminRoutes           = require './routes/admin.coffee'
+observabilityRoutes   = require './routes/observability.coffee'
 middleware            = require './middleware.coffee'
 { DatabaseSync }      = require 'node:sqlite'
 pkg                   = require '../package.json'
@@ -243,6 +244,7 @@ setup = (app, getServer) ->
   paymentsRoutes       .setup app
   backupRoutes         .setup app
   adminRoutes          .setup app
+  observabilityRoutes  .setup app
 
 
 module.exports = { setup, markAppReady }

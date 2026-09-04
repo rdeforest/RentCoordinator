@@ -119,6 +119,20 @@
   <button id="detokenizeBtn" onclick="detokenize()">Detokenize</button>
   <div id="error"></div>
 
+  <hr style="margin: 2rem 0;">
+  <h2>Recent Logs</h2>
+  <div class="help">
+    Tail of the server log on this instance. Client-side errors (from the
+    browser beacon) appear with <code>"source":"client"</code>. CloudWatch
+    shipping is disabled on this AMI, so this is the review surface.
+  </div>
+  <div style="margin: 0.5rem 0; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+    <button id="loadLogsBtn" onclick="loadLogs()">Load logs</button>
+    <label>Lines: <input id="logLines" type="number" value="200" min="1" max="2000" style="width: 5rem;"></label>
+    <label><input id="logClientOnly" type="checkbox"> client errors only</label>
+  </div>
+  <pre id="logsOut" style="background:#111; color:#8f8; padding:1rem; overflow:auto; max-height:60vh; white-space:pre-wrap;"></pre>
+
   <script>
     async function detokenize() {
       const inputText = document.getElementById('input').value.trim();
@@ -182,6 +196,29 @@
         detokenize();
       }
     });
+
+    async function loadLogs() {
+      const btn = document.getElementById('loadLogsBtn');
+      const out = document.getElementById('logsOut');
+      const lines = document.getElementById('logLines').value || 200;
+      const clientOnly = document.getElementById('logClientOnly').checked;
+      btn.disabled = true; btn.textContent = 'Loading...';
+      try {
+        const res = await fetch('/admin/logs?lines=' + encodeURIComponent(lines));
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || ('HTTP ' + res.status));
+        }
+        const data = await res.json();
+        let rows = data.lines || [];
+        if (clientOnly) rows = rows.filter(l => l.includes('"source":"client"'));
+        out.textContent = rows.length ? rows.join('\n') : '(no matching log lines)';
+      } catch (err) {
+        out.textContent = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Load logs';
+      }
+    }
   </script>
 </body>
 </html>

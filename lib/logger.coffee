@@ -50,4 +50,18 @@ warn = (operation, message, metadata = {}, requestId = null) ->
 
   console.error JSON.stringify log
 
-module.exports = { error, warn }
+# Log a client-reported error (from the browser beacon). Same JSON shape as
+# server errors but tagged source:'client' so it's easy to grep/filter.
+clientError = (info = {}, requestId = null) ->
+  log =
+    timestamp: new Date().toISOString()
+    level:     'error'
+    operation: 'client'
+    source:    'client'
+
+  log.requestId = requestId if requestId
+  log.metadata  = tokenizeMetadata info
+
+  console.error JSON.stringify log
+
+module.exports = { error, warn, clientError }
