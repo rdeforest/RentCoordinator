@@ -24,6 +24,38 @@ toWireShape = (p) ->
     manual_adjustments: 0   # legacy field; always 0 in the new model
 
 
+# Project a folded event onto the flat shape the events table + editor expect
+# (the legacy rent_events shape). Inverse of the POST /rent/events mapping.
+# Only financial events (payment-made, override) get an `amount`; for other
+# actions it's undefined, so the client's amount guard hides them — matching
+# the old "Rent Events" table, which only ever listed financial entries.
+eventToWireShape = (e, deleted) ->
+  [year, month] =
+    if e.effective_for
+      e.effective_for.split('-').map (n) -> parseInt n, 10
+    else
+      [undefined, undefined]
+
+  type = switch e.action
+    when 'payment-made' then 'payment'
+    when 'override'     then 'adjustment'
+    else e.action
+
+  amount = switch e.action
+    when 'payment-made' then e.payload?.amount
+    when 'override'     then e.payload?.new_value
+    else undefined
+
+  Object.assign {}, e,
+    type:        type
+    date:        e.occurred_at
+    year:        year
+    month:       month
+    amount:      amount
+    description: e.payload?.note or ''
+    deleted:     deleted
+
+
 actorFromRequest = (req, fallback = 'landlord') ->
   email = req.session?.email or 'unknown@unknown'
   actor = if email is 'lynz57@hotmail.com' then 'tenant' else fallback
@@ -255,8 +287,7 @@ setup = (app) ->
       true
 
     res.json filtered.map (e) ->
-      Object.assign {}, e,
-        deleted: deletedIds.has e.id
+      eventToWireShape e, deletedIds.has e.id
 
   app.post '/rent/events', asyncRoute 'rent.createEvent', (req, res) ->
     { type, year, month, amount, description } = req.body

@@ -1,7 +1,28 @@
 # Bug 17 — Rent events table is always empty (client/server field mismatch)
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** fixed 2026-09-04
+
+## Resolution
+
+Server-side projection (the option this doc recommended). `GET /rent/events`
+now runs each event through `eventToWireShape` (`lib/routes/rent.coffee`),
+which maps `action`→`type` (payment-made→payment, override→adjustment),
+`occurred_at`→`date`, splits `effective_for` into `year`/`month`, and lifts
+the amount up (`payload.amount` for payments, `payload.new_value` for
+overrides) with `payload.note`→`description`. Fixes the table plus the
+`editEvent`/`deleteEvent` accessors at once; client untouched.
+
+Only financial events (payment-made, override) get an `amount`, so the
+client's amount guard keeps hiding non-financial events (work-reported,
+config-changed) — same as the legacy financial-only table. Regression test:
+`test/integration/rent-events.coffee`.
+
+**Known remaining nuance:** the list shows raw original events; it filters
+out `edited`/`deleted` actions but does not *apply* edits, so an event whose
+amount was later edited shows its original amount in the list even though the
+period math uses the edited value. Separate from this bug; fix by folding
+`edited` events onto their targets in the projection if it matters.
 
 ## Symptom
 
