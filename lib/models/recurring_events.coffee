@@ -257,7 +257,7 @@ initializeDefaultRecurringEvents = ->
       day_of_month: 1
       time_of_day:  '00:00'
       enabled:      true
-      amount:       -(config.BASE_RENT or 1600)
+      amount:       -config.BASE_RENT
       start_date:   new Date().toISOString()
       event_template:
         type:                 'manual'

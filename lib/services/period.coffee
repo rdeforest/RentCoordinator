@@ -1,14 +1,19 @@
 # Pure functions for computing rent periods from an event log.
-# No DB access, no persistence. Caller passes events in, gets period views out.
-# See docs/event-model.md for the conceptual model.
+# No DB access, no persistence (config.coffee is pure constants). Caller
+# passes events in, gets period views out. See docs/event-model.md.
+
+config = require '../config.coffee'
 
 
+# Baseline the event fold starts from; config-changed events override these.
+# Values come from config.coffee so the rent math and the /rent/constants
+# endpoint can't drift apart (was bug 39 — these were hardcoded here too).
 DEFAULT_CONFIG =
-  base_rent:              1600
-  hourly_credit:          50
-  max_monthly_hours:      8
-  agreed_monthly_payment: 950
-  rent_due_day:           15
+  base_rent:              config.BASE_RENT
+  hourly_credit:          config.HOURLY_CREDIT
+  max_monthly_hours:      config.MAX_MONTHLY_HOURS
+  agreed_monthly_payment: config.AGREED_MONTHLY_PAYMENT
+  rent_due_day:           config.RENT_DUE_DAY
   temporary_rent_amount:  null
   apply_override:         false
 

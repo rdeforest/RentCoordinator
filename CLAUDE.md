@@ -114,89 +114,15 @@ For the full layered architecture and data flow diagrams, see
 preserved for quick reference.
 
 ### Project Structure
-```
-lib/
-├── config.coffee          - Environment config and constants
-├── logger.coffee          - Structured error logging with PII tokenization
-├── middleware.coffee      - Express middleware and auth middleware
-├── routing.coffee         - Main route definitions, health checks, timer API
-├── db/
-│   ├── schema.coffee      - Database initialization and table definitions
-│   └── utils.coffee       - SQL parameter formatting helper
-├── services/              - Business logic layer
-│   ├── timer.coffee       - Timer operations and session management
-│   ├── rent.coffee        - Rent calculation logic
-│   ├── recurring_events.coffee - Recurring events processing
-│   ├── backup.coffee      - Database backup/restore
-│   ├── email.coffee       - Email verification codes
-│   ├── payment.coffee     - Stripe payment processing
-│   └── tokenization.coffee - PII tokenization for logs
-├── models/                - Data access layer
-│   ├── work_session.coffee - Work session CRUD operations
-│   ├── work_log.coffee    - Work log management
-│   ├── rent.coffee        - Rent periods, events, audit logs
-│   ├── rent_configuration.coffee - Singleton rent configuration
-│   ├── recurring_events.coffee - Recurring events CRUD
-│   └── auth.coffee        - Auth verification codes and validation
-└── routes/                - Route handlers
-    ├── work.coffee        - Work management routes
-    ├── rent.coffee        - Rent-related endpoints
-    ├── recurring_events.coffee - Recurring events API
-    ├── auth.coffee        - Authentication endpoints
-    ├── payment.coffee     - Stripe checkout flow
-    ├── payments.coffee    - Payment history CRUD (NOTE: different from payment.coffee)
-    ├── backup.coffee      - Backup endpoints
-    └── admin.coffee       - Admin endpoints
 
-static/                    - Frontend assets
-├── coffee/                - Frontend CoffeeScript (source)
-│   ├── auth.coffee        - Shared auth utilities
-│   ├── login.coffee       - Login page logic
-│   ├── rent.coffee        - Rent dashboard logic
-│   ├── work.coffee        - Work page logic
-│   ├── timer.coffee       - Timer logic
-│   ├── payment.coffee     - Stripe checkout page logic
-│   ├── payments.coffee    - Payment history page logic
-│   └── shared-utils.coffee - Shared frontend utilities
-├── js/                    - Compiled JavaScript (served to browser)
-├── css/                   - Stylesheets
-└── *.html                 - HTML pages (index, work, rent, login, payment, payments, admin)
-
-scripts/                   - Build and deployment scripts
-├── build.ts               - CoffeeScript compilation and asset copying
-├── backup.ts              - Backup logic (called by backup service, not directly)
-├── backup-now.sh          - Shell wrapper to trigger a backup manually
-├── backup-list.sh         - List available S3 backups
-├── backup-restore.sh      - Restore from S3 backup
-└── upgrade.sh             - Production upgrade automation
-
-migrations/                - Database migrations (see migrations/README.md)
-├── 001-add-discount-applied.sql
-├── 002-add-amount-due-manual.sql
-└── 2026-03-17_add_amount_paid_manual.coffee
-
-docs/                      - Project documentation (see Documentation Index above)
-├── architecture.md
-├── code-review-2026-05.md
-├── bugs/                  - Known bugs, one file each
-├── fixes/                 - Proposed patches
-├── disaster-recovery.md
-├── deployment.md
-├── cloudwatch-logs-setup.md
-├── health-checks.md
-├── nginx.md
-├── todo.md
-└── troubleshooting.md
-
-backups/                   - Database backups (gitignored)
-
-test/                      - Test suite
-├── integration/           - Integration tests
-│   ├── auth.coffee        - Authentication flow tests (including session race conditions)
-│   └── timer.coffee       - Timer system tests
-├── services/              - Unit tests for services
-└── helper.coffee          - Test utilities
-```
+See [docs/architecture.md](docs/architecture.md) for the current
+layer-by-layer layout and data flow — it's the source of truth. In brief:
+`lib/` is the server (config, middleware, routing, plus the `db/`,
+`services/`, `models/`, `routes/` layers), `static/` is the frontend
+(`coffee/` source compiled to `js/`), `docs/` the documentation,
+`migrations/` the manual DB migrations, and `test/` the suite. (A
+hand-maintained file tree lived here and drifted out of date, so it now
+points at architecture.md rather than duplicating it.)
 
 ### Testing
 
@@ -448,32 +374,15 @@ Add commenting functionality to work items with bidirectional notifications:
 
 ## Known Issues
 
-The live index is [docs/bugs/](docs/bugs/) — treat it as the source of
-truth. Each bug file carries its own status; the
-[README](docs/bugs/README.md) has Active / Resolved tables. Bugs 01–05
-predate the audit; **01, 02, 03, 05** are still open with proposed fixes in
-[docs/fixes/](docs/fixes/). A full-codebase audit on 2026-08-15 added bugs
-**06–48** (diagnosis + inline fix sketch in each file).
+The live bug index is [docs/bugs/](docs/bugs/) — per-bug files with status,
+plus Active / Resolved tables in the [README](docs/bugs/README.md), and
+proposed patches for the pre-audit bugs in [docs/fixes/](docs/fixes/). That
+index is the source of truth; this file deliberately does **not** re-list
+bugs or their statuses (that duplication is exactly what used to drift).
 
-**Fixed since the audit:** 04 (same cause as 06), 06, 08, 09, 10, 17, 19 —
-plus two uncatalogued infra fixes (the daily-backup cron was hitting an
-auth-gated endpoint; the init script's pidfile handling broke restart).
-
-**Still open, worth knowing before touching the rent code:**
-
-- **07** — timer-stopped work logs can save duration 0.
-- **11 / 12 / 13** — auth hardening: `SESSION_SECRET` falls back to a public
-  default in production, the verification code has no brute-force lockout,
-  and codes use `Math.random()`.
-- **26 / 27** — recurring-events and payment-history still read/write the
-  legacy `rent_periods` / `rent_events` tables.
-
-The dual-model structural issue that underlay 06 and 09 (now fixed) still
-underlies **26 / 27**: the app runs the event-sourced `events` table the
-dashboard reads alongside the legacy `rent_periods`/`rent_events` tables
-that recurring/payment-history writes still touch, with nothing reconciling
-them. A durable fix picks one model and routes all writes through it.
-
-When a new issue is discovered, add a file to `docs/bugs/` rather than
-appending to this list — that way the index stays the source of truth and
-this section doesn't drift out of date.
+One structural note worth having before you touch the rent code: the app
+still runs two "what's owed" models — the event-sourced `events` table the
+dashboard reads, and the legacy `rent_periods` / `rent_events` tables that
+the recurring-events and payment-history paths still write — with nothing
+reconciling them. Picking one model and routing all writes through it is the
+durable fix (see docs/bugs 26 and 27).

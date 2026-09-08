@@ -1,7 +1,16 @@
 # Bug 39 — period.coffee DEFAULT_CONFIG duplicates config.coffee constants
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** fixed 2026-09-08
+
+## Resolution
+
+`period.coffee` now derives `DEFAULT_CONFIG` from `config.coffee`
+(`base_rent: config.BASE_RENT`, etc.) instead of re-hardcoding the five
+values, and `recurring_events.coffee` dropped its `or 1600` fallbacks. The
+rent math and the `/rent/constants` endpoint now read the same source, so
+they can't silently disagree. Verified: period unit tests + dashboard
+contract test still green.
 
 ## Symptom
 

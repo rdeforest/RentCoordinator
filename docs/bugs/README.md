@@ -47,7 +47,6 @@ yet in `docs/fixes/`.
 | 36 | [Logger doesn't tokenize error message/stack (PII leak)](36-logger-untokenized-errors.md) | Low (PII) | inline |
 | 37 | [Wide-open CORS, no explicit `sameSite`, no CSRF token](37-cors-csrf-hardening.md) | Low (security) | inline |
 | 38 | [Used/expired verification codes never purged](38-verification-codes-not-purged.md) | Low | inline |
-| 39 | [`period.coffee` `DEFAULT_CONFIG` duplicates config constants](39-default-config-duplication.md) | Low | inline |
 | 40 | [`calculateNextDueDate` month/year math fragile](40-next-due-date-math.md) | Low | inline |
 | 41 | [`transaction()` helper doesn't await callback, can't nest](41-transaction-helper-not-await.md) | Low | inline |
 | 42 | [Health check opens/closes a fresh DB connection per hit](42-health-check-new-connection.md) | Low | inline |
@@ -69,6 +68,7 @@ yet in `docs/fixes/`.
 | 10 | Payment confirmation not idempotent | 2026-08-17 | One recorder, idempotent on the Stripe intent id. Ships with 09. |
 | 17 | Rent events table always empty | 2026-09-04 | Route projects events onto the flat shape the client reads. |
 | 19 | Summary "total credits" renders `$NaN` | 2026-09-04 | Client reads `total_discount` (the key the route sends). |
+| 39 | period.coffee DEFAULT_CONFIG duplicates config constants | 2026-09-08 | period.coffee derives defaults from config.coffee; single source. |
 
 Not in the numbered catalog but fixed this cycle (infra): the daily-backup
 cron hit an auth-gated endpoint (now `backup-now.sh`), and the init script's
