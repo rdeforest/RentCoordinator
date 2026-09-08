@@ -41,49 +41,30 @@ npm run test:integration
 
 :# Local installation (current machine)
 ./scripts/install.sh
-
-:# AWS deployment (current production method)
-cd infrastructure
-./deploy.sh deploy
-
-:# Manual instance update (SSH to current instance)
-:# Find current instance IP: aws ec2 describe-instances --filters "Name=tag:Name,Values=RentCoordinator-production" --query 'Reservations[*].Instances[*].PublicIpAddress'
-ssh -i ~/.ssh/id_aws_rdeforest admin@<INSTANCE_IP> "sudo systemctl restart rent-coordinator"
 ```
 
-The SSH user is `admin` on the current Debian-based AMI. If you're working
-against an Ubuntu instance, use `ubuntu` instead.
+Deploying to production is a procedure, not a one-liner (AWS ASG, in-place
+`git pull` + restart, init-system and ASG-suspend specifics) — see
+[docs/deployment.md](docs/deployment.md). SSH user is `admin` on the current
+Devuan AMI.
 
 ### Build System
 The server automatically compiles client-side CoffeeScript to JavaScript on startup. Server-side CoffeeScript runs directly via the `coffee` command. No separate build step needed — just start the server.
 
 ### Deployment System
 
-RentCoordinator supports two deployment models:
+Production is AWS CloudFormation + an Auto Scaling Group behind an ALB;
+instances pull `main` from GitHub on boot. The full procedure — including the
+in-place upgrade path and the ASG/restart specifics — lives in the canonical
+docs, not here:
 
-#### 1. AWS Infrastructure Automation (Recommended)
-**Automated cloud deployment** using AWS CloudFormation:
+- **[docs/deployment.md](docs/deployment.md)** — deployment procedure
+- **[infrastructure/README.md](infrastructure/README.md)** — CloudFormation / infra
+- **[migrations/README.md](migrations/README.md)** — DB migrations
+- **[docs/disaster-recovery.md](docs/disaster-recovery.md)** — disaster recovery
 
-**Features:**
-- Auto Scaling Group (ReplaceUnhealthy suspended — instances stay up when unhealthy rather than being terminated)
-- Zero-touch deployment from GitHub
-- IAM roles for secure Secrets Manager access
-- Auto-registration with Application Load Balancer
-- Health checks visible via CloudWatch
-- Scale up/down on demand
-
-**Quick Start:**
-```bash
-cd infrastructure
-cp cloudformation/parameters-example.json cloudformation/parameters.json
-:# Edit parameters.json with your AWS settings
-./deploy.sh deploy
-```
-
-See `infrastructure/README.md` for complete AWS deployment guide.
-
-See `migrations/README.md` for database migration guide.
-See `docs/disaster-recovery.md` for complete disaster recovery procedures.
+There is also a legacy remote-install ("vault2") path under `scripts/`; it is
+not how production runs today.
 
 ### Logging and Monitoring
 
@@ -270,52 +251,21 @@ See `docs/event-model.md` for the full event model.
 
 ### Backup and Disaster Recovery
 
-**Backups:**
-- There is no `npm run backup`. Backups are triggered via API or shell scripts.
-- Local backups land in `./backups/` as timestamped SQLite files
-- S3 backups auto-upload to `rent-coordinator-backups-822812818413` (us-west-2), 30-day retention
-- **TODO:** Daily automated backups are not yet implemented — currently manual only
+- No `npm run backup`. Server-side backups run via `./scripts/backup-now.sh`,
+  which calls the backup service directly — the `/api/backup` endpoint is
+  auth-gated (for the UI/authenticated callers), so cron and scripts use the
+  shell path, not curl. Local copies land in `./backups/`; S3 uploads to
+  `rent-coordinator-backups-822812818413` (us-west-2, 30-day retention).
+- Automated: a nightly cron (02:00 UTC) and an in-app idle-backup (after ~1h
+  of write-inactivity) both run `backup-now.sh`.
+- Secrets live in AWS Secrets Manager (`rent-coordinator/config`, us-west-2),
+  written into each instance's `.env` at boot; `./scripts/restore-secrets.sh`
+  pushes them to a running host.
 
-```bash
-:# Trigger a backup via API (requires auth session cookie)
-curl -X POST https://rent.thatsnice.org/api/backup \
-  -H "Cookie: <session-cookie>"
-
-:# NOTE: /api/backup is behind requireAuth even on localhost — an
-:# unauthenticated curl gets 302'd to /login.html and backs up nothing.
-:# (This silently broke the nightly cron; fixed 2026-08-17 to use the
-:# script below.) For a server-side backup with no session, use the
-:# script — it calls the backup service directly, no HTTP:
-:#   ./scripts/backup-now.sh
-
-:# Check backup status
-curl https://rent.thatsnice.org/api/backup/status
-
-:# List all S3 backups
-curl https://rent.thatsnice.org/api/backup/list
-
-:# Shell script alternative (runs on the server)
-./scripts/backup-now.sh
-```
-
-**Secrets Management:**
-- Application secrets stored in AWS Secrets Manager
-- Secret name: `rent-coordinator/config` (us-west-2)
-- Protected by IAM credentials
-
-```bash
-:# Restore secrets to a server
-./scripts/restore-secrets.sh vault2
-
-:# Manual secret retrieval
-aws secretsmanager get-secret-value \
-  --secret-id rent-coordinator/config \
-  --region us-west-2 \
-  --query 'SecretString' \
-  --output text
-```
-
-See `docs/disaster-recovery.md` for complete restoration procedures.
+Canonical references: backup API in
+[scripts/BACKUP-API.md](scripts/BACKUP-API.md); restoration and DR in
+[docs/disaster-recovery.md](docs/disaster-recovery.md). Log review — since
+CloudWatch shipping is dead on the Devuan AMI — is the `/admin/logs` page.
 
 ### Startup Process
 1. Server startup compiles client-side CoffeeScript to `static/js/`
