@@ -448,38 +448,31 @@ Add commenting functionality to work items with bidirectional notifications:
 
 ## Known Issues
 
-The active list lives in [docs/bugs/](docs/bugs/). At time of last review
-(2026-05-19) the open bugs were:
+The live index is [docs/bugs/](docs/bugs/) — treat it as the source of
+truth. Each bug file carries its own status; the
+[README](docs/bugs/README.md) has Active / Resolved tables. Bugs 01–05
+predate the audit; **01, 02, 03, 05** are still open with proposed fixes in
+[docs/fixes/](docs/fixes/). A full-codebase audit on 2026-08-15 added bugs
+**06–48** (diagnosis + inline fix sketch in each file).
 
-- **01** — Periods table shows raw amount instead of stress-free display
-- **02** — Cannot delete rent period (FK constraint)
-- **03** — Soft-delete UI wired to hard-delete model
-- **04** — Lyndzie's work hours not appearing in rent periods (the 48.75-hour case)
-- **05** — Recalculate-all discards retroactive logic
+**Fixed since the audit:** 04 (same cause as 06), 06, 08, 09, 10, 17, 19 —
+plus two uncatalogued infra fixes (the daily-backup cron was hitting an
+auth-gated endpoint; the init script's pidfile handling broke restart).
 
-Each has a proposed fix in [docs/fixes/](docs/fixes/).
+**Still open, worth knowing before touching the rent code:**
 
-A full-codebase audit on 2026-08-15 added bugs **06–48** — see the
-[docs/bugs/](docs/bugs/) index (each has its diagnosis and an inline fix
-sketch; none have a `docs/fixes/` file yet). Highlights worth knowing
-before you touch the rent code:
+- **07** — timer-stopped work logs can save duration 0.
+- **11 / 12 / 13** — auth hardening: `SESSION_SECRET` falls back to a public
+  default in production, the verification code has no brute-force lockout,
+  and codes use `Math.random()`.
+- **26 / 27** — recurring-events and payment-history still read/write the
+  legacy `rent_periods` / `rent_events` tables.
 
-- **06** — Work hours never credit rent: nothing emits a `work-reported`
-  event, so the event-sourced dashboard always shows 0 hours. This is the
-  live cause of bug 04's symptom (whose old case/timezone suspects no
-  longer apply).
-- **09 / 10** — ACH payments are never recorded (no Stripe webhook), and
-  payment confirmation isn't idempotent (double-credits on retry).
-- **11 / 12 / 13** — Auth: `SESSION_SECRET` falls back to a public default
-  in production; the verification code has no brute-force lockout and uses
-  `Math.random()`.
-
-The recurring structural cause (underlies 06, 09, 26, 27) is that the app
-still runs two parallel "what's owed" models — the event-sourced `events`
-table the dashboard reads, and the legacy `rent_periods`/`rent_events`
-tables that work/payment/recurring writes still update — with nothing
-reconciling them. A durable fix picks one model and routes all writes
-through it.
+The dual-model structural issue that underlay 06 and 09 (now fixed) still
+underlies **26 / 27**: the app runs the event-sourced `events` table the
+dashboard reads alongside the legacy `rent_periods`/`rent_events` tables
+that recurring/payment-history writes still touch, with nothing reconciling
+them. A durable fix picks one model and routes all writes through it.
 
 When a new issue is discovered, add a file to `docs/bugs/` rather than
 appending to this list — that way the index stays the source of truth and

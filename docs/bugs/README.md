@@ -11,7 +11,6 @@ the proposed fix in `docs/fixes/`.
 | 01 | Periods table shows raw `amount_due` instead of stress-free display | Low (UX) | [fixes/01](../fixes/01-periods-table-display.md) |
 | 02 | Cannot delete rent period (FK constraint) | High | [fixes/02](../fixes/02-cascade-delete-migration.md) |
 | 03 | Soft-delete UI wired to hard-delete model | Medium | [fixes/03](../fixes/03-soft-delete-events.md) |
-| 04 | Lyndzie's work hours not appearing in rent periods | High | [fixes/04](../fixes/04-missing-work-hours.md) |
 | 05 | `recalculateAllRent` retroactive logic discarded | Medium | [fixes/05](../fixes/05-recalculate-persists-retroactive.md) |
 
 ### 2026-08-15 audit batch
@@ -21,20 +20,14 @@ yet in `docs/fixes/`.
 
 | # | Title | Severity | Fix |
 |---|---|---|---|
-| 06 | [Work hours never credit rent (event model)](06-work-hours-never-credit.md) | High | inline |
 | 07 | [Timer-stopped work logs always save duration 0](07-timer-duration-zero.md) | High | inline |
-| 08 | [`DELETE /work-logs/:id` always 500s](08-delete-work-log-undefined.md) | High | inline |
-| 09 | [ACH payments never recorded (no webhook)](09-ach-payment-not-recorded.md) | High | inline |
-| 10 | [Payment confirmation not idempotent (double-credit)](10-payment-not-idempotent.md) | High | inline |
 | 11 | [`SESSION_SECRET` falls back to a public default in prod](11-session-secret-default.md) | High (security) | inline |
 | 12 | [Verification code brute-forceable (no lockout)](12-verification-code-brute-force.md) | High (security) | inline |
 | 13 | [Verification codes use `Math.random()`](13-verification-code-weak-random.md) | High (security) | inline |
 | 14 | [Adjustment/manual events overwrite `amount_due` instead of adding](14-adjustment-overwrites-amount-due.md) | Medium | inline |
 | 15 | [`work_value_change` events silently recorded as payments](15-work-value-change-as-payment.md) | Medium | inline |
 | 16 | [Undelete is a no-op in the event fold](16-undelete-noop.md) | Medium | inline |
-| 17 | [Rent events table always empty (client/server field mismatch)](17-events-list-empty.md) | Medium | inline |
 | 18 | [`/rent/summary` uses raw `amount_due`, not display value](18-summary-raw-amount-due.md) | Medium | inline |
-| 19 | [Summary "total credits" renders undefined](19-summary-total-credits-undefined.md) | Low | inline |
 | 20 | [`temporary_rent_amount` can never be cleared](20-temporary-rent-amount-cannot-clear.md) | Medium | inline |
 | 21 | [Global error handler registered before routes; never catches](21-error-handler-registration-order.md) | Medium | inline |
 | 22 | [Email casing mismatch can break verification](22-email-casing-mismatch.md) | Medium | inline |
@@ -67,7 +60,20 @@ yet in `docs/fixes/`.
 
 ## Resolved
 
-(none recorded yet — start adding when you fix the active ones)
+| # | Title | Resolved | Notes |
+|---|---|---|---|
+| 04 | Lyndzie's work hours not appearing in rent periods | 2026-08-17 | Same root cause as 06 (no `work-reported` event emitted); fixed by 06. |
+| 06 | Work hours never credit rent (event model) | 2026-08-17 | `createWorkLog` now emits a `work-reported` event. |
+| 08 | `DELETE /work-logs/:id` always 500s | 2026-08-17 | Added `deleteWorkLog`; also retracts the credit. |
+| 09 | ACH payments never recorded (no webhook) | 2026-08-17 | Added `POST /payment/webhook` (signature-verified). Ships with 10. |
+| 10 | Payment confirmation not idempotent | 2026-08-17 | One recorder, idempotent on the Stripe intent id. Ships with 09. |
+| 17 | Rent events table always empty | 2026-09-04 | Route projects events onto the flat shape the client reads. |
+| 19 | Summary "total credits" renders `$NaN` | 2026-09-04 | Client reads `total_discount` (the key the route sends). |
+
+Not in the numbered catalog but fixed this cycle (infra): the daily-backup
+cron hit an auth-gated endpoint (now `backup-now.sh`), and the init script's
+pidfile daemonization broke restart (now `exec node`, not `npx`). See the CF
+template and commit history.
 
 ## Adding a bug
 

@@ -1,7 +1,13 @@
 # Bug 04 — Lyndzie's work hours not appearing in rent periods
 
 **Reported:** 2026-01-01
-**Status:** investigating
+**Status:** resolved 2026-08-17 (same root cause as bug 06)
+
+> **Resolution:** the 48.75-hour symptom was bug 06 — nothing emitted a
+> `work-reported` event, so the event-sourced dashboard always showed 0
+> hours. The old case/timezone suspects below no longer apply. Fixed when
+> `createWorkLog` began emitting `work-reported` events (see
+> [06](06-work-hours-never-credit.md)).
 
 ## Symptom
 
