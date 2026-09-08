@@ -1,143 +1,129 @@
 # RentCoordinator Deployment Guide
 
-The production deployment is **AWS CloudFormation** with an Auto Scaling Group behind an
-Application Load Balancer. The instance runs Debian 12, pulls code from GitHub on boot,
-and starts the app via systemd.
+Canonical deployment procedure. CloudFormation/infrastructure details live in
+[infrastructure/README.md](../infrastructure/README.md); disaster recovery in
+[disaster-recovery.md](disaster-recovery.md); DB migrations in
+[migrations/README.md](../migrations/README.md).
 
-See `infrastructure/README.md` for the authoritative guide.
+## What production is
 
-## Quick Reference
+AWS CloudFormation + an Auto Scaling Group behind an Application Load
+Balancer. Key facts that shape the procedure below:
 
-### Deploy / Update Stack
+- **Devuan AMI → sysvinit, not systemd.** The service is
+  `/etc/init.d/rent-coordinator` (`start|stop|restart|status`). There is no
+  `systemctl`.
+- App lives at `/opt/rent-coordinator` (git clone of `main`, pulled on boot),
+  runs as user `rent-coordinator` on **port 8080**. DB at
+  `/var/lib/rent-coordinator/tenant-coordinator.db`. Env at
+  `/opt/rent-coordinator/.env`, written from Secrets Manager at boot.
+- ASG health-check type is **ELB**, desired count 1. `ReplaceUnhealthy` is
+  currently **active** — a failing `/health` gets the instance replaced (this
+  is how the 2026-09-03 outage self-healed). Suspend it during manual
+  restarts (below) so a blip can't trigger a replacement mid-deploy.
+- A fresh instance **restores its DB from the latest S3 backup** and runs
+  migrations before starting. So a replacement loses anything written since
+  the last backup — **always back up first** (see Backups).
+- The Devuan AMI intermittently skips cloud-init's user-data at boot, so a
+  fresh instance sometimes comes up with no app installed. Workaround in
+  [disaster-recovery.md](disaster-recovery.md).
 
-```bash
-cd infrastructure
-./deploy.sh deploy
-```
+## Deploying code — in-place upgrade (preferred)
 
-### Find Current Instance IP
-
-```bash
-aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=RentCoordinator-production" \
-  --query 'Reservations[*].Instances[*].PublicIpAddress'
-```
-
-### Restart App on Running Instance
-
-```bash
-ssh -i ~/.ssh/id_aws_rdeforest admin@<INSTANCE_IP> \
-  "sudo systemctl restart rent-coordinator"
-```
-
-### View Live Logs
-
-```bash
-aws logs tail /rent-coordinator/application --follow
-```
-
-## Auto Scaling
-
-- Min/Max/Desired: 1/3/1 (single instance in practice)
-- `ReplaceUnhealthy` process is **suspended** — a failing health check will not
-  trigger instance termination. The instance stays up (unhealthy) until manually
-  acted on. This prevents data loss from cycling instances before a replacement
-  is healthy.
-- Health check grace period: 480 seconds (8 minutes)
-
-To manually suspend/resume termination behavior:
+Because a replacement restores from S3 and cloud-init is flaky, the default
+is to upgrade the running instance in place (preserves the live DB):
 
 ```bash
-:# Suspend (current default — already applied)
-aws autoscaling suspend-processes \
-  --auto-scaling-group-name RentCoordinator-production \
-  --scaling-processes ReplaceUnhealthy
+# 1. Back up prod first (see Backups) and confirm it's in S3.
 
-:# Re-enable if desired
-aws autoscaling resume-processes \
-  --auto-scaling-group-name RentCoordinator-production \
-  --scaling-processes ReplaceUnhealthy
+# 2. Ship code to main (instances track main):
+git push origin <branch>:main
+
+# 3. On the instance (find IP below):
+ssh -i ~/.ssh/id_aws_rdeforest admin@<INSTANCE_IP>
+cd /opt/rent-coordinator && sudo -u rent-coordinator git pull --ff-only
+
+# 4. If Secrets Manager gained a new key since the instance booted, append it
+#    to .env (a running instance's .env is only written once, at boot).
+
+# 5. Guard against replacement during the restart, then restart:
+#    (run the suspend/resume from your workstation; the restart on the box)
+aws autoscaling suspend-processes --auto-scaling-group-name RentCoordinator-production \
+  --scaling-processes HealthCheck ReplaceUnhealthy
+sudo /etc/init.d/rent-coordinator restart      # cycles cleanly since the pidfile fix
+
+# 6. Verify, then resume:
+curl -s http://localhost:8080/health           # on the box; or the ALB /health
+aws autoscaling resume-processes --auto-scaling-group-name RentCoordinator-production \
+  --scaling-processes HealthCheck ReplaceUnhealthy
 ```
 
-## Prerequisites (for a fresh install)
+Verify externally too: `curl https://rent.thatsnice.org/health` and, for a
+payment deploy, `POST /payment/webhook` with no signature should return 400.
 
-- Node.js 24 LTS (managed via nvm)
-- CoffeeScript (`npm install -g coffeescript`)
-- Git
+## Deploying infrastructure / replacing the instance
 
-The CloudFormation user data script handles all of this automatically on instance launch.
-
-## Running Locally
+`deploy.sh deploy` updates the CloudFormation stack (and the Launch Template,
+so future instances pick up UserData changes). It does **not** replace the
+running instance:
 
 ```bash
-:# Install dependencies
-npm install
-
-:# Start server (also compiles client CoffeeScript on startup)
-npm start
+cd infrastructure && ./deploy.sh deploy
 ```
 
-No separate build step. Client-side CoffeeScript is compiled to `static/js/` on every startup.
+To roll a new instance (e.g. after an AMI or UserData change), terminate the
+current one so the ASG relaunches from the new Launch Template. **Back up
+first** — the replacement restores from S3 — and watch for the cloud-init
+bug. Full detail in [infrastructure/README.md](../infrastructure/README.md).
 
-## Environment Variables
+## Finding the current instance
 
-| Variable              | Default                    | Notes                          |
-|-----------------------|----------------------------|--------------------------------|
-| `PORT`                | 3000                       |                                |
-| `NODE_ENV`            | development                | Set to `production` in prod    |
-| `DB_PATH`             | ./tenant-coordinator.db    | SQLite file path               |
-| `SESSION_SECRET`      | (required in production)   | From AWS Secrets Manager       |
-| `SMTP_HOST`           | (optional in dev)          | AWS SES SMTP in production     |
-| `SMTP_PORT`           | 587                        |                                |
-| `SMTP_USER`           |                            |                                |
-| `SMTP_PASS`           |                            |                                |
-| `EMAIL_FROM`          | noreply@thatsnice.org      |                                |
-| `STRIPE_SECRET_KEY`   |                            | sk_live_... in production      |
-| `STRIPE_PUBLISHABLE_KEY` |                         | pk_live_... in production      |
+```bash
+aws ec2 describe-instances --region us-west-2 \
+  --filters Name=tag:Name,Values=RentCoordinator-production \
+            Name=instance-state-name,Values=running \
+  --query 'Reservations[].Instances[].{Id:InstanceId,IP:PublicIpAddress}' --output table
+```
 
-Production secrets are stored in AWS Secrets Manager under `rent-coordinator/config` (us-west-2).
+SSH user is `admin` on the current Devuan AMI.
 
-## Database
+## Logs and monitoring
 
-- SQLite via Node.js built-in `node:sqlite` module (requires Node 22+)
-- Database file: `./tenant-coordinator.db` (configurable via `DB_PATH`)
-- Schema initialized on startup in `lib/db/schema.coffee`
+**CloudWatch log shipping is not working** on the Devuan AMI (the agent needs
+systemd) — don't rely on `aws logs tail`. Review logs via:
+
+- The **`/admin/logs`** page (robert only) — tails the app log, with a
+  "client errors only" filter for browser beacons.
+- Or SSH: `sudo tail -f /var/log/rent-coordinator/application.log`.
 
 ## Backups
 
-Backups are triggered on-demand — there is no automatic scheduler yet.
+`./scripts/backup-now.sh` on the instance is the server-side path (calls the
+backup service directly — `/api/backup` is auth-gated and not for cron). A
+nightly cron (02:00 UTC) and an in-app idle-backup (after ~1h of write
+inactivity) both run it. Local copies in `./backups/`; S3 at
+`rent-coordinator-backups-822812818413` (us-west-2, 30-day retention). API
+reference: [../scripts/BACKUP-API.md](../scripts/BACKUP-API.md).
+
+## Secrets
+
+AWS Secrets Manager, `rent-coordinator/config` (us-west-2). Loaded into each
+instance's `.env` generically at boot (every key in the secret). To push to a
+running host: `./scripts/restore-secrets.sh <host>`.
+
+## Running locally
 
 ```bash
-:# Trigger backup (local + S3 upload)
-curl -X POST http://localhost:3000/api/backup
-
-:# Check status / last backup time
-curl http://localhost:3000/api/backup/status
-
-:# List all S3 backups
-curl http://localhost:3000/api/backup/list
-
-:# Restore from latest S3 backup
-curl -X POST http://localhost:3000/api/backup/restore
+npm install
+npm start        # compiles client CoffeeScript to static/js/ on startup, then runs
 ```
 
-S3 bucket: `rent-coordinator-backups-822812818413` (us-west-2), 30-day retention.
+Environment variables and their defaults are defined in `lib/config.coffee`
+(and summarized in the project `CLAUDE.md`); production values come from
+Secrets Manager.
 
-## Health Check
+## Legacy
 
-```bash
-curl http://localhost:3000/health
-```
-
-## Process Management
-
-The app runs as a systemd service (`rent-coordinator.service`) on the EC2 instance.
-Logs flow to journald → `/var/log/rent-coordinator/application.log` → CloudWatch Logs
-(`/rent-coordinator/application`).
-
-## Security
-
-- Non-root service user (`rent-coordinator`)
-- Secrets via AWS Secrets Manager (never in source)
-- HTTPS terminated at the ALB
-- Email auth with 90-day sessions (2-user whitelist)
+An older remote-install ("vault2") deployment path exists under `scripts/`
+(`deploy-upgrade.sh`, `scripts/deployment.md`, `scripts/quick-start.md`). It
+is **not** how production runs today and is kept only for reference.

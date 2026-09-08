@@ -68,17 +68,14 @@ not how production runs today.
 
 ### Logging and Monitoring
 
-**CloudWatch Logs** (deployed 2025-12-29):
-- Application logs shipped to CloudWatch Logs in real-time
-- Log group: `/rent-coordinator/application`
-- View logs: `aws logs tail /rent-coordinator/application --follow`
-- Setup script: `infrastructure/setup-cloudwatch-logs.sh`
-- Full documentation: `docs/cloudwatch-logs-setup.md`
-
-**Log Architecture:**
-1. `rent-coordinator.service` → journald
-2. `rent-coordinator-logs.service` → `/var/log/rent-coordinator/application.log`
-3. CloudWatch Agent → CloudWatch Logs
+Structured JSON logs (`lib/logger.coffee`, PII-tokenized) go to
+`/var/log/rent-coordinator/application.log` on the instance, and browser
+errors are beaconed to the same log via `POST /client-errors`
+(`source:"client"`). **CloudWatch shipping is not working on the current
+Devuan AMI** (the agent needs systemd), so `aws logs tail` is stale — review
+via the **`/admin/logs`** page (robert only; "client errors only" filter) or
+`sudo tail -f /var/log/rent-coordinator/application.log`. See
+[docs/deployment.md](docs/deployment.md#logs-and-monitoring).
 
 ## Technology Stack
 

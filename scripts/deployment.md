@@ -1,5 +1,9 @@
 # RentCoordinator Deployment Guide
 
+> **LEGACY — not how production runs today.** This describes the older
+> remote-install ("vault2") model. Production is AWS CloudFormation + ASG;
+> see [docs/deployment.md](../docs/deployment.md). Kept for reference only.
+
 This document describes the remote deployment system for RentCoordinator.
 
 ## Overview

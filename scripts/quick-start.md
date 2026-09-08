@@ -1,5 +1,9 @@
 # RentCoordinator Deployment Quick Start
 
+> **LEGACY — not how production runs today.** This is the older
+> remote-install ("vault2") path. For the current AWS deployment see
+> [docs/deployment.md](../docs/deployment.md). Kept for reference only.
+
 ## Prerequisites Setup (One Time)
 
 ### 1. Configure SSH on Dev Machine

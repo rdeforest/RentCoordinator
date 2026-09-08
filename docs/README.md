@@ -13,7 +13,6 @@ Tool for coordinating efforts, reimbursements, plans and rent payments with Lynd
 ## Documentation
 
 - **[Disaster Recovery Guide](disaster-recovery.md)** - Infrastructure and recovery procedures
-- **[CloudWatch Logs Setup](cloudwatch-logs-setup.md)** - Centralized logging configuration
 - **[Deployment Guide](deployment.md)** - Deployment procedures and scripts
 
 ## Technology Stack
