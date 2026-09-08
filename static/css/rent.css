@@ -331,3 +331,26 @@ th {
         gap: 5px;
     }
 }
+#events-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+#events-table th.sortable:hover {
+    background: #e9ecef;
+}
+
+#events-table th.sortable::after {
+    content: ' ↕';
+    opacity: 0.3;
+}
+
+#events-table th.sortable.asc::after {
+    content: ' ↑';
+    opacity: 1;
+}
+
+#events-table th.sortable.desc::after {
+    content: ' ↓';
+    opacity: 1;
+}

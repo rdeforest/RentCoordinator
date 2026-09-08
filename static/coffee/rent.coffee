@@ -6,6 +6,8 @@ currentFilters   = {}
 allEvents        = []
 eventToDelete    = null
 showingDeleted   = false
+sortColumn       = 'period'
+sortDirection    = 'desc'
 
 AGREED_MONTHLY_PAYMENT = null  # Loaded from /rent/constants
 RENT_DUE_DAY           = null  # Loaded from /rent/constants
@@ -45,6 +47,7 @@ window.addEventListener 'load', ->
   loadRentConfiguration()
   populateFilterYears()
   setupSpoilerToggle()
+  setupEventSorting()
 
 
 loadRentConstants = ->
@@ -347,6 +350,8 @@ renderEventsTable = (events) ->
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No valid events found</td></tr>'
     return
 
+  validEvents = sortEvents validEvents
+
   tbody.innerHTML = validEvents.map((event) ->
     dateStr = formatDate event.date
     periodStr = formatMonthYear event.year, event.month
@@ -377,6 +382,51 @@ renderEventsTable = (events) ->
       </tr>
     """
   ).join ''
+
+# Sort events by the active column/direction; period falls back to date so
+# events within the same month keep a stable chronological order.
+sortEvents = (events) ->
+  [...events].sort (a, b) ->
+    aVal = getEventSortValue a, sortColumn
+    bVal = getEventSortValue b, sortColumn
+
+    cmp =
+      if aVal < bVal then -1
+      else if aVal > bVal then 1
+      else if a.date < b.date then -1
+      else if a.date > b.date then 1
+      else 0
+
+    if sortDirection is 'asc' then cmp else -cmp
+
+getEventSortValue = (event, column) ->
+  switch column
+    when 'date'        then event.date
+    when 'type'        then event.type
+    when 'period'      then event.year * 100 + event.month
+    when 'amount'      then event.amount
+    when 'description' then (event.description or '').toLowerCase()
+    else event.year * 100 + event.month
+
+# Clickable column headers: same column toggles direction, a new column
+# starts descending. Re-renders the currently-loaded events in place.
+setupEventSorting = ->
+  markSortedHeader()
+  document.querySelectorAll('#events-table th.sortable').forEach (th) ->
+    th.addEventListener 'click', ->
+      column = th.dataset.sort
+      if column is sortColumn
+        sortDirection = if sortDirection is 'asc' then 'desc' else 'asc'
+      else
+        sortColumn    = column
+        sortDirection = 'desc'
+      markSortedHeader()
+      renderEventsTable allEvents
+
+markSortedHeader = ->
+  document.querySelectorAll('#events-table th.sortable').forEach (th) ->
+    th.classList.remove 'asc', 'desc'
+    th.classList.add sortDirection if th.dataset.sort is sortColumn
 
 # Populate filter years from available data
 populateFilterYears = ->
