@@ -18,7 +18,7 @@ SCHEMA = """
 
   CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
-    project_id TEXT REFERENCES projects(id),
+    project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
     status TEXT DEFAULT 'pending',
@@ -40,7 +40,7 @@ SCHEMA = """
 
   CREATE TABLE IF NOT EXISTS work_events (
     id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL REFERENCES work_sessions(id),
+    session_id TEXT NOT NULL REFERENCES work_sessions(id) ON DELETE CASCADE,
     event_type TEXT NOT NULL,
     timestamp DATETIME NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -50,7 +50,7 @@ SCHEMA = """
 
   CREATE TABLE IF NOT EXISTS current_sessions (
     worker TEXT PRIMARY KEY,
-    session_id TEXT REFERENCES work_sessions(id)
+    session_id TEXT REFERENCES work_sessions(id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS work_logs (
@@ -60,8 +60,8 @@ SCHEMA = """
     end_time DATETIME NOT NULL,
     duration INTEGER NOT NULL, -- minutes
     description TEXT NOT NULL,
-    project_id TEXT REFERENCES projects(id),
-    task_id TEXT REFERENCES tasks(id),
+    project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+    task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
     billable BOOLEAN DEFAULT 1,
     submitted BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP

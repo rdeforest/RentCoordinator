@@ -8,6 +8,7 @@
 periodViewer  = require '../services/period_viewer.coffee'
 period        = require '../services/period.coffee'
 eventsModel   = require '../models/events.coffee'
+money         = require '../money.coffee'
 { asyncRoute } = require '../middleware.coffee'
 
 { AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY, BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } =
@@ -181,13 +182,15 @@ setup = (app) ->
       .map (p) ->
         owed = p.display_amount_due
         paid = p.amount_paid or 0
-        outstanding = Math.max 0, owed - paid
+        outstanding = Math.max 0, money.minus owed, paid
         { year: p.year, month: p.month, owed, paid, outstanding }
-      .filter (r) -> r.outstanding > 0
+      # A month settled to the cent is settled. Comparing raw floats left
+      # fully-paid months outstanding by fractions of a cent (bug 35).
+      .filter (r) -> money.cents(r.outstanding) > 0
       .sort   (a, b) -> (a.year - b.year) or (a.month - b.month)   # oldest first
 
     res.json
-      total_outstanding: rows.reduce ((s, r) -> s + r.outstanding), 0
+      total_outstanding: money.dollars rows.reduce ((s, r) -> s + r.outstanding), 0
       months:            rows
 
   # ---- period writes (overrides) ------------------------------------------
@@ -292,10 +295,10 @@ setup = (app) ->
     # a month that is genuinely owed.
     res.json
       total_periods:       rows.length
-      total_amount_due:    rows.reduce ((s, p) -> s + p.display_amount_due), 0
-      total_amount_paid:   rows.reduce ((s, p) -> s + p.amount_paid),        0
-      total_discount:      rows.reduce ((s, p) -> s + p.discount_applied),   0
-      outstanding_balance: rows.reduce ((s, p) -> s + Math.max 0, p.display_amount_due - p.amount_paid), 0
+      total_amount_due:    money.dollars rows.reduce ((s, p) -> s + p.display_amount_due), 0
+      total_amount_paid:   money.dollars rows.reduce ((s, p) -> s + p.amount_paid),        0
+      total_discount:      money.dollars rows.reduce ((s, p) -> s + p.discount_applied),   0
+      outstanding_balance: money.dollars rows.reduce ((s, p) -> s + Math.max 0, money.minus p.display_amount_due, p.amount_paid), 0
       periods:             rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
 
   app.post '/rent/recalculate-all', asyncRoute 'rent.recalculateAll', (req, res) ->

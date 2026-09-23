@@ -2,6 +2,7 @@ paymentService = require '../services/payment.coffee'
 periodViewer   = require '../services/period_viewer.coffee'
 config         = require '../config.coffee'
 logger         = require '../logger.coffee'
+money          = require '../money.coffee'
 
 
 computeOutstanding = ->
@@ -11,11 +12,13 @@ computeOutstanding = ->
     .map (p) ->
       owed = p.display_amount_due
       paid = p.amount_paid or 0
-      outstanding = Math.max 0, owed - paid
+      outstanding = Math.max 0, money.minus owed, paid
       { year: p.year, month: p.month, owed, paid, outstanding }
-    .filter (r) -> r.outstanding > 0
+    # A month settled to the cent is settled. Comparing raw floats left
+    # fully-paid months outstanding by fractions of a cent (bug 35).
+    .filter (r) -> money.cents(r.outstanding) > 0
     .sort   (a, b) -> (a.year - b.year) or (a.month - b.month)
-  total: rows.reduce ((s, r) -> s + r.outstanding), 0
+  total: money.dollars rows.reduce ((s, r) -> s + r.outstanding), 0
   months: rows
 
 

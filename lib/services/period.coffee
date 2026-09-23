@@ -3,6 +3,7 @@
 # passes events in, gets period views out. See docs/event-model.md.
 
 config = require '../config.coffee'
+money  = require '../money.coffee'
 
 
 # Baseline the event fold starts from; config-changed events override these.
@@ -154,32 +155,37 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
     else                             amount_due
 
   payment_status =
-    if      is_current and now.getDate() < config.rent_due_day then 'NOT DUE'
-    else if amount_paid >= display_amount_due                  then 'PAID'
-    else if amount_paid > 0                                    then 'PARTIAL'
-    else                                                            'UNPAID'
+    if      is_current and now.getDate() < config.rent_due_day    then 'NOT DUE'
+    else if money.cents(amount_paid) >= money.cents(display_amount_due) then 'PAID'
+    else if money.cents(amount_paid) > 0                          then 'PARTIAL'
+    else                                                               'UNPAID'
 
+  # Every currency value leaves this function rounded to the cent. An hourly
+  # credit on fractional hours produces amounts like $1,433.3333333333333,
+  # which no payment method can settle exactly — the month would read PARTIAL
+  # for ever over a third of a cent (bug 35). Hours stay unrounded; they are
+  # not money and carry-over depends on their full precision.
   {
     year, month
     hours_worked
     hours_from_previous:      carryOver
     hours_to_next:            total_available - hours_used
     hours_applied:            base_hours_applied
-    discount_applied:         base_discount
-    retroactive_credit
-    total_discount
-    base_rent:                config.base_rent
-    agreed_payment
-    effective_agreed_payment: agreed_payment
-    amount_due
-    amount_due_calculated
-    adjustment_total
+    discount_applied:         money.dollars base_discount
+    retroactive_credit:       money.dollars retroactive_credit
+    total_discount:           money.dollars total_discount
+    base_rent:                money.dollars config.base_rent
+    agreed_payment:           money.dollars agreed_payment
+    effective_agreed_payment: money.dollars agreed_payment
+    amount_due:               money.dollars amount_due
+    amount_due_calculated:    money.dollars amount_due_calculated
+    adjustment_total:         money.dollars adjustment_total
     amount_due_override
-    amount_paid
+    amount_paid:              money.dollars amount_paid
     amount_paid_override
-    display_amount_due
+    display_amount_due:       money.dollars display_amount_due
     payment_status
-    cumulative_shortfall
+    cumulative_shortfall:     money.dollars cumulative_shortfall
   }
 
 
