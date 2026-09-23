@@ -96,7 +96,14 @@ currentSessionOf = (worker, now = new Date()) ->
   return null
 
 
-startTimer = (worker, project_id = null, task_id = null) ->
+# No project or task: a work session has nowhere to record one. The route used
+# to accept both and pass them here, and they went no further — work_sessions
+# has no such columns, so every timer-created log was filed against no project
+# (bug 29). Manual entry through POST /work-logs does support them; work_logs
+# has the columns and the foreign keys. If the timer should too, that is a
+# migration on work_sessions plus somewhere in the UI to choose one — not a
+# parameter that quietly does nothing.
+startTimer = (worker) ->
   unless worker in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
 

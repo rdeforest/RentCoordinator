@@ -6,14 +6,13 @@ the proposed fix in `docs/fixes/`.
 
 ## Active
 
-Three remain, all deferred deliberately rather than missed, plus bug 35 which
+Two remain, both deferred deliberately rather than missed, plus bug 35 which
 is half done (see Resolved).
 
 | # | Title | Severity | Why it is still here |
 |---|---|---|---|
 | 23 | [`NODE_ENV=test` fully bypasses auth](23-test-env-auth-bypass.md) | Medium (security) | Removing the bypass means the integration suite has to establish real sessions — worth doing, but it touches every test file and the owner asked to understand the tradeoffs first. |
 | 27 | [Payment-history page reads legacy `rent_events`](27-payment-history-legacy-table.md) | Medium | The architectural review recommends deleting the page, as bug 26 was deleted. Awaiting that call — it removes a linked page from the UI. |
-| 29 | [Timer `project_id`/`task_id` silently dropped](29-timer-project-task-dropped.md) | Low | Add the columns or drop the parameters; deferred pending that call. |
 
 ### The remaining structural debt
 
@@ -83,6 +82,7 @@ without changing that line turns every instance unhealthy at the ALB.
 | 46 | Migration loop swallows failures | 2026-09-23 | `set -euo pipefail`, delegating to `upgrade.sh`. |
 | 47 | `scripts/upgrade.sh` is empty | 2026-09-23 | Real runner; migrations also apply at boot. |
 | 48 | Projects/tasks/sessions FKs lack `ON DELETE` | 2026-09-23 | Cascade for parts, `SET NULL` for references. |
+| 29 | Timer `project_id`/`task_id` silently dropped | 2026-09-23 | Parameters dropped — no caller sent them, no data exists, and `timer_state`'s columns are dead too. |
 | 49 | [Editing a work log doesn't move the rent credit](49-work-log-edit-no-event.md) | 2026-09-23 | `updateWorkLog` emits an `edited` event; moves months and workers too. |
 
 Not in the numbered catalog but fixed this cycle: the daily-backup cron hit an

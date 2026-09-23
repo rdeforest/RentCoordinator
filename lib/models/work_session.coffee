@@ -184,8 +184,10 @@ sessionToWorkLog = (session) ->
     end_time:    lastEvent?.timestamp or new Date().toISOString()
     duration:    Math.round seconds / 60
     description: session.description
-    project_id:  session.project_id or null
-    task_id:     session.task_id or null
+    # Always null, and said outright rather than read off a column that does
+    # not exist. See startTimer in services/timer.coffee (bug 29).
+    project_id:  null
+    task_id:     null
     billable:    session.billable
 
 module.exports = {

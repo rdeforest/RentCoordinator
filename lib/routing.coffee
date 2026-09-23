@@ -134,12 +134,12 @@ setup = (app, getServer) ->
 
 
   app.post '/timer/start', (req, res) ->
-    { worker, project_id, task_id } = req.body
+    { worker } = req.body
 
     return res.status(400).json error: 'Worker required' unless worker
 
     try
-      result = await timerService.startTimer worker, project_id, task_id
+      result = await timerService.startTimer worker
       res.json result
     catch err
       res.status(400).json error: err.message

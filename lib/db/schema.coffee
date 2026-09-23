@@ -115,6 +115,10 @@ SCHEMA = """
   CREATE INDEX IF NOT EXISTS idx_work_logs_start_time ON work_logs(start_time);
   CREATE INDEX IF NOT EXISTS idx_work_logs_date ON work_logs(DATE(start_time));
 
+  -- Vestigial. Nothing in lib/ reads or writes this table; the only reference
+  -- left is the health check asserting it exists. Its project_id/task_id are
+  -- where an earlier design kept the timer's project — they are not a working
+  -- alternative to giving work_sessions those columns (bug 29).
   CREATE TABLE IF NOT EXISTS timer_state (
     worker TEXT PRIMARY KEY,
     session_id TEXT,

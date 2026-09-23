@@ -138,3 +138,24 @@ describe 'Resume validation (bug 32)', ->
 
     resumed = await workSessionModel.resumeSession session.id, 'robert'
     assert.equal resumed.status, 'active'
+
+
+describe 'Timer sessions carry no project (bug 29)', ->
+  it 'a timer-created work log has no project or task', ->
+    # The route accepted project_id and task_id and passed them to startTimer,
+    # which passed them nowhere — work_sessions has no such columns. The log
+    # came out filed against no project either way, so the parameters only ever
+    # advertised a capability that did not exist.
+    start   = new Date Date.now() - 30 * MINUTE
+    session = seedSession 'lyndzie', [['start', start], ['stop', new Date()]]
+
+    log = workSessionModel.sessionToWorkLog session
+
+    assert.equal log.project_id, null
+    assert.equal log.task_id,    null
+
+  it 'startTimer takes only a worker', ->
+    timerService = require '../../lib/services/timer.coffee'
+
+    assert.equal timerService.startTimer.length, 1,
+      'an extra parameter here is a promise the storage cannot keep'
