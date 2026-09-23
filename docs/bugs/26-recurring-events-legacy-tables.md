@@ -1,7 +1,36 @@
 # Bug 26 — Recurring-events scheduler writes the legacy tables (invisible to dashboard)
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23 (removed)
+
+## Resolution
+
+Deleted rather than ported, on the strength of an architectural review.
+
+What it actually was: seven routes no page ever called, a scheduler whose
+`rent_due` template the 2026-06-11 seed had already disabled, and a
+`recalculation` template still firing monthly to rewrite `rent_periods` from
+the legacy `rent_events` table — including the phantom `-1600` rows the event
+model exists to stop double-counting. Nothing read the result.
+
+It was also in the boot path: `schema.initialize` awaited
+`initializeRecurringEvents`, and a failure inside it propagated to
+`main.coffee` and exited 1. A subsystem with no reader could stop the server
+starting.
+
+Porting was the more expensive option, not the cheaper one. The processors are
+welded to the legacy schema — `event_template.type` is a `rent_events` type and
+`createProcessingLog` needs a `rent_periods.id` for its foreign key — so a port
+means rewriting both processors and the log table. Meanwhile "rent is due every
+month" needs no scheduler in this model (`config.base_rent` already means it),
+and a recurring utility charge is an `adjustment` event with a `delta`: roughly
+twenty lines against machinery that already exists. See `docs/event-model.md`.
+
+Done in two commits so each reverts on its own: a migration setting the
+templates inactive, then the removal of
+`lib/{services,models,routes}/recurring_events.coffee` and its three call
+sites. The `recurring_events` and `recurring_event_logs` tables are left in
+place — they hold real history and nothing writes to them now.
 
 ## Symptom
 

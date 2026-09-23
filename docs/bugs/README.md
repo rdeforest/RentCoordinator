@@ -6,13 +6,11 @@ the proposed fix in `docs/fixes/`.
 
 ## Active
 
-Four remain, all deferred deliberately rather than missed. Three are the same
-structural question and the fourth waits on it.
+Three remain, all deferred deliberately rather than missed.
 
 | # | Title | Severity | Why it is still here |
 |---|---|---|---|
 | 23 | [`NODE_ENV=test` fully bypasses auth](23-test-env-auth-bypass.md) | Medium (security) | Removing the bypass means the integration suite has to establish real sessions — worth doing, but it touches every test file and the owner asked to understand the tradeoffs first. |
-| 26 | [Recurring-events scheduler writes legacy tables](26-recurring-events-legacy-tables.md) | Medium | Needs the port-or-delete decision below. |
 | 27 | [Payment-history page reads legacy `rent_events`](27-payment-history-legacy-table.md) | Medium | Same decision. |
 | 29 | [Timer `project_id`/`task_id` silently dropped](29-timer-project-task-dropped.md) | Low | Add the columns or drop the parameters; deferred pending that call. |
 
@@ -23,11 +21,17 @@ that the dashboard, the rent math and the Stripe path all read, and the legacy
 `rent_periods` / `rent_events` tables that the recurring-events scheduler and
 the payment-history page still write. Nothing reconciles them.
 
-Everything else in this catalog has been fixed *within* the event model, which
-makes the split the largest thing left. Bugs 26 and 27 are the two places
-writes still go to the dead side. Picking one model and routing all writes
-through it is the durable fix; deleting the recurring-events scheduler outright
-is the smaller half of it, since rent-due is already derivable from the fold.
+Bug 26 — the recurring-events scheduler — has now been deleted rather than
+ported, which removes one of the two remaining writers to the dead side. Bug 27
+(the payment-history page) is the other, and an architectural review recommends
+the same treatment: it reads 11 pre-migration rows, cannot see the 13 real
+`payment-made` events, will never gain a row, and its delete and reassign
+buttons report success while changing nothing about what is owed.
+
+The legacy tables themselves are left in place. They hold real history, nothing
+writes to them after bug 26, and dropping them has its own gotchas — the health
+check in `lib/routing.coffee` asserts `rent_periods` *exists*, so dropping it
+without changing that line turns every instance unhealthy at the ALB.
 
 ## Resolved
 
@@ -67,6 +71,7 @@ is the smaller half of it, since rent-due is already derivable from the fold.
 | 36 | Logger doesn't tokenize error text | 2026-09-23 | Addresses inside messages and stacks are tokenized; the trace survives. |
 | 37 | Wide-open CORS, no `sameSite` | 2026-09-23 | cors not mounted unless configured; `sameSite: 'lax'`. |
 | 38 | Verification codes never purged | 2026-09-23 | Deleted on use, superseded on reissue, swept on expiry. |
+| 26 | Recurring-events scheduler writes legacy tables | 2026-09-23 | Removed, not ported — no reader, and it sat in the boot path. |
 | 39 | `DEFAULT_CONFIG` duplicates constants | 2026-09-08 | Derived from `config.coffee`. |
 | 40 | `calculateNextDueDate` month/year math | 2026-09-23 | Day clamped to month length; yearly uses its configured date. |
 | 41 | `transaction()` doesn't await, can't nest | 2026-09-23 | `SAVEPOINT`; async callbacks refused. |

@@ -84,7 +84,7 @@ describe 'The match budget', ->
     metadata = {}
     metadata["field#{i}"] = "contact m#{i}@ex.org please" for i in [0...200]
 
-    logger.error 'test.budget', new Error('boom'), metadata
+    capture -> logger.error 'test.budget', new Error('boom'), metadata
 
     assert.ok tokenCount() - before <= tok.MAX_TOKENIZE_MATCHES,
       "200 fields wrote #{tokenCount() - before} rows; the budget is per record"

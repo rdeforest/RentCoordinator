@@ -2,7 +2,6 @@ config                = require './config.coffee'
 timerService          = require './services/timer.coffee'
 rentRoutes            = require './routes/rent.coffee'
 workRoutes            = require './routes/work.coffee'
-recurringEventsRoutes = require './routes/recurring_events.coffee'
 authRoutes            = require './routes/auth.coffee'
 paymentRoutes         = require './routes/payment.coffee'
 paymentsRoutes        = require './routes/payments.coffee'
@@ -220,7 +219,6 @@ setup = (app, getServer) ->
 
   rentRoutes           .setup app
   workRoutes           .setup app
-  recurringEventsRoutes.setup app
   paymentRoutes        .setup app
   paymentsRoutes       .setup app
   backupRoutes         .setup app

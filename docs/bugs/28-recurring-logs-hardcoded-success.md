@@ -1,11 +1,16 @@
 # Bug 28 — Recurring-event processing logs hardcode status=success
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** resolved 2026-09-23
+**Status:** resolved 2026-09-23 (superseded by the removal in bug 26)
 
 ## Resolution
 
-`recurring_event_logs` gained `status`, `message`, `error_details` and `events_created` (migration), and both the insert and the read use them. Rows written before the columns existed report `status: null` — honestly unknown — rather than being backfilled as successes.
+**Superseded 2026-09-23:** the subsystem that wrote these logs was removed
+outright (bug 26), so the read path that invented `status: 'success'` is gone
+with it. The columns and the migration below remain — the table still holds
+ten historical rows — but nothing writes to it now.
+
+The original fix, which shipped first: `recurring_event_logs` gained `status`, `message`, `error_details` and `events_created` (migration), and both the insert and the read use them. Rows written before the columns existed report `status: null` — honestly unknown — rather than being backfilled as successes.
 
 ## Symptom
 

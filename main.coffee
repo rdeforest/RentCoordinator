@@ -48,9 +48,6 @@ startServer = ->
       Timer API available at http://localhost:#{config.PORT}/
     """
 
-    recurringEventsService = require './lib/services/recurring_events.coffee'
-    recurringEventsService.scheduleDailyProcessing()
-    console.log 'Recurring events daily processing scheduled'
 
     backupService = require './lib/services/backup.coffee'
     backupService.startIdleBackup()

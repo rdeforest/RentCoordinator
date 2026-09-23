@@ -267,8 +267,5 @@ initialize = ->
 
   console.log "Database initialized successfully"
 
-  recurringEventsService = require '../services/recurring_events.coffee'
-  await recurringEventsService.initializeRecurringEvents()
-
 
 module.exports = { db, reopen, initialize }

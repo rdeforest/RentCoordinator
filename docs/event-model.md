@@ -247,3 +247,23 @@ match the `manual` filter rather than `adjustment`. Their arithmetic has not
 changed — the new label is the accurate one — but someone filtering for past
 adjustments will not find them there.
 
+## Recurring charges, after the scheduler was removed (2026-09-23)
+
+The recurring-events subsystem is gone (bug 26). It wrote to the legacy
+`rent_periods` / `rent_events` tables, which nothing authoritative reads, and
+it sat in the boot path where a failure could stop the server starting — for a
+capability no page ever called.
+
+Two of its jobs do not need a scheduler in this model:
+
+- **"Rent is due every month"** is already what `config.base_rent` means. The
+  fold computes a month's amount from the events in it; there is no row to
+  create.
+- **A recurring utility charge** is an `adjustment` event with a `delta`,
+  written once per month against that month's `effective_for`. If that is ever
+  wanted, it is a small loop over the months since the last one — roughly
+  twenty lines against machinery that already exists — not a template table, a
+  processor, a log table and seven routes.
+
+The `recurring_events` and `recurring_event_logs` tables are left in place.
+They hold real history and nothing writes to them any more.
