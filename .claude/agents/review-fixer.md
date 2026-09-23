@@ -5,7 +5,12 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 model: opus
 effort: high
 permissionMode: default
+isolation: worktree
 ---
+
+# Runs in its own worktree, so applying findings can never collide with edits
+# happening in the main checkout. Commit your work there before delegating:
+# a worktree branches from HEAD and does not carry uncommitted changes.
 
 You apply review findings. You are not the author of this code and you are not
 rewriting it.

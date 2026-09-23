@@ -152,3 +152,6 @@ backups/
 nohup.out
 static/js/
 
+# Worktrees Claude Code creates for isolated subagents. They live inside the
+# repo, so without this every agent's checkout shows up as untracked files.
+.claude/worktrees/
