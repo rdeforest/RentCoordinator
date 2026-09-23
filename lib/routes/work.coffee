@@ -26,8 +26,12 @@ setup = (app) ->
       endDate   = new Date end_time
       duration  = Math.round (endDate - startDate) / 1000 / 60
 
-    if duration < 1
-      return res.status(400).json error: 'Work duration must be at least 1 minute'
+    # `'abc' < 1` is false, so a string sailed past this and reached the event
+    # payload as NaN.
+    duration = Number duration
+
+    unless Number.isFinite(duration) and duration >= 1
+      return res.status(400).json error: 'Work duration must be a number of minutes, at least 1'
 
     try
       workLog = await workLogModel.createWorkLog
@@ -58,7 +62,9 @@ setup = (app) ->
       if worker?      then updates.worker      = worker
       if start_time?  then updates.start_time  = start_time
       if end_time?    then updates.end_time    = end_time
-      if duration?    then updates.duration    = duration
+      if duration?
+        return res.status(400).json error: 'Duration must be a number of minutes' unless Number.isFinite Number duration
+        updates.duration = Number duration
       if description? then updates.description = description.trim()
       if billable?    then updates.billable    = if billable then 1 else 0
 

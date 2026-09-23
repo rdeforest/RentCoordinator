@@ -63,7 +63,15 @@ applyEdits = (events) ->
   for e in events when e.action is 'edited' and byId.has e.target_event_id
     orig    = byId.get e.target_event_id
     payload = Object.assign {}, orig.payload, e.payload.new_payload
-    byId.set e.target_event_id, Object.assign {}, orig, { payload }
+
+    # `new_fields` replaces top-level columns — which month the event applies
+    # to, and whose work it was. A work log corrected to a different date has
+    # to take its rent credit with it. `id` and `action` are not replaceable:
+    # an edit changes what an event says, not which event it is.
+    fields = Object.assign {}, e.payload.new_fields
+    delete fields[key] for key in ['id', 'action', 'target_event_id']
+
+    byId.set e.target_event_id, Object.assign {}, orig, fields, { payload }
 
   Array.from byId.values()
 
@@ -174,8 +182,15 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   # Hours and cumulative_shortfall stay unrounded. Neither is displayed; both
   # are carried into the next month's arithmetic, and rounding a running
   # balance before feeding it forward makes it drift against the exact figure.
+  # A value that is not a number cannot be reasoned about, and every route has
+  # to say so the same way. Marking the month here means /rent/period,
+  # /rent/summary and /rent/outstanding agree, instead of one throwing while
+  # another serves null.
+  corrupt = not (Number.isFinite(amount_due) and Number.isFinite(amount_paid))
+
   {
     year, month
+    corrupt
     hours_worked
     hours_from_previous:      carryOver
     hours_to_next:            total_available - hours_used
@@ -264,8 +279,43 @@ computeAllPeriods = (events, now = new Date(), opts = {}) ->
   result
 
 
+# What is actually owed, oldest month first. Months still NOT DUE are excluded
+# — they can be paid early, but they are not part of "what do I owe".
+#
+# Pure, and here rather than in period_viewer, because this is the rule that
+# decides what the tenant is billed: /payment/create-intent creates a Stripe
+# intent from it and /rent/outstanding displays it. In period_viewer it could
+# not be tested without a database, so it had no unit test at all.
+computeOutstanding = (periods) ->
+  rows = Object.values(periods)
+    .filter (p) -> p.payment_status isnt 'NOT DUE'
+    .map (p) ->
+      owed = p.display_amount_due
+      paid = p.amount_paid or 0
+      outstanding = if p.corrupt then 0 else Math.max 0, money.minus owed, paid
+      { year: p.year, month: p.month, owed, paid, outstanding, corrupt: p.corrupt is true }
+    .filter (r) ->
+      # A corrupt month is reported, not billed and not silently dropped:
+      # `NaN > 0` is false, so filtering on the number alone would have made it
+      # vanish from both the list and the total — "you are paid up".
+      return true if r.corrupt
+
+      # A month settled to the cent is settled; comparing raw floats left
+      # fully-paid months outstanding by fractions of a cent (bug 35).
+      money.cents(r.outstanding) > 0
+    .sort (a, b) -> (a.year - b.year) or (a.month - b.month)
+
+  # A corrupt month contributes nothing to the total — billing a figure nobody
+  # can compute would be worse than showing it as unresolved — but it stays in
+  # the list, flagged, so the page can say so.
+  total:  money.dollars rows.reduce ((s, r) -> s + r.outstanding), 0
+  months: rows
+  corrupt: (r for r in rows when r.corrupt)
+
+
 module.exports = {
   DEFAULT_CONFIG
+  computeOutstanding
   META_ACTIONS
   monthKey
   parseMonthKey

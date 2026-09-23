@@ -92,12 +92,15 @@ build = ->
       JSON.stringify(Object.assign({}, pkg,
         type:    'commonjs'
         main:    'main.js'
-        # The source scripts run .coffee files that dist/ does not contain, so
-        # the two that matter are rewritten — the rest are kept rather than
-        # dropped, which replacing the whole block would have done.
-        scripts: Object.assign {}, pkg.scripts,
-          start:   'node main.js'
-          migrate: 'node scripts/run-migrations.js'
+        # Only what the artifact can actually run, spelled for the artifact.
+        # Inheriting the source scripts shipped commands that invoke .coffee
+        # files dist/ does not contain — and a `clean` that deletes
+        # tenant-coordinator.db* from the directory above dist/, which on an
+        # installed host is the live database and its restore safety copies.
+        scripts:
+          start:           'node main.js'
+          migrate:         'node scripts/run-migrations.js'
+          'migrate:check': 'node scripts/run-migrations.js --check'
       ), null, 2) + '\n'
 
     # The shell entry points are not compiled, so they have to be copied.

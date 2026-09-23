@@ -27,15 +27,26 @@ db =
 
 
 reopen = ->
-  try
-    connection.close()
-  catch err
-    # Expected when a restore has already renamed another file over the path:
-    # this handle's file is gone. Closing it is best-effort — what matters is
-    # that the next statement runs against the file that is there now.
-    console.warn "Closing the previous database handle failed: #{err.message}"
+  # Open before closing. Closing first and assigning second means a failed
+  # open — a bad mount, a permission change on the restored file, no disk —
+  # leaves `connection` pointing at a closed handle, and every query in the
+  # process throws "database is not open" for ever with no path back.
+  replacement = openConnection()
+  previous    = connection
+  connection  = replacement
 
-  connection = openConnection()
+  # Anything cached from the old database is now wrong. Required lazily: this
+  # module loads before the services that depend on it.
+  require('../services/tokenization.coffee').clearCaches()
+
+  try
+    previous.close()
+  catch err
+    # The new handle is already in place, so a failure here costs a file
+    # descriptor rather than the process. Worth saying out loud, not worth
+    # unwinding a restore for.
+    console.warn "Could not close the previous database handle: #{err.message}"
+
   db
 
 SCHEMA = """

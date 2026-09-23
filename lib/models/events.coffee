@@ -15,13 +15,41 @@ hydrate = (row) ->
 # Amounts that are not numbers poison every downstream sum, and the event log
 # is append-only — a bad row cannot be taken back. Reject at the boundary
 # rather than discovering it as a month that quietly reports nothing owed.
-AMOUNT_KEYS = ['amount', 'delta', 'new_value', 'hours']
+#
+# By action, not by key name. `new_value` is a number on an `override` and a
+# boolean or null on a `config-changed` — validating the key wherever it
+# appeared rejected every save from the rent configuration UI.
+NUMERIC_FIELDS =
+  'payment-made':  ['amount']
+  'adjustment':    ['delta']
+  'override':      ['new_value']
+  'work-reported': ['hours']
+
+# An `edited` event carries the replacement figure nested under `new_payload`,
+# keyed for the action it targets. That is the one path that parses
+# user-supplied text, and it was the one path the check could not see.
+EDITABLE_FIELDS = ['amount', 'delta', 'new_value']
+
+
+describeValue = (value) ->
+  return 'NaN' if typeof value is 'number' and Number.isNaN value
+  JSON.stringify value
+
+
+checkFields = (action, payload, fields) ->
+  for key in fields when payload?[key]?
+    value = payload[key]
+    unless typeof value is 'number' and Number.isFinite value
+      throw new Error "#{action} payload.#{key} must be a finite number, got #{describeValue value}"
+
+  return
+
 
 validateAmounts = (event) ->
-  for key in AMOUNT_KEYS when event.payload?[key]?
-    value = event.payload[key]
-    unless typeof value is 'number' and Number.isFinite value
-      throw new Error "#{event.action} payload.#{key} must be a finite number, got #{JSON.stringify value}"
+  checkFields event.action, event.payload, NUMERIC_FIELDS[event.action] ? []
+
+  if event.action is 'edited'
+    checkFields 'edited', event.payload?.new_payload, EDITABLE_FIELDS
 
   return
 

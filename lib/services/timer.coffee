@@ -40,11 +40,15 @@ finishSession = (worker, session, { completed, at }) ->
     # poll triggered a moment earlier. Stopping something that is stopped is
     # what the caller asked for, so report the outcome rather than a 400
     # carrying an internal session id.
+    #
+    # Clearing the pointer matters: leaving it meant the condition never
+    # resolved and every later stop answered the same way for ever.
+    clearCurrentSession worker
+
     return
       session:  current ? session
       duration: (if current then workSessionModel.calculateSessionDuration current.id else 0)
       event:    if current?.status is 'cancelled' then 'cancelled' else 'completed'
-      already:  true
 
   session = current
 

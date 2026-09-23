@@ -414,3 +414,117 @@ test "deletedEventIds reports what the events list should mark deleted", ->
 
   ids2 = deletedEventIds [p1, p2, d1, undeleteOf(p1, '2026-02-02T00:00:00Z')]
   assert.ok !ids2.has(p1.id), 'and an undelete clears it'
+
+
+# --- what is owed -------------------------------------------------------------
+#
+# This is the rule that decides what the tenant is billed: /payment/create-intent
+# creates a Stripe intent from it and /rent/outstanding displays it. It lived in
+# period_viewer, which cannot be reached without a database, so it had no test.
+
+{ computeOutstanding } = require '../../lib/services/period.coffee'
+
+owedFrom = (events, now) -> computeOutstanding computeAllPeriods events, now
+
+# computeAllPeriods walks every month from the first with activity through the
+# current one — rent is owed whether or not anything was logged that month. So
+# each test anchors "now" just after the months it cares about, where the
+# current month is still NOT DUE and therefore excluded.
+earlyIn = (year, month) -> new Date "#{year}-#{String(month).padStart 2, '0'}-10T12:00:00Z"
+
+
+test "a month paid in full is not outstanding", ->
+  owed = owedFrom [work('2026-01', 0), payment('2026-01', 1600)], earlyIn 2026, 2
+
+  assert.deepEqual owed.months, []
+  assert.equal     owed.total, 0
+
+
+test "a month paid to the cent is settled, despite float residue", ->
+  # 200 minutes of work credits $166.666…, so the month owes $1,433.33 — and
+  # raw float subtraction left it owing a third of a cent for ever.
+  events = [work('2026-01', 200 / 60)]
+  due    = computeAllPeriods(events, earlyIn 2026, 2)['2026-01'].display_amount_due
+
+  assert.deepEqual owedFrom([events..., payment('2026-01', due)], earlyIn 2026, 2).months, []
+
+
+test "an unpaid past month is owed in full", ->
+  [row] = owedFrom([work('2026-01', 0)], earlyIn 2026, 2).months
+
+  assert.equal row.owed,        1600
+  assert.equal row.paid,        0
+  assert.equal row.outstanding, 1600
+
+
+test "a partly paid month is owed the remainder", ->
+  [row] = owedFrom([work('2026-01', 0), payment('2026-01', 600)], earlyIn 2026, 2).months
+  assert.equal row.outstanding, 1000
+
+
+test "an overpaid month does not cancel out a month that is owed", ->
+  events = [
+    work('2026-01', 0), payment('2026-01', 5000)   # wildly overpaid
+    work('2026-02', 0)                             # and nothing paid here
+  ]
+  { total, months } = owedFrom events, earlyIn 2026, 3
+
+  assert.equal months.length, 1, 'only the unpaid month is listed'
+  assert.equal months[0].month, 2
+  assert.equal total, 1600, 'the overpayment must not reduce what February owes'
+
+
+test "the current month before the due date is not yet owed", ->
+  months = owedFrom([work('2026-06', 0)], earlyIn 2026, 6).months
+
+  assert.deepEqual months, [], 'NOT DUE months are excluded from what is owed'
+
+
+test "months come back oldest first, so a payment is applied to the oldest debt", ->
+  events = [work('2026-03', 0), work('2026-01', 0), work('2026-02', 0)]
+  order  = owedFrom(events, earlyIn 2026, 4).months.map (r) -> "#{r.year}-#{r.month}"
+
+  assert.deepEqual order, ['2026-1', '2026-2', '2026-3']
+
+
+test "the total is the sum of the months, to the cent", ->
+  events = [work('2026-01', 200 / 60), work('2026-02', 100 / 60)]
+  { total, months } = owedFrom events, earlyIn 2026, 3
+
+  assert.equal total, months.reduce ((s, r) -> s + r.outstanding), 0
+  assert.equal total, Math.round(total * 100) / 100, 'and it is a payable amount'
+
+
+test "a corrupt month is flagged, not quietly dropped", ->
+  # NaN > 0 is false, so filtering on the number alone would have removed the
+  # month from both the list and the total — reporting "you are paid up" for a
+  # month nobody can reason about.
+  events = [work('2026-01', 0), override('2026-01', 'amount_due', NaN)]
+  { months, corrupt, total } = owedFrom events, earlyIn 2026, 2
+
+  assert.equal months.length,  1
+  assert.equal corrupt.length, 1, 'the month is reported'
+  assert.equal corrupt[0].month, 1
+  assert.equal total, 0, 'and contributes nothing to a figure anyone is billed'
+
+
+test "one corrupt month does not stop the others being paid", ->
+  # Throwing from the aggregate meant a single bad historical row blocked the
+  # tenant from paying any month at all, and showed a raw internal message.
+  events = [
+    work('2026-01', 0), override('2026-01', 'amount_due', NaN)
+    work('2026-02', 0)
+  ]
+  { months, corrupt, total } = owedFrom events, earlyIn 2026, 3
+
+  assert.equal total, 1600, 'February is still payable'
+  assert.equal corrupt.length, 1
+  assert.equal months.length,  2, 'and both months are still listed'
+
+
+test "computeMonth marks the month so every route agrees", ->
+  # /rent/period used to serve the row as null while /rent/outstanding threw.
+  periods = computeAllPeriods [work('2026-01', 0), override('2026-01', 'amount_due', NaN)], earlyIn 2026, 2
+
+  assert.equal periods['2026-01'].corrupt, true
+  assert.equal periods['2026-02'].corrupt, false

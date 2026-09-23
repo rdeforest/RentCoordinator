@@ -24,13 +24,29 @@ for env_file in .env ../.env config.sh ../config.sh; do
   fi
 done
 
-export DB_PATH="${DB_PATH:-./tenant-coordinator.db}"
+# Whether DB_PATH was chosen or defaulted decides what a missing file means.
+if [ -n "${DB_PATH:-}" ]; then
+  DB_PATH_SUPPLIED=1
+else
+  DB_PATH_SUPPLIED=0
+  DB_PATH=./tenant-coordinator.db
+fi
+export DB_PATH
 
 if [ ! -f "$DB_PATH" ]; then
-  echo "ERROR: no database at ${DB_PATH}." >&2
-  echo "Set DB_PATH to the database you mean to migrate — reporting success" >&2
-  echo "against a database that isn't there is how migrations got skipped." >&2
-  exit 1
+  if [ "$DB_PATH_SUPPLIED" = "1" ]; then
+    # Somebody named this path. Reporting success against a database that is
+    # not there is how migrations came to be skipped in the first place.
+    echo "ERROR: no database at ${DB_PATH}." >&2
+    echo "Set DB_PATH to the database you mean to migrate." >&2
+    exit 1
+  fi
+
+  # Nothing named it and nothing is there: a first boot before the app has
+  # created its schema. The app migrates on startup, so this is not an error —
+  # and failing here would abort cloud-init before the service is installed.
+  echo "No database at ${DB_PATH} yet; the app will create and migrate it on startup."
+  exit 0
 fi
 
 echo "Applying migrations against ${DB_PATH}"

@@ -11,6 +11,17 @@ db = null
 tokenCache = new Map()  # value → token
 valueCache = new Map()  # token → value
 
+
+# Both caches are derived from pii_tokens, so they are wrong the moment the
+# database underneath changes. A restore swaps the file; without this, tokenize
+# would keep returning cached tokens and skip the INSERT, and the restored
+# database would never gain the row — leaving log lines carrying tokens no
+# later process could reverse.
+clearCaches = ->
+  tokenCache.clear()
+  valueCache.clear()
+  return
+
 # Generate deterministic token from value using SHA-256
 generateToken = (value) ->
   hash = crypto.createHash('sha256').update(value).digest('hex')
@@ -149,5 +160,5 @@ detokenizeObject = (obj) ->
       result[key] = value
   result
 
-module.exports = { tokenize, tokenizeEmbedded, newBudget, detokenize, detokenizeEmbedded,
+module.exports = { tokenize, tokenizeEmbedded, newBudget, clearCaches, detokenize, detokenizeEmbedded,
                    detokenizeObject, MAX_TOKENIZE_MATCHES }

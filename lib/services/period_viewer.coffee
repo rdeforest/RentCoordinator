@@ -4,7 +4,6 @@
 
 eventsModel  = require '../models/events.coffee'
 period       = require './period.coffee'
-money        = require '../money.coffee'
 
 
 getAllPeriods = (opts = {}, now = new Date()) ->
@@ -22,34 +21,10 @@ getConfig = (asOf = new Date()) ->
   period.resolveConfig eventsModel.listAllEvents(), asOf
 
 
-# What is actually owed, oldest month first. Months still NOT DUE are
-# excluded — they can be paid early, but they are not part of "what do I
-# owe". A month settled to the cent is settled; comparing raw floats left
-# fully-paid months outstanding by fractions of a cent (bug 35).
-#
-# One definition, because /payment/create-intent bills from it and
-# /rent/outstanding displays it. They were separate copies of the same rule,
-# so the bug-35 fix had to be made twice and the next change would have been
-# applied to one of them.
+# One definition of what is owed, in period.coffee next to the fold that
+# produces the periods. This supplies them.
 computeOutstanding = (now = new Date()) ->
-  rows = Object.values(getAllPeriods {}, now)
-    .filter (p) -> p.payment_status isnt 'NOT DUE'
-    .map (p) ->
-      owed = p.display_amount_due
-      paid = p.amount_paid or 0
-      { year: p.year, month: p.month, owed, paid, outstanding: Math.max 0, money.minus owed, paid }
-    .filter (r) ->
-      # `NaN > 0` is false, so a corrupt month would vanish from both the
-      # months list and the total — "you are paid up". A row that cannot be
-      # reasoned about has to be surfaced, not filtered away.
-      if Number.isNaN r.outstanding
-        throw new Error "#{r.year}-#{r.month} has a non-numeric balance; an event payload is corrupt"
-
-      money.cents(r.outstanding) > 0
-    .sort   (a, b) -> (a.year - b.year) or (a.month - b.month)
-
-  total:  money.dollars rows.reduce ((s, r) -> s + r.outstanding), 0
-  months: rows
+  period.computeOutstanding getAllPeriods {}, now
 
 
 module.exports = {

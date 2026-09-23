@@ -1,6 +1,6 @@
 { v1 }                   = require 'uuid'
 { db }                   = require '../db/schema.coffee'
-{ formatSQLParameters }  = require '../db/utils.coffee'
+{ formatSQLParameters, transaction } = require '../db/utils.coffee'
 config                   = require '../config.coffee'
 eventsModel              = require './events.coffee'
 
@@ -39,6 +39,38 @@ emitWorkReported = (log) ->
       note:       log.description or null
 
 
+# An edit to a work log is an edit to the work-reported event it emitted —
+# they share an id. Without this the row changed and nothing else did: the fold
+# still saw the original hours, so correcting a duration left the rent credit
+# at the old figure (bug 49).
+#
+# `fields` carries the top-level changes, because an edit can move the work to
+# a different month or attribute it to a different person, and neither lives in
+# the payload. The route is the only caller and passes the whole updated log.
+emitWorkEdited = (log) ->
+  identity = identityFor log.worker
+
+  eventsModel.recordEvent
+    occurred_at:     new Date().toISOString()
+    effective_for:   monthKeyFromISO log.start_time
+    actor:           identity.actor
+    actor_user:      identity.user
+    action:          'edited'
+    target_event_id: log.id
+    payload:
+      new_fields:
+        effective_for: monthKeyFromISO log.start_time
+        actor:         identity.actor
+        actor_user:    identity.user
+      new_payload:
+        hours:      (log.duration or 0) / 60
+        started_at: log.start_time
+        ended_at:   log.end_time
+        project:    log.project_id or null
+        task:       log.task_id    or null
+        note:       log.description or null
+
+
 # Retract a reported work log: a `deleted` event targeting the work-reported
 # event (which shares the log's id) removes those hours from the fold in
 # period.coffee. See bug 08 and docs/event-model.md.
@@ -63,15 +95,19 @@ createWorkLog = (data) ->
     submitted:  0
     created_at: new Date().toISOString()
 
-  db.prepare("""
-    INSERT INTO work_logs
-           ( id,  worker,  start_time,  end_time,  duration,  description,  project_id,  task_id,  billable,  submitted,  created_at)
-    VALUES (:id, :worker, :start_time, :end_time, :duration, :description, :project_id, :task_id, :billable, :submitted, :created_at)
-  """).run params
+  # The row and its event together. Emitting validates the hours, and without
+  # the transaction a bad duration left a work log behind with no
+  # work-reported event — the invariant bug 06 was about.
+  transaction ->
+    db.prepare("""
+      INSERT INTO work_logs
+             ( id,  worker,  start_time,  end_time,  duration,  description,  project_id,  task_id,  billable,  submitted,  created_at)
+      VALUES (:id, :worker, :start_time, :end_time, :duration, :description, :project_id, :task_id, :billable, :submitted, :created_at)
+    """).run params
 
-  log = db.prepare("SELECT * FROM work_logs WHERE id = ?").get params[':id']
-  emitWorkReported log
-  return log
+    emitWorkReported db.prepare("SELECT * FROM work_logs WHERE id = ?").get params[':id']
+
+  db.prepare("SELECT * FROM work_logs WHERE id = ?").get params[':id']
 
 
 getWorkLogs = (filters = {}) ->
@@ -129,9 +165,11 @@ updateWorkLog = (id, updates) ->
   query = "UPDATE work_logs SET #{fields.join ', '} WHERE id = ?"
   values.push id
 
-  db.prepare(query).run values...
+  transaction ->
+    db.prepare(query).run values...
+    emitWorkEdited db.prepare("SELECT * FROM work_logs WHERE id = ?").get id
 
-  return db.prepare("SELECT * FROM work_logs WHERE id = ?").get id
+  db.prepare("SELECT * FROM work_logs WHERE id = ?").get id
 
 
 # Hard-delete a work log and retract its rent credit. If the row is already
@@ -140,9 +178,11 @@ deleteWorkLog = (id) ->
   log = db.prepare("SELECT * FROM work_logs WHERE id = ?").get id
   return { changes: 0 } unless log
 
-  result = db.prepare("DELETE FROM work_logs WHERE id = ?").run id
-  emitWorkReversal log
-  return result
+  transaction ->
+    db.prepare("DELETE FROM work_logs WHERE id = ?").run id
+    emitWorkReversal log
+
+  return { changes: 1 }
 
 module.exports = {
   createWorkLog

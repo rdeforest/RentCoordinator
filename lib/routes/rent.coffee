@@ -8,6 +8,7 @@
 periodViewer  = require '../services/period_viewer.coffee'
 period        = require '../services/period.coffee'
 eventsModel   = require '../models/events.coffee'
+{ transaction } = require '../db/utils.coffee'
 money         = require '../money.coffee'
 { asyncRoute } = require '../middleware.coffee'
 
@@ -120,27 +121,32 @@ setup = (app) ->
     { actor, actor_user } = actorFromRequest req, 'landlord'
     now = new Date().toISOString()
 
+    changes = []
+
     # Presence, not non-null: the client sends an explicit null to clear the
     # override amount, and a null check silently discarded it (bug 20).
     if 'temporary_rent_amount' of req.body
-      eventsModel.recordEvent
-        occurred_at: now
-        actor:       actor
-        actor_user:  actor_user
-        action:      'config-changed'
-        payload:
-          field:     'temporary_rent_amount'
-          new_value: req.body.temporary_rent_amount
+      amount = req.body.temporary_rent_amount
+
+      if amount? and not Number.isFinite amount
+        return res.status(400).json
+          error: "temporary_rent_amount must be a number or null, got #{JSON.stringify amount}"
+
+      changes.push field: 'temporary_rent_amount', new_value: amount
 
     if req.body.apply_override?
-      eventsModel.recordEvent
-        occurred_at: now
-        actor:       actor
-        actor_user:  actor_user
-        action:      'config-changed'
-        payload:
-          field:     'apply_override'
-          new_value: Boolean req.body.apply_override
+      changes.push field: 'apply_override', new_value: Boolean req.body.apply_override
+
+    # Both together or neither: written separately, a rejection of the second
+    # left the first committed and told the caller the request had failed.
+    transaction ->
+      for change in changes
+        eventsModel.recordEvent
+          occurred_at: now
+          actor:       actor
+          actor_user:  actor_user
+          action:      'config-changed'
+          payload:     change
 
     cfg = periodViewer.getConfig()
     res.json
@@ -275,20 +281,25 @@ setup = (app) ->
   # ---- summary / recalculate ----------------------------------------------
 
   app.get '/rent/summary', asyncRoute 'rent.summary', (req, res) ->
-    periods = periodViewer.getAllPeriods()
+    # One clock for both: computed separately, the rows and the total could
+    # land on opposite sides of the due date.
+    now     = new Date()
+    periods = periodViewer.getAllPeriods {}, now
     rows    = Object.values periods
     # display_amount_due, not amount_due: the summary has to agree with the
     # rows beneath it and with /rent/outstanding. Summing the raw value put
     # the full base rent into "outstanding" the moment a month began, which
     # is the "$1,600 overdue!" the display logic exists to avoid (bug 18).
-    # Each month is clamped at zero so an overpaid month does not cancel out
-    # a month that is genuinely owed.
+    #
+    # outstanding_balance comes from computeOutstanding, which also excludes
+    # months still NOT DUE — so it now matches /rent/outstanding exactly
+    # rather than approximately.
     res.json
       total_periods:       rows.length
       total_amount_due:    money.dollars rows.reduce ((s, p) -> s + p.display_amount_due), 0
       total_amount_paid:   money.dollars rows.reduce ((s, p) -> s + p.amount_paid),        0
       total_discount:      money.dollars rows.reduce ((s, p) -> s + p.discount_applied),   0
-      outstanding_balance: periodViewer.computeOutstanding().total
+      outstanding_balance: periodViewer.computeOutstanding(now).total
       periods:             rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
 
   app.post '/rent/recalculate-all', asyncRoute 'rent.recalculateAll', (req, res) ->
@@ -386,6 +397,10 @@ setup = (app) ->
     if req.body.amount? and not amountField
       return res.status(400).json
         error: "#{existing.action} events have no editable amount"
+
+    if req.body.amount? and not Number.isFinite parseFloat req.body.amount
+      return res.status(400).json
+        error: "Amount must be a number, got #{JSON.stringify req.body.amount}"
 
     new_payload = {}
     new_payload[amountField] = parseFloat req.body.amount if req.body.amount?

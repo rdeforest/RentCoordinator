@@ -25,15 +25,30 @@ fi
 # restore run while the service is up leaves it answering from the old
 # database and failing every write, with /health still reporting healthy.
 # Nothing in this process can reopen that connection.
+# Asked three ways, because only one of them works on any given host: the
+# CloudFormation SysVInit script writes a pidfile, the systemd unit the
+# installer writes is Type=simple with no PIDFile=, and a process may be
+# running under neither.
 PIDFILE="${PIDFILE:-/var/run/rent-coordinator.pid}"
+PORT="${PORT:-8080}"
 
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  echo "ERROR: rent-coordinator is running (pid $(cat "$PIDFILE"))." >&2
+service_is_running() {
+  if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then return 0; fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet rent-coordinator; then return 0; fi
+  if command -v lsof >/dev/null 2>&1 && lsof -ti ":${PORT}" >/dev/null 2>&1; then return 0; fi
+  return 1
+}
+
+if service_is_running; then
+  echo "ERROR: rent-coordinator appears to be running." >&2
   echo "Stop it first, restore, then start it again:" >&2
-  echo "  sudo /etc/init.d/rent-coordinator stop" >&2
+  echo "  sudo systemctl stop rent-coordinator   # or /etc/init.d/rent-coordinator stop" >&2
   echo "  $0" >&2
-  echo "  sudo /etc/init.d/rent-coordinator start" >&2
-  exit 1
+  echo "  sudo systemctl start rent-coordinator" >&2
+  echo >&2
+  echo "Set RESTORE_ANYWAY=1 to override (the running process will keep serving" >&2
+  echo "the pre-restore database and fail every write until it restarts)." >&2
+  [ "${RESTORE_ANYWAY:-}" = "1" ] || exit 1
 fi
 
 echo "Restoring from latest S3 backup..."

@@ -47,13 +47,27 @@ describe 'Tokenizing free text', ->
     assert.equal tok.tokenizeEmbedded(frame), frame
 
 
-  it 'does not shorten a long trace that holds no address', ->
+  it 'does not tokenize a long trace that holds no address', ->
     # Truncating before matching destroyed exactly the traces the pattern was
     # narrowed to protect — every frame through a scoped package contains '@'.
     trace = ("    at f#{i} (/app/node_modules/@scope/pkg/lib/x.js:#{i}:1)" for i in [1..400]).join '\n'
 
     assert.equal tok.tokenizeEmbedded(trace), trace
     assert.ok trace.length > 10000, 'and it really is long'
+
+
+  it 'a trace reaching the log keeps its frames readable', ->
+    # Through logger.error, which is the only path production uses — asserting
+    # on tokenizeEmbedded alone missed the size cap applied one layer up.
+    trace = ("    at f#{i} (/app/node_modules/@scope/pkg/lib/x.js:#{i}:1)" for i in [1..400]).join '\n'
+    err   = new Error 'boom'
+    err.stack = trace
+
+    [record] = capture -> logger.error 'test.trace', err
+
+    assert.ok not record.stack.includes('token:'), 'nothing in it is an address'
+    assert.ok record.stack.split('\n').length > 20,
+      "a trace should survive readably (kept #{record.stack.split('\n').length} of 400 frames)"
 
 
   it 'never leaves a partial address behind', ->
