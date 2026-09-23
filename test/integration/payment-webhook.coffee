@@ -16,7 +16,7 @@ path                            = require 'path'
 { execSync }                    = require 'child_process'
 Stripe                          = require 'stripe'
 { waitForServer }               = require '../helper.coffee'
-{ findFreePort, shutdownServer }= require '../server.coffee'
+{ findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
 
 TEST_TMP_DIR   = '/tmp/rent-coordinator-tests'
@@ -52,14 +52,21 @@ succeededEvent = (intentId, allocation) ->
 
 postWebhook = (payload) ->
   signature = stripe.webhooks.generateTestHeaderString { payload, secret: WEBHOOK_SECRET }
-  fetch "#{testConfig.baseUrl}/payment/webhook",
+  api "/payment/webhook",
     method:  'POST'
     headers: { 'Content-Type': 'application/json', 'stripe-signature': signature }
     body:    payload
 
 period = (year, month) ->
-  res = await fetch "#{testConfig.baseUrl}/rent/period/#{year}/#{month}"
+  res = await api "/rent/period/#{year}/#{month}"
   await res.json()
+
+
+# Every request carries the session. requireAuth no longer has a NODE_ENV
+# bypass (bug 23), so these routes need one.
+api = (path, options = {}) ->
+  fetch "#{testConfig.baseUrl}#{path}", Object.assign {}, options,
+    headers: Object.assign {}, (options.headers ? {}), { Cookie: testConfig.client.cookie }
 
 
 describe 'Stripe webhook records payment (bugs 09/10)', ->
@@ -83,6 +90,7 @@ describe 'Stripe webhook records payment (bugs 09/10)', ->
     await waitForServer "#{baseUrl}/health"
 
     testConfig = { port, dbPath, baseUrl, logPath }
+    testConfig.client = await authenticatedClient baseUrl, dbPath
 
   after ->
     await shutdownServer testConfig.baseUrl if testConfig
@@ -119,7 +127,7 @@ describe 'Stripe webhook records payment (bugs 09/10)', ->
   it "rejects a bad signature with 400 and records nothing", ->
     payload = succeededEvent 'pi_forged', [ { year: 2026, month: 2, amount: 950 } ]
 
-    res = await fetch "#{testConfig.baseUrl}/payment/webhook",
+    res = await api "/payment/webhook",
       method:  'POST'
       headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=1,v1=forged' }
       body:    payload

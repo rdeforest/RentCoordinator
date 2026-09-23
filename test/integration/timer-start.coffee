@@ -1,15 +1,22 @@
 { describe, it, before, after } = require 'node:test'
 assert                          = require 'node:assert/strict'
-{ startTestServer, stopTestServer, DEFAULT_TEST_PORT } = require '../server.coffee'
+{ startTestServer, stopTestServer, DEFAULT_TEST_PORT, authenticatedClient } = require '../server.coffee'
 
 
-BASE_URL     = "http://localhost:#{DEFAULT_TEST_PORT}"
 serverConfig = null
+
+
+# Every request carries the session. requireAuth no longer has a NODE_ENV
+# bypass (bug 23), so these routes need one.
+api = (path, options = {}) ->
+  fetch "#{serverConfig.baseUrl}#{path}", Object.assign {}, options,
+    headers: Object.assign {}, (options.headers ? {}), { Cookie: serverConfig.cookie }
 
 
 describe 'Timer Start', ->
   before ->
     serverConfig = await startTestServer()
+    serverConfig.cookie = (await authenticatedClient serverConfig.baseUrl, serverConfig.dbPath).cookie
     console.log "Test server started on port #{serverConfig.port}"
 
   after ->
@@ -19,7 +26,7 @@ describe 'Timer Start', ->
   it 'should start a timer for robert', ->
     console.log '\n=== Testing /timer/start ==='
 
-    response = await fetch "#{BASE_URL}/timer/start",
+    response = await api "/timer/start",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { worker: 'robert' }
@@ -46,7 +53,7 @@ describe 'Timer Start', ->
   it 'should start a timer for lyndzie', ->
     console.log '\n=== Testing /timer/start for lyndzie ==='
 
-    response = await fetch "#{BASE_URL}/timer/start",
+    response = await api "/timer/start",
       method:  'POST'
       headers: 'Content-Type': 'application/json'
       body:    JSON.stringify { worker: 'lyndzie' }

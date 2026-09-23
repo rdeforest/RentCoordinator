@@ -14,7 +14,7 @@ fs                              = require 'fs'
 path                            = require 'path'
 { execSync }                    = require 'child_process'
 { waitForServer }               = require '../helper.coffee'
-{ findFreePort, shutdownServer }= require '../server.coffee'
+{ findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
@@ -32,8 +32,10 @@ PERIOD  =
 finite = (v) -> typeof v is 'number' and Number.isFinite v
 clientShows = (e) -> e.type? and e.date? and e.year? and e.month? and e.amount? and e.description? and e.id?
 
-get  = (p) -> (await fetch "#{testConfig.baseUrl}#{p}").json()
-post = (p, b) -> fetch "#{testConfig.baseUrl}#{p}", method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)
+# Routed through a session-holding client: requireAuth no longer has a
+# NODE_ENV bypass (bug 23).
+get  = (p)    -> testConfig.client.json p
+post = (p, b) -> testConfig.client.post p, b
 
 
 describe 'Rent dashboard data contract (bugs 17/19)', ->
@@ -47,7 +49,7 @@ describe 'Rent dashboard data contract (bugs 17/19)', ->
       stdio: 'ignore', shell: true
     await new Promise (resolve) -> setTimeout resolve, 1000
     await waitForServer "#{baseUrl}/health"
-    testConfig = { baseUrl }
+    testConfig = { baseUrl, client: await authenticatedClient baseUrl, dbPath }
 
     # Seed real activity: a tenant work log + a payment for a past month.
     await post '/work-logs',

@@ -8,7 +8,7 @@ fs                              = require 'fs'
 path                            = require 'path'
 { execSync }                    = require 'child_process'
 { waitForServer }               = require '../helper.coffee'
-{ findFreePort, shutdownServer }= require '../server.coffee'
+{ findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
@@ -27,8 +27,16 @@ cleanupTestDirectory = ->
       fs.rmSync TEST_TMP_DIR, recursive: true, force: true
 
 
+# Every request carries the session. requireAuth no longer has a NODE_ENV
+# bypass (bug 23), so these routes need one. baseUrl is still threaded through
+# the helpers below; the cookie comes from testConfig.
+api = (path, options = {}) ->
+  fetch "#{testConfig.baseUrl}#{path}", Object.assign {}, options,
+    headers: Object.assign {}, (options.headers ? {}), { Cookie: testConfig.client.cookie }
+
+
 postLog = (baseUrl) ->
-  res = await fetch "#{baseUrl}/work-logs",
+  res = await api "/work-logs",
     method:  'POST'
     headers: { 'Content-Type': 'application/json' }
     body:    JSON.stringify
@@ -41,7 +49,7 @@ postLog = (baseUrl) ->
   await res.json()
 
 getPeriod = (baseUrl) ->
-  res = await fetch "#{baseUrl}/rent/period/2026/7"
+  res = await api "/rent/period/2026/7"
   await res.json()
 
 
@@ -62,6 +70,7 @@ describe 'Delete work log retracts credit (bug 08)', ->
     await waitForServer "#{baseUrl}/health"
 
     testConfig = { port, dbPath, baseUrl, logPath }
+    testConfig.client = await authenticatedClient baseUrl, dbPath
 
   after ->
     await shutdownServer testConfig.baseUrl if testConfig
@@ -77,7 +86,7 @@ describe 'Delete work log retracts credit (bug 08)', ->
     credited = await getPeriod baseUrl
     assert.equal credited.discount_applied, 250, 'credited before delete'
 
-    delRes = await fetch "#{baseUrl}/work-logs/#{log.id}", method: 'DELETE'
+    delRes = await api "/work-logs/#{log.id}", method: 'DELETE'
     assert.equal delRes.status, 200, 'delete succeeds (was 500 before fix)'
     assert.deepEqual (await delRes.json()), { success: true, deleted: log.id }
 
@@ -91,10 +100,10 @@ describe 'Delete work log retracts credit (bug 08)', ->
     { baseUrl } = testConfig
 
     log = await postLog baseUrl
-    firstDel = await fetch "#{baseUrl}/work-logs/#{log.id}", method: 'DELETE'
+    firstDel = await api "/work-logs/#{log.id}", method: 'DELETE'
     assert.equal firstDel.status, 200
 
-    secondDel = await fetch "#{baseUrl}/work-logs/#{log.id}", method: 'DELETE'
+    secondDel = await api "/work-logs/#{log.id}", method: 'DELETE'
     assert.equal secondDel.status, 404, 'already gone'
 
     after = await getPeriod baseUrl

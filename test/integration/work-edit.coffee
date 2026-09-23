@@ -10,16 +10,14 @@ fs                              = require 'fs'
 path                            = require 'path'
 { execSync }                    = require 'child_process'
 { waitForServer }               = require '../helper.coffee'
-{ findFreePort, shutdownServer }= require '../server.coffee'
+{ findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
 BASE_PORT    = 4900
 testConfig   = null
 
-req = (method, p, body) ->
-  options = method: method, headers: 'Content-Type': 'application/json'
-  options.body = JSON.stringify body if body
-  fetch "#{testConfig.baseUrl}#{p}", options
+# One funnel, one session: requireAuth no longer has a NODE_ENV bypass (bug 23).
+req = (method, p, body) -> testConfig.client.request method, p, body
 
 get  = (p)    -> (await req 'GET',  p).json()
 post = (p, b) ->  req 'POST', p, b
@@ -44,7 +42,8 @@ describe 'Editing a work log moves the rent credit (bug 49)', ->
       stdio: 'ignore', shell: true
     await new Promise (resolve) -> setTimeout resolve, 1000
     await waitForServer "http://localhost:#{port}/health"
-    testConfig = { baseUrl: "http://localhost:#{port}" }
+    baseUrl = "http://localhost:#{port}"
+    testConfig = { baseUrl, client: (await authenticatedClient baseUrl, db) }
 
   after ->
     await shutdownServer testConfig.baseUrl if testConfig

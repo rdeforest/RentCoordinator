@@ -6,12 +6,11 @@ the proposed fix in `docs/fixes/`.
 
 ## Active
 
-Two remain, both deferred deliberately rather than missed, plus bug 35 which
-is half done (see Resolved).
+One remains, deferred deliberately rather than missed, plus bug 35 which is
+half done (see Resolved).
 
 | # | Title | Severity | Why it is still here |
 |---|---|---|---|
-| 23 | [`NODE_ENV=test` fully bypasses auth](23-test-env-auth-bypass.md) | Medium (security) | Removing the bypass means the integration suite has to establish real sessions — worth doing, but it touches every test file and the owner asked to understand the tradeoffs first. |
 | 27 | [Payment-history page reads legacy `rent_events`](27-payment-history-legacy-table.md) | Medium | The architectural review recommends deleting the page, as bug 26 was deleted. Awaiting that call — it removes a linked page from the UI. |
 
 ### The remaining structural debt
@@ -59,6 +58,7 @@ without changing that line turns every instance unhealthy at the ALB.
 | 20 | `temporary_rent_amount` can never be cleared | 2026-09-23 | Presence check, not a null check. |
 | 21 | Error handler registered before routes | 2026-09-23 | Mounted last; honours `err.status`. |
 | 22 | Email casing mismatch breaks verification | 2026-09-23 | Normalized at the route boundary. |
+| 23 | `NODE_ENV=test` fully bypasses auth | 2026-09-23 | Removed. It also made the gate untestable — deleting the gate used to leave every suite green. |
 | 24 | Billable checkbox uses `isnt false` | 2026-09-23 | `!!log.billable`. |
 | 25 | Duplicate `GET /work-logs` | 2026-09-23 | One handler; the session-merging one would now double-count. |
 | 28 | Processing logs hardcode `status: success` | 2026-09-23 | Outcome columns added and used. |

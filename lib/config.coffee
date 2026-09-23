@@ -149,6 +149,7 @@ module.exports = {
   RENT_DUE_DAY
   ALLOWED_EMAILS
   ADMIN_EMAILS
+  LOCAL_ENVS
   normalizeEmail
   isEmailAllowed
   isAdminEmail

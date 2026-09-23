@@ -12,7 +12,7 @@ fs                              = require 'fs'
 path                            = require 'path'
 { execSync }                    = require 'child_process'
 { waitForServer }               = require '../helper.coffee'
-{ findFreePort, shutdownServer }= require '../server.coffee'
+{ findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
@@ -20,10 +20,8 @@ BASE_PORT    = 4700
 PAST         = { year: 2026, month: 3 }
 testConfig   = null
 
-req = (method, p, body) ->
-  options = method: method, headers: 'Content-Type': 'application/json'
-  options.body = JSON.stringify body if body
-  fetch "#{testConfig.baseUrl}#{p}", options
+# One funnel, one session: requireAuth no longer has a NODE_ENV bypass (bug 23).
+req = (method, p, body) -> testConfig.client.request method, p, body
 
 get    = (p)    -> (await req 'GET',    p).json()
 post   = (p, b) ->  req 'POST',   p, b
@@ -47,7 +45,8 @@ describe 'Rent event write path (bugs 14/15/16/18/20)', ->
 
     await new Promise (resolve) -> setTimeout resolve, 1000
     await waitForServer "http://localhost:#{port}/health"
-    testConfig = { baseUrl: "http://localhost:#{port}", dbPath }
+    baseUrl = "http://localhost:#{port}"
+    testConfig = { baseUrl, client: (await authenticatedClient baseUrl, dbPath), dbPath }
 
     # One past month with no work, so its calculated amount is the full base
     # rent and every assertion below is against a known number.

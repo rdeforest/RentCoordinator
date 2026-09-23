@@ -9,14 +9,17 @@ generateCode = ->
 
 
 sendVerificationCode = (email, code) ->
-  if config.NODE_ENV is 'development'
+  # Local environments print the code instead of mailing it. Test used to fall
+  # through to the SMTP branch and throw, which is why tests that needed to log
+  # in had to pretend to be development.
+  if config.NODE_ENV in config.LOCAL_ENVS
     console.log """
       ════════════════════════════════════════
       Verification Code for #{email}
 
       Code: #{code}
 
-      (In production, this would be sent via email)
+      (#{config.NODE_ENV}: printed instead of emailed)
       ════════════════════════════════════════
     """
     return Promise.resolve success: true

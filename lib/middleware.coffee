@@ -74,9 +74,11 @@ setupErrorHandler = (app) ->
 
 
 requireAuth = (req, res, next) ->
-  if config.NODE_ENV is 'test'
-    return next()
-
+  # No environment bypass. This used to return next() unconditionally when
+  # NODE_ENV was 'test', which meant a single stray env var opened every route
+  # on a deployed box — and, less obviously, that the test suite could not see
+  # this gate at all: deleting it entirely left every integration suite green
+  # (bug 23). Tests hold a real session now; see test/server.coffee.
   if req.session?.authenticated
     next()
   else

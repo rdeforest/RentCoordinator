@@ -8,7 +8,7 @@ fs                              = require 'fs'
 path                            = require 'path'
 { execSync }                    = require 'child_process'
 { waitForServer }               = require '../helper.coffee'
-{ findFreePort, shutdownServer }= require '../server.coffee'
+{ findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
@@ -25,6 +25,13 @@ cleanupTestDirectory = ->
   try
     if fs.existsSync TEST_TMP_DIR
       fs.rmSync TEST_TMP_DIR, recursive: true, force: true
+
+
+# Every request carries the session. requireAuth no longer has a NODE_ENV
+# bypass (bug 23), so these routes need one.
+api = (path, options = {}) ->
+  fetch "#{testConfig.baseUrl}#{path}", Object.assign {}, options,
+    headers: Object.assign {}, (options.headers ? {}), { Cookie: testConfig.client.cookie }
 
 
 describe 'Work log credits rent (bug 06)', ->
@@ -44,6 +51,7 @@ describe 'Work log credits rent (bug 06)', ->
     await waitForServer "#{baseUrl}/health"
 
     testConfig = { port, dbPath, baseUrl, logPath }
+    testConfig.client = await authenticatedClient baseUrl, dbPath
 
   after ->
     await shutdownServer testConfig.baseUrl if testConfig
@@ -61,13 +69,13 @@ describe 'Work log credits rent (bug 06)', ->
       description: 'Yard work'
       billable:    true
 
-    postRes = await fetch "#{testConfig.baseUrl}/work-logs",
+    postRes = await api "/work-logs",
       method:  'POST'
       headers: { 'Content-Type': 'application/json' }
       body:    JSON.stringify body
     assert.equal postRes.status, 200, 'work log created'
 
-    periodRes = await fetch "#{testConfig.baseUrl}/rent/period/2026/7"
+    periodRes = await api "/rent/period/2026/7"
     assert.equal periodRes.status, 200
     period = await periodRes.json()
 
@@ -75,7 +83,7 @@ describe 'Work log credits rent (bug 06)', ->
     assert.equal period.discount_applied,      250,  '5h × $50'
     assert.equal period.amount_due_calculated, 1350, '$1600 − $250'
 
-    eventsRes = await fetch "#{testConfig.baseUrl}/rent/events?year=2026&month=7"
+    eventsRes = await api "/rent/events?year=2026&month=7"
     events    = await eventsRes.json()
     reported  = events.filter (e) -> e.action is 'work-reported'
 
@@ -93,13 +101,13 @@ describe 'Work log credits rent (bug 06)', ->
       description: 'Fixed the sink'
       billable:    true
 
-    postRes = await fetch "#{testConfig.baseUrl}/work-logs",
+    postRes = await api "/work-logs",
       method:  'POST'
       headers: { 'Content-Type': 'application/json' }
       body:    JSON.stringify body
     assert.equal postRes.status, 200
 
-    periodRes = await fetch "#{testConfig.baseUrl}/rent/period/2026/7"
+    periodRes = await api "/rent/period/2026/7"
     period    = await periodRes.json()
 
     # Still only Lyndzie's 5 hours credit — Robert's 2 don't move the math.
