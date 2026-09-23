@@ -304,3 +304,113 @@ test "resolveEditsAndDeletes preserves non-edit events untouched", ->
   events = [ work('2026-04', 5), payment('2026-04', 100) ]
   out    = resolveEditsAndDeletes events
   assert.equal out.length, 2
+
+
+# --- additive adjustments (bug 14) -------------------------------------------
+
+adjustment = (ym, delta, occurred = "#{ym}-20T00:00:00Z") ->
+  evt 'adjustment', ym, { target_kind: 'period-field', target: { field: 'amount_due' }, delta }, occurred,
+    { actor: 'landlord', actor_user: 'robert@defore.st' }
+
+deleteOf = (target, occurred) ->
+  evt 'deleted', null, { reason: 'test' }, occurred, { target_event_id: target.id }
+
+undeleteOf = (target, occurred) ->
+  evt 'undeleted', null, {}, occurred, { target_event_id: target.id }
+
+
+test "an adjustment adds to the amount due instead of replacing it (bug 14)", ->
+  periods = computeAllPeriods [work('2026-01', 0), adjustment('2026-01', 100)], NOW
+  p       = periods['2026-01']
+
+  assert.equal p.amount_due, 1700,
+    'a $100 late fee on a $1,600 month leaves $1,700 owing, not $100'
+  assert.equal p.adjustment_total, 100
+  assert.equal p.amount_due_override, false,
+    'an adjustment must not pin the month as manually overridden'
+
+
+test "a negative adjustment reduces the amount due", ->
+  periods = computeAllPeriods [work('2026-01', 0), adjustment('2026-01', -250)], NOW
+  assert.equal periods['2026-01'].amount_due, 1350
+
+
+test "adjustments accumulate, and stack on top of work credit", ->
+  events  = [work('2026-01', 4), adjustment('2026-01', 100), adjustment('2026-01', 25)]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_due, 1600 - 200 + 125
+
+
+test "an override still pins the month absolutely", ->
+  periods = computeAllPeriods [work('2026-01', 0), override('2026-01', 'amount_due', 100)], NOW
+  p       = periods['2026-01']
+
+  assert.equal p.amount_due, 100, 'an override is an absolute pin — unchanged behaviour'
+  assert.equal p.amount_due_override, true
+
+
+test "an override wins over an adjustment on the same month", ->
+  events  = [work('2026-01', 0), adjustment('2026-01', 100), override('2026-01', 'amount_due', 500)]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_due, 500
+  assert.equal periods['2026-01'].amount_due_calculated, 1700,
+    'the calculated value still reflects the adjustment underneath the pin'
+
+
+# --- delete / undelete (bug 16) ----------------------------------------------
+
+test "undelete restores an event to the fold (bug 16)", ->
+  p1 = payment '2026-01', 500
+  d  = deleteOf   p1, '2026-02-01T00:00:00Z'
+  u  = undeleteOf p1, '2026-02-02T00:00:00Z'
+
+  assert.equal computeAllPeriods([work('2026-01', 0), p1], NOW)['2026-01'].amount_paid, 500
+  assert.equal computeAllPeriods([work('2026-01', 0), p1, d], NOW)['2026-01'].amount_paid, 0,
+    'the delete still removes it'
+  assert.equal computeAllPeriods([work('2026-01', 0), p1, d, u], NOW)['2026-01'].amount_paid, 500,
+    'the undelete must bring it back — this was the no-op'
+
+
+test "delete → undelete → delete resolves to deleted, by time not by count", ->
+  p1     = payment '2026-01', 500
+  events = [
+    work('2026-01', 0)
+    p1
+    deleteOf   p1, '2026-02-01T00:00:00Z'
+    undeleteOf p1, '2026-02-02T00:00:00Z'
+    deleteOf   p1, '2026-02-03T00:00:00Z'
+  ]
+
+  assert.equal computeAllPeriods(events, NOW)['2026-01'].amount_paid, 0
+
+
+test "order is by occurred_at, not by position in the array", ->
+  p1     = payment '2026-01', 500
+  events = [
+    work('2026-01', 0)
+    p1
+    undeleteOf p1, '2026-02-09T00:00:00Z'   # later, but listed first
+    deleteOf   p1, '2026-02-01T00:00:00Z'
+  ]
+
+  assert.equal computeAllPeriods(events, NOW)['2026-01'].amount_paid, 500,
+    'the undelete happened last in time, so the event is live'
+
+
+test "deletedEventIds reports what the events list should mark deleted", ->
+  { deletedEventIds } = require '../../lib/services/period.coffee'
+
+  p1 = payment '2026-01', 500
+  p2 = payment '2026-01', 300
+  d1 = deleteOf p1, '2026-02-01T00:00:00Z'
+
+  ids = deletedEventIds [p1, p2, d1]
+  assert.ok  ids.has(p1.id), 'the deleted event is reported'
+  assert.ok !ids.has(p2.id), 'an untouched event is not'
+  assert.ok !ids.has(d1.id),
+    'the delete event itself is not deleted — targeting it was the old undelete bug'
+
+  ids2 = deletedEventIds [p1, p2, d1, undeleteOf(p1, '2026-02-02T00:00:00Z')]
+  assert.ok !ids2.has(p1.id), 'and an undelete clears it'

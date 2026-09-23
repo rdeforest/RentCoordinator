@@ -27,13 +27,34 @@ parseMonthKey = (key) ->
   { year: y, month: m }
 
 
+META_ACTIONS = ['edited', 'deleted', 'undeleted']
+
+
+# Which event ids are currently deleted. A delete and a later undelete both
+# target the *original* event, so the answer is whichever came last — a
+# delete/undelete/delete sequence resolves to deleted. Ordering is by
+# occurred_at with the event id as tiebreak, matching the order the events
+# model returns rows in.
+deletedEventIds = (events) ->
+  state = new Map()
+
+  ordered = events
+    .filter (e) -> e.action in ['deleted', 'undeleted'] and e.target_event_id
+    .sort   (a, b) -> a.occurred_at.localeCompare(b.occurred_at) or a.id.localeCompare b.id
+
+  for e in ordered
+    state.set e.target_event_id, e.action is 'deleted'
+
+  new Set (id for [id, isDeleted] from state when isDeleted)
+
+
 # Given the raw event log, return events with edits applied and deletes
 # removed. Pure — does not touch the input array. `edited` events fold their
-# new_payload onto the original (last write wins). `deleted` events drop
-# their target from the result.
+# new_payload onto the original (last write wins). A target left deleted by
+# `deletedEventIds` drops out of the result.
 resolveEditsAndDeletes = (events) ->
   byId = new Map()
-  for e in events when e.action not in ['edited', 'deleted']
+  for e in events when e.action not in META_ACTIONS
     byId.set e.id, e
 
   for e in events when e.action is 'edited' and byId.has e.target_event_id
@@ -41,8 +62,8 @@ resolveEditsAndDeletes = (events) ->
     payload = Object.assign {}, orig.payload, e.payload.new_payload
     byId.set e.target_event_id, Object.assign {}, orig, { payload }
 
-  for e in events when e.action is 'deleted'
-    byId.delete e.target_event_id
+  for id from deletedEventIds events
+    byId.delete id
 
   Array.from byId.values()
 
@@ -89,7 +110,14 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   total_discount = base_discount + retroactive_credit
   hours_used     = base_hours_applied + (retroactive_credit / config.hourly_credit)
 
-  amount_due_calculated = config.base_rent - total_discount
+  # Adjustments move the amount owed; they do not replace it. A $100 late fee
+  # on a $1,600 month leaves $1,700 owing, and the month is still calculated
+  # rather than pinned. Overrides below are the only thing that pins a value.
+  adjustment_total = 0
+  for e in monthEvents when e.action is 'adjustment' and e.payload.target?.field is 'amount_due'
+    adjustment_total += e.payload.delta
+
+  amount_due_calculated = config.base_rent - total_discount + adjustment_total
   amount_due            = amount_due_calculated
   amount_due_override   = false
   amount_paid_override  = false
@@ -145,6 +173,7 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
     effective_agreed_payment: agreed_payment
     amount_due
     amount_due_calculated
+    adjustment_total
     amount_due_override
     amount_paid
     amount_paid_override
@@ -224,6 +253,7 @@ module.exports = {
   DEFAULT_CONFIG
   monthKey
   parseMonthKey
+  deletedEventIds
   resolveEditsAndDeletes
   resolveConfig
   computeMonth

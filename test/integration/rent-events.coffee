@@ -74,7 +74,7 @@ describe 'Rent events table renders (bug 17)', ->
     assert.ok p.date and p.id, 'date and id present'
 
 
-  it "an override shows as an adjustment; a work log stays hidden", ->
+  it "an override shows as a manual pin; a work log stays hidden", ->
     await put  '/rent/period/2026/5', { amount_due: 1234 }
     await post '/work-logs',
       worker: 'lyndzie', start_time: '2026-05-10T10:00:00Z', end_time: '2026-05-10T15:00:00Z'
@@ -83,9 +83,9 @@ describe 'Rent events table renders (bug 17)', ->
     visible = (await getEvents()).filter clientShows
     types   = visible.map (e) -> e.type
 
-    assert.ok 'adjustment' in types, 'override shows as adjustment'
-    adj = visible.find (e) -> e.type is 'adjustment'
+    assert.ok 'manual' in types, 'an override is an absolute pin, shown as manual'
+    adj = visible.find (e) -> e.type is 'manual'
     assert.equal adj.amount, 1234
     # work-reported has no currency amount → filtered out, as before.
     assert.equal (visible.filter (e) -> e.type is 'work-reported').length, 0
-    assert.equal visible.length, 2, 'payment + adjustment only'
+    assert.equal visible.length, 2, 'payment + manual only'

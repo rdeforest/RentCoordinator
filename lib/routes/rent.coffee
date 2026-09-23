@@ -38,11 +38,13 @@ eventToWireShape = (e, deleted) ->
 
   type = switch e.action
     when 'payment-made' then 'payment'
-    when 'override'     then 'adjustment'
+    when 'adjustment'   then 'adjustment'
+    when 'override'     then 'manual'
     else e.action
 
   amount = switch e.action
     when 'payment-made' then e.payload?.amount
+    when 'adjustment'   then e.payload?.delta
     when 'override'     then e.payload?.new_value
     else undefined
 
@@ -54,6 +56,38 @@ eventToWireShape = (e, deleted) ->
     amount:      amount
     description: e.payload?.note or ''
     deleted:     deleted
+
+
+# The legacy 'type' the client sends, mapped onto the event vocabulary.
+# 'adjustment' moves the amount due by a delta; 'manual' pins it absolutely.
+# Conflating the two is what made a $100 late fee leave a month owing $100
+# instead of $1,700 (bug 14).
+EVENT_TYPE_ACTIONS =
+  payment:    'payment-made'
+  adjustment: 'adjustment'
+  manual:     'override'
+
+
+buildEventPayload = (action, body) ->
+  amount = parseFloat body.amount
+  target = { year: parseInt(body.year), month: parseInt(body.month), field: 'amount_due' }
+
+  switch action
+    when 'payment-made'
+      amount:                   amount
+      method:                   body.method or 'manual'
+      stripe_payment_intent_id: null
+      note:                     body.description
+    when 'adjustment'
+      target_kind: 'period-field'
+      target:      target
+      delta:       amount
+      note:        body.description
+    when 'override'
+      target_kind: 'period-field'
+      target:      target
+      new_value:   amount
+      note:        body.description
 
 
 actorFromRequest = (req, fallback = 'landlord') ->
@@ -81,7 +115,9 @@ setup = (app) ->
     { actor, actor_user } = actorFromRequest req, 'landlord'
     now = new Date().toISOString()
 
-    if req.body.temporary_rent_amount?
+    # Presence, not non-null: the client sends an explicit null to clear the
+    # override amount, and a null check silently discarded it (bug 20).
+    if 'temporary_rent_amount' of req.body
       eventsModel.recordEvent
         occurred_at: now
         actor:       actor
@@ -248,13 +284,19 @@ setup = (app) ->
   app.get '/rent/summary', asyncRoute 'rent.summary', (req, res) ->
     periods = periodViewer.getAllPeriods()
     rows    = Object.values periods
+    # display_amount_due, not amount_due: the summary has to agree with the
+    # rows beneath it and with /rent/outstanding. Summing the raw value put
+    # the full base rent into "outstanding" the moment a month began, which
+    # is the "$1,600 overdue!" the display logic exists to avoid (bug 18).
+    # Each month is clamped at zero so an overpaid month does not cancel out
+    # a month that is genuinely owed.
     res.json
-      total_periods:     rows.length
-      total_amount_due:  rows.reduce ((s, p) -> s + p.amount_due),         0
-      total_amount_paid: rows.reduce ((s, p) -> s + p.amount_paid),         0
-      total_discount:    rows.reduce ((s, p) -> s + p.discount_applied),    0
-      outstanding_balance: rows.reduce ((s, p) -> s + p.amount_due - p.amount_paid), 0
-      periods:           rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
+      total_periods:       rows.length
+      total_amount_due:    rows.reduce ((s, p) -> s + p.display_amount_due), 0
+      total_amount_paid:   rows.reduce ((s, p) -> s + p.amount_paid),        0
+      total_discount:      rows.reduce ((s, p) -> s + p.discount_applied),   0
+      outstanding_balance: rows.reduce ((s, p) -> s + Math.max 0, p.display_amount_due - p.amount_paid), 0
+      periods:             rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
 
   app.post '/rent/recalculate-all', asyncRoute 'rent.recalculateAll', (req, res) ->
     # Recalculation is implicit in the new model — every GET recomputes.
@@ -272,15 +314,11 @@ setup = (app) ->
     { year, month, includeDeleted } = req.query
     showDeleted = includeDeleted is 'true'
 
-    all = eventsModel.listAllEvents()
-
-    # Build set of event ids that are deleted
-    deletedIds = new Set()
-    for e in all when e.action is 'deleted'
-      deletedIds.add e.target_event_id
+    all        = eventsModel.listAllEvents()
+    deletedIds = period.deletedEventIds all
 
     filtered = all.filter (e) ->
-      return false if e.action in ['edited', 'deleted']
+      return false if e.action in ['edited', 'deleted', 'undeleted']
       return false if deletedIds.has(e.id) and not showDeleted
       if year and month
         return e.effective_for is period.monthKey parseInt(year), parseInt(month)
@@ -298,24 +336,16 @@ setup = (app) ->
     ymKey = period.monthKey parseInt(year), parseInt(month)
     { actor, actor_user } = actorFromRequest req, 'landlord'
 
-    # Map legacy 'type' onto the new action vocabulary
-    action = switch type
-      when 'payment'    then 'payment-made'
-      when 'adjustment' then 'override'
-      when 'manual'     then 'override'
-      else 'payment-made'   # safest fallback
+    action = EVENT_TYPE_ACTIONS[type]
 
-    payload =
-      if action is 'payment-made'
-        amount:                   parseFloat amount
-        method:                   req.body.method or 'manual'
-        stripe_payment_intent_id: null
-        note:                     description
-      else
-        target_kind: 'period-field'
-        target:      { year: parseInt(year), month: parseInt(month), field: 'amount_due' }
-        new_value:   parseFloat amount
-        note:        description
+    # Defaulting an unrecognized type to 'payment-made' fabricated a payment
+    # nobody made (bug 15). An unknown type is a client bug; say so.
+    unless action
+      return res.status(400).json
+        error: "Unknown event type: #{type}"
+        known: Object.keys EVENT_TYPE_ACTIONS
+
+    payload = buildEventPayload action, req.body
 
     event = eventsModel.recordEvent
       occurred_at:   new Date().toISOString()
@@ -374,32 +404,36 @@ setup = (app) ->
     res.json message: 'Event deleted', event: existing
 
   app.post '/rent/events/:id/undelete', asyncRoute 'rent.undeleteEvent', (req, res) ->
-    # Undeleting is a delete-of-the-delete-event.
-    deletes = eventsModel.listAllEvents().filter (e) ->
-      e.action is 'deleted' and e.target_event_id is req.params.id
-    unless deletes.length > 0
+    # Undelete used to mean "delete the delete event", which the fold never
+    # saw: its byId map only ever held non-meta events, so removing a delete
+    # event's id removed nothing (bug 16). An `undeleted` event targeting the
+    # original is something both the fold and the events list understand.
+    existing = eventsModel.getEvent req.params.id
+    unless existing
+      return res.status(404).json error: 'Event not found'
+
+    unless period.deletedEventIds(eventsModel.listAllEvents()).has existing.id
       return res.status(400).json error: 'Event is not deleted'
 
     { actor, actor_user } = actorFromRequest req, 'landlord'
-    latest = deletes[deletes.length - 1]
 
     eventsModel.recordEvent
       occurred_at:     new Date().toISOString()
-      effective_for:   latest.effective_for
+      effective_for:   existing.effective_for
       actor:           actor
       actor_user:      actor_user
-      action:          'deleted'
-      target_event_id: latest.id
-      payload:         { reason: 'Undelete via POST /rent/events/:id/undelete' }
+      action:          'undeleted'
+      target_event_id: existing.id
+      payload:         { reason: req.body?.reason or null }
 
-    res.json message: 'Event undeleted', event: eventsModel.getEvent req.params.id
+    res.json message: 'Event undeleted', event: eventsModel.getEvent existing.id
 
   # ---- audit logs ---------------------------------------------------------
 
   app.get '/rent/audit-logs', asyncRoute 'rent.getAuditLogs', (req, res) ->
     # The events table IS the audit log. Surface edits and deletes.
     all = eventsModel.listAllEvents()
-    audits = all.filter (e) -> e.action in ['edited', 'deleted', 'override']
+    audits = all.filter (e) -> e.action in ['edited', 'deleted', 'undeleted', 'override', 'adjustment']
 
     res.json audits.map (e) ->
       action:      e.action

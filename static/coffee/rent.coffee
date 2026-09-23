@@ -751,10 +751,9 @@ autoRecalculateAndReload = ->
 
 formatEventType = (type) ->
   switch type
-    when 'payment'            then 'Payment'
-    when 'adjustment'         then 'Rent Adjustment'
-    when 'work_value_change'  then 'Work Value Change'
-    when 'manual'             then 'Manual Entry'
+    when 'payment'    then 'Payment'
+    when 'adjustment' then 'Rent Adjustment'
+    when 'manual'     then 'Manual Entry'
     else type
 
 getDisplayAmountDue = (period) ->

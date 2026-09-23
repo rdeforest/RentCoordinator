@@ -118,7 +118,9 @@ window.editWork = (id) ->
   document.getElementById('work-end-time').value = endDate.toTimeString().slice 0, 5
 
   document.getElementById('work-description').value   = log.description
-  document.getElementById('work-billable')   .checked = log.billable isnt false
+  # SQLite stores billable as 0/1, and `0 isnt false` is true in JavaScript,
+  # so the box was checked for non-billable work and saving flipped it (bug 24).
+  document.getElementById('work-billable')   .checked = !!log.billable
 
   workModal.style.display = 'block'
 
