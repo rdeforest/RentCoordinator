@@ -82,6 +82,7 @@ without changing that line turns every instance unhealthy at the ALB.
 | 46 | Migration loop swallows failures | 2026-09-23 | `set -euo pipefail`, delegating to `upgrade.sh`. |
 | 47 | `scripts/upgrade.sh` is empty | 2026-09-23 | Real runner; migrations also apply at boot. |
 | 48 | Projects/tasks/sessions FKs lack `ON DELETE` | 2026-09-23 | Cascade for parts, `SET NULL` for references. |
+| 49 | [Editing a work log doesn't move the rent credit](49-work-log-edit-no-event.md) | 2026-09-23 | `updateWorkLog` emits an `edited` event; moves months and workers too. |
 
 Not in the numbered catalog but fixed this cycle: the daily-backup cron hit an
 auth-gated endpoint (now `backup-now.sh`); the init script's pidfile
