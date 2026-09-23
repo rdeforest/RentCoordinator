@@ -7,6 +7,16 @@
 
 The pre-restore safety copy is timestamped, so consecutive restores no longer overwrite each other, and both restore paths stage the incoming database next to the live one and `rename` it into place. Verified: two consecutive restores leave two distinct safety copies and the source backup files intact.
 
+The rename turned out to be only half of it. `schema.coffee` holds one
+long-lived connection opened at module load, and a rename swaps the directory
+entry while that handle keeps the old inode — so the process went on answering
+reads from the pre-restore database and failed every write with
+`SQLITE_READONLY`, while `/health` (which now queries that same handle)
+reported healthy. A restore inside the server therefore ends the process, and
+the supervisor restarts it against the file that is actually there. Found by
+the second review round; the previous `copyFileSync` only appeared to avoid
+this because it wrote into the inode the app was holding.
+
 ## Symptom
 
 Two problems in the restore paths:

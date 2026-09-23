@@ -80,3 +80,26 @@ finished and whose tests were green:
 
 Every one of those was found by reading the diff and running it, not by being
 told where to look.
+
+A second round over the fixes then found two more blocking bugs, both of them
+*in the round-one fixes*, and both invisible to a green test suite:
+
+- The boot-time migration runner — the fix for the first blocking finding —
+  killed the server on every existing database. One migration's "already
+  applied" shortcut was `process.exit 0`, which was harmless while migrations
+  ran as child processes and fatal once they ran in-process. The server ended
+  mid-boot with status 0, so nothing downstream could tell it from a clean
+  shutdown. Every test starts from a fresh database, where that branch is
+  never taken.
+- The same runner found zero migrations in the compiled artifact — it matched
+  `.coffee` and `dist/` holds `.js` — and reported "already up to date"
+  against a completely unmigrated database.
+
+It also found that the atomic-restore fix left the running process on an
+orphaned inode (serving stale reads, failing every write, still reporting
+healthy), and that the PII-tokenizer fix turned one unauthenticated request
+into three thousand database writes.
+
+That is the argument for running the loop again after applying its findings,
+and it is why the skill says a blocking finding that gets fixed goes round
+again: **a fix is unreviewed code.**

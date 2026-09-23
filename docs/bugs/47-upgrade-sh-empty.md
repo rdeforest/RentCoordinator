@@ -7,6 +7,14 @@
 
 `scripts/upgrade.sh` applies pending migrations via `scripts/run-migrations.coffee`, and `migrations/README.md` describes the three paths that run it. This was the visible half of a larger problem: *nothing* ran migrations on the documented in-place upgrade (`git pull` + restart), so new code would have started against an old schema. `schema.initialize()` now applies pending migrations at boot.
 
+Running migrations in the server's own process makes a migration's control
+flow the server's control flow, which the second review round caught the hard
+way: the 2026-06-11 seed migration ended its "already seeded" path with
+`process.exit 0`, and that ended the boot. The migration returns now, and the
+runner installs an exit guard so no future migration can end the host process
+silently. The runner also matches `.js` so it works inside the compiled
+artifact, where it had been finding nothing and reporting success.
+
 ## Symptom
 
 `migrations/README.md` tells you migrations run via `scripts/upgrade.sh`.
