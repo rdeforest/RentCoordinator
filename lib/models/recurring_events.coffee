@@ -179,6 +179,20 @@ getEnabledRecurringEvents = ->
   return events
 
 
+# A row whose events_created is unparseable is a real problem; returning []
+# for it would replace the hardcoded 'success' this migration removed with a
+# quieter lie in the adjacent field.
+parseEventsCreated = (log) ->
+  return [] unless log.events_created
+
+  try
+    JSON.parse log.events_created
+  catch err
+    console.error "recurring_event_logs #{log.id}: events_created is not JSON
+                   (#{err.message}); stored value: #{log.events_created}"
+    []
+
+
 # Rows written before the outcome columns existed report status null — an
 # honest "unknown" rather than the hardcoded 'success' that used to be
 # invented on read, which made a run that threw look like one that worked.
@@ -187,7 +201,7 @@ hydrateProcessingLog = (log) ->
 
   log.processing_date = log.processed_at
   log.created_at      = log.processed_at
-  log.events_created  = try JSON.parse(log.events_created or '[]') catch then []
+  log.events_created  = parseEventsCreated log
   log
 
 

@@ -20,6 +20,10 @@ LIMITS =
 # login attempt. Truncate before it becomes a key.
 MAX_KEY_EMAIL = 128
 
+# RFC 5321's limit. Anything longer is not an address, and letting it through
+# put attacker-sized strings into the rate-limit map, the database and the log.
+MAX_EMAIL_LENGTH = 254
+
 # The address bucket is consulted first, and deliberately: it is the one that
 # bounds how many keys a single caller can create, so checking it second let a
 # spray insert a key per made-up address before being rejected.
@@ -55,6 +59,9 @@ setup = (app) ->
     unless email
       return res.status(400).json error: 'Email required'
 
+    if email.length > MAX_EMAIL_LENGTH
+      return res.status(400).json error: 'Email address is too long'
+
     return unless throttle req, res, 'send-code', email
 
     try
@@ -78,6 +85,9 @@ setup = (app) ->
 
     unless email and code
       return res.status(400).json error: 'Email and code required'
+
+    if email.length > MAX_EMAIL_LENGTH
+      return res.status(400).json error: 'Email address is too long'
 
     return unless throttle req, res, 'verify-code', email
 

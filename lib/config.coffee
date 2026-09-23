@@ -74,7 +74,8 @@ unless SESSION_SECRET
 
   SESSION_SECRET = require('node:crypto').randomBytes(32).toString 'hex'
   console.warn "SESSION_SECRET is unset; generated an ephemeral one for
-                #{NODE_ENV}. Sessions will not survive a restart."
+                #{NODE_ENV}. Cookies signed with it stop verifying when this
+                process ends." 
 
 SESSION_MAX_AGE = 90 * 24 * 60 * 60 * 1000
 CODE_EXPIRY     = 10 * 60 * 1000

@@ -160,11 +160,14 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
     else if money.cents(amount_paid) > 0                          then 'PARTIAL'
     else                                                               'UNPAID'
 
-  # Every currency value leaves this function rounded to the cent. An hourly
-  # credit on fractional hours produces amounts like $1,433.3333333333333,
-  # which no payment method can settle exactly — the month would read PARTIAL
-  # for ever over a third of a cent (bug 35). Hours stay unrounded; they are
-  # not money and carry-over depends on their full precision.
+  # Every value the dashboard shows as money leaves this function rounded to
+  # the cent. An hourly credit on fractional hours produces amounts like
+  # $1,433.3333333333333, which no payment method can settle exactly — the
+  # month would read PARTIAL for ever over a third of a cent (bug 35).
+  #
+  # Hours and cumulative_shortfall stay unrounded. Neither is displayed; both
+  # are carried into the next month's arithmetic, and rounding a running
+  # balance before feeding it forward makes it drift against the exact figure.
   {
     year, month
     hours_worked
@@ -185,7 +188,7 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
     amount_paid_override
     display_amount_due:       money.dollars display_amount_due
     payment_status
-    cumulative_shortfall:     money.dollars cumulative_shortfall
+    cumulative_shortfall
   }
 
 
@@ -257,6 +260,7 @@ computeAllPeriods = (events, now = new Date(), opts = {}) ->
 
 module.exports = {
   DEFAULT_CONFIG
+  META_ACTIONS
   monthKey
   parseMonthKey
   deletedEventIds

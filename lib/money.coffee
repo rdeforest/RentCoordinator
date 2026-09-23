@@ -14,7 +14,10 @@
 # through Math.round on a scaled integer rather than toFixed, which is
 # locale- and precision-sensitive.
 
-cents = (dollars) -> Math.round (dollars or 0) * 100
+# `?` and not `or`: only a missing value defaults. `or` treats NaN as falsy
+# too, which turned a corrupt amount into $0.00 and reported the month PAID —
+# erasing the corruption in the one direction that says nothing is owed.
+cents = (dollars) -> Math.round (dollars ? 0) * 100
 
 # The nearest real amount of money. Idempotent: rounding an already-round
 # value changes nothing.

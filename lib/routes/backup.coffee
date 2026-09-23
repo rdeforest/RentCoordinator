@@ -71,6 +71,20 @@ listBackupsRoute = (req, res) ->
       error:   error.message
 
 
+# The restore renamed a new file over the database path, but this process
+# still holds a connection to the old inode — it would serve stale reads and
+# fail every write. Exiting hands the supervisor a clean restart against the
+# file that is now there. Deliberately after the response is flushed, so the
+# caller learns the restore succeeded.
+restartAfterRestore = (res) ->
+  console.log 'Restore complete — exiting so the service restarts on the restored database'
+
+  finish = ->
+    process.exit 0
+
+  if res.writableEnded then setTimeout finish, 250 else res.on 'finish', -> setTimeout finish, 250
+
+
 # POST /api/backup/restore
 # Restore database from latest S3 backup
 restoreFromS3Route = (req, res) ->
@@ -84,9 +98,12 @@ restoreFromS3Route = (req, res) ->
 
     if result
       res.json
-        success:  true
-        restored: true
-        backup:   result.backup
+        success:         true
+        restored:        true
+        backup:          result.backup
+        requiresRestart: result.requiresRestart is true
+
+      restartAfterRestore res if result.requiresRestart
     else
       res.json
         success:  true

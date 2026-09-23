@@ -109,13 +109,14 @@ describe 'Admin gate (bug 33)', ->
   # would make the gate sound by coincidence rather than by construction.
   authed = (email) -> { email, authenticated: true }
 
-  run = (session) ->
+  run = (session, accepts = false) ->
     new Promise (resolve) ->
-      req = session: session
+      req = session: session, xhr: not accepts, accepts: -> accepts
       res =
         status: (code) ->
           statusCode: code
           json: (body) -> resolve { status: code, body }
+        redirect: (code, location) -> resolve { status: code, location }
       middleware.requireAdmin req, res, -> resolve status: 200
 
   it 'lets the landlord through', ->
@@ -134,3 +135,9 @@ describe 'Admin gate (bug 33)', ->
 
   it 'rejects a request with no session at all', ->
     assert.equal (await run undefined).status, 403
+
+  it 'sends a browser somewhere usable instead of a JSON body', ->
+    result = await run { email: 'lynz57@hotmail.com', authenticated: true }, true
+    assert.equal result.status,   302
+    assert.equal result.location, '/',
+      'the tenant used to get a raw {"error":"Admin only"} rendered as a page'

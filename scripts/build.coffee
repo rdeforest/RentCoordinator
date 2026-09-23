@@ -11,6 +11,9 @@ execAsync = promisify exec
 # migration runner executes them from the deployed tree.
 SERVER_SOURCES = ['main.coffee', 'lib', 'migrations', 'scripts']
 
+# Not CoffeeScript, so the compiler steps above skip them entirely.
+SHELL_SCRIPTS = ['scripts/upgrade.sh']
+
 
 fixImportPaths = (dir) ->
   return unless fs.existsSync dir
@@ -86,7 +89,22 @@ build = ->
     console.log 'Writing dist/package.json...'
     pkg = JSON.parse fs.readFileSync 'package.json', 'utf8'
     fs.writeFileSync 'dist/package.json',
-      JSON.stringify(Object.assign({}, pkg, type: 'commonjs', main: 'main.js'), null, 2) + '\n'
+      JSON.stringify(Object.assign({}, pkg,
+        type:    'commonjs'
+        main:    'main.js'
+        # The source scripts run .coffee files that dist/ does not contain.
+        # A manifest that describes the artifact has to describe this too.
+        scripts:
+          start:     'node main.js'
+          'migrate': 'node scripts/run-migrations.js'
+      ), null, 2) + '\n'
+
+    # The shell entry points are not compiled, so they have to be copied.
+    # Without upgrade.sh the artifact has no documented way to migrate.
+    console.log 'Copying shell scripts...'
+    for script in SHELL_SCRIPTS
+      fs.copyFileSync script, path.join 'dist', script
+      fs.chmodSync path.join('dist', script), 0o755
 
     console.log '✓ Build complete!'
 

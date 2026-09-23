@@ -54,12 +54,15 @@ insertEvent = (e) ->
   )
 
 
-try
-  # Skip if already seeded
+# Wrapped in a function so the "already seeded" case can return. It used to
+# call `process.exit 0`, which was harmless while migrations were spawned as
+# child processes and fatal once they are required in-process: it terminated
+# the server mid-boot, before app.listen, with exit status 0.
+seed = ->
   count = db.prepare('SELECT COUNT(*) AS n FROM events').get().n
   if count > 0
     console.log "  events table already has #{count} rows — skipping seed"
-    process.exit 0
+    return
 
   db.exec 'BEGIN TRANSACTION'
 
@@ -227,11 +230,17 @@ try
   console.log "  discarded rent_due: #{emitted['discarded-rent-due']}"
   console.log "  recurring templates disabled: #{disabled}"
 
+try
+  seed()
+
 catch err
   console.error 'Migration failed:', err.message
   console.error err.stack
   try
     db.exec 'ROLLBACK'
+  catch rollbackErr
+    console.error 'Rollback ALSO failed — the database may be mid-transaction:',
+      rollbackErr.message
   throw err
 
 finally

@@ -63,6 +63,10 @@ updateSessionDescription = (sessionId, description) ->
   return db.prepare("SELECT * FROM work_sessions WHERE id = ?").get sessionId
 
 
+getSession = (sessionId) ->
+  db.prepare("SELECT * FROM work_sessions WHERE id = ?").get(sessionId) or null
+
+
 getCurrentSession = (worker) ->
   result = db.prepare("""
     SELECT s.* FROM work_sessions s
@@ -141,7 +145,7 @@ pauseActiveSessions = (worker) ->
 
 
 resumeSession = (sessionId, worker) ->
-  session = db.prepare("SELECT * FROM work_sessions WHERE id = ?").get sessionId
+  session = getSession sessionId
 
   unless session
     throw new Error "Session not found: #{sessionId}"
@@ -188,6 +192,7 @@ module.exports = {
   createWorkSession
   createWorkEvent
   updateSessionDescription
+  getSession
   getCurrentSession
   openSegmentStart
   calculateSessionDuration

@@ -13,8 +13,16 @@ BACKUP_VERSION = '2.0.0'  # SQLite-based backups
 
 # A restore is the one operation that can destroy the live database, so it
 # gets a safety copy that does not collide with the previous one, and it
-# lands via rename — which is atomic within a filesystem — rather than a copy
-# over the file the app is reading.
+# lands via rename — atomic within a filesystem — rather than a copy over the
+# file the app is reading.
+#
+# The rename is only half the story. schema.coffee holds one long-lived
+# connection opened at module load, and a rename swaps the directory entry
+# while that handle keeps the old inode: the process would go on answering
+# reads from the pre-restore database and fail every write with
+# SQLITE_READONLY, all while /health reported healthy. So a restore inside the
+# server process ends that process — the supervisor restarts it against the
+# file that is actually there now. Callers get requiresRestart to say so.
 safetyCopyPath = (dbPath) ->
   stamp = new Date().toISOString().replace /[:.]/g, '-'
   "#{dbPath}.before-restore-#{stamp}"
@@ -221,7 +229,7 @@ restoreFromS3 = ->
   swapInDatabase tempPath, dbPath
 
   console.log "Database restored successfully from S3"
-  { restored: true, backup: latest }
+  { restored: true, backup: latest, requiresRestart: true }
 
 
 # Full backup workflow: local + S3
@@ -324,7 +332,7 @@ restoreFromFile = (filepath) ->
     throw err
 
   console.log "Database restored successfully"
-  { restored: true, source: filepath }
+  { restored: true, source: filepath, requiresRestart: true }
 
 
 module.exports = {

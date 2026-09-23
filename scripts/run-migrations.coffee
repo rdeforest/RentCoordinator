@@ -32,10 +32,18 @@ pendingMigrations = (db) ->
 
   applied = new Set (row.name for row in db.prepare('SELECT name FROM schema_migrations').all())
 
-  fs.readdirSync MIGRATIONS_DIR
-    .filter (name) -> name.endsWith '.coffee'
-    .sort()
-    .filter (name) -> not applied.has name
+  # Source runs against .coffee; the compiled artifact has the same migrations
+  # as .js. Matching only .coffee made the runner find nothing in dist/ and
+  # report "already up to date" against a completely unmigrated database.
+  # Recorded under the stem so a database migrated from source is not migrated
+  # again from the artifact, or the other way round.
+  stems = new Map()
+  for name in fs.readdirSync(MIGRATIONS_DIR).sort()
+    [_, stem, ext] = name.match(/^(.*)\.(coffee|js)$/) ? []
+    continue unless stem
+    stems.set stem, name unless stems.has(stem) and ext is 'js'
+
+  [stem, name] for [stem, name] from stems when not applied.has stem
 
 
 # Each migration is a standalone script that opens its own connection, so this
@@ -54,24 +62,40 @@ runMigrations = ->
 
   console.log "Migrations: #{pending.length} pending"
 
+  # A migration is a script, and a script can call process.exit. One of them
+  # did, as an "already applied, nothing to do" shortcut — which ended the
+  # server's own boot, before app.listen, with status 0. Nothing downstream
+  # could tell that from a clean shutdown. No migration gets to decide this
+  # process's lifetime silently.
+  # Only a *silent* exit is the failure this guards. A migration that throws
+  # propagates normally and the caller already sees the error; complaining
+  # about that too would just be noise on a real failure.
+  finished = false
+  process.on 'exit', (code) ->
+    return if finished or code isnt 0
+    console.error "FATAL: a migration ended the process before the run
+                   completed. Migrations must return, not exit."
+    process.exitCode = 1
+
   # Required in-process rather than spawned. Each migration is a script that
   # does its work at load time and opens its own connection, so requiring it
   # runs it — and a boot that shells out to `npx coffee` nine times takes long
   # enough to push startup past a health check.
   process.env.DB_PATH = DB_PATH
 
-  for name in pending
+  for [stem, name] in pending
     console.log "  applying #{name}"
     require path.join MIGRATIONS_DIR, name
 
     db = new DatabaseSync DB_PATH
     try
-      db.prepare('INSERT OR REPLACE INTO schema_migrations (name) VALUES (?)').run name
+      db.prepare('INSERT OR REPLACE INTO schema_migrations (name) VALUES (?)').run stem
     finally
       db.close()
 
+  finished = true
   console.log "Migrations: applied #{pending.length}"
-  pending
+  (stem for [stem] in pending)
 
 
 module.exports = { runMigrations, pendingMigrations }

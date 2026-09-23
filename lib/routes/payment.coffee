@@ -5,23 +5,6 @@ logger         = require '../logger.coffee'
 money          = require '../money.coffee'
 
 
-computeOutstanding = ->
-  periods = periodViewer.getAllPeriods()
-  rows    = Object.values(periods)
-    .filter (p) -> p.payment_status isnt 'NOT DUE'
-    .map (p) ->
-      owed = p.display_amount_due
-      paid = p.amount_paid or 0
-      outstanding = Math.max 0, money.minus owed, paid
-      { year: p.year, month: p.month, owed, paid, outstanding }
-    # A month settled to the cent is settled. Comparing raw floats left
-    # fully-paid months outstanding by fractions of a cent (bug 35).
-    .filter (r) -> money.cents(r.outstanding) > 0
-    .sort   (a, b) -> (a.year - b.year) or (a.month - b.month)
-  total: money.dollars rows.reduce ((s, r) -> s + r.outstanding), 0
-  months: rows
-
-
 setup = (app) ->
   # If year/month are supplied, the tenant is paying a specific month
   # (legacy flow + the Stripe checkout link in the rent UI). If they're
@@ -55,7 +38,7 @@ setup = (app) ->
         meta        = { year, month, tenant: req.session.email, allocation: JSON.stringify allocation }
       else
         # "Pay everything outstanding" flow.
-        outstanding = computeOutstanding()
+        outstanding = periodViewer.computeOutstanding()
         expected    = outstanding.total
 
         if expected <= 0

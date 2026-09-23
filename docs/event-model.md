@@ -228,3 +228,22 @@ boundary. Before deploying:
    `payment-made` events.
 
 If the asserts pass, the seed is sound. Deploy.
+
+## A note on `override` vs `adjustment` (2026-09-23)
+
+`adjustment` was added as a distinct action that moves `amount_due` by a
+`delta`. `override` keeps its original meaning: an absolute pin, the only
+thing that sets `amount_due_override`.
+
+Before this split, the UI's "Rent Adjustment" wrote an `override`, which
+replaced the month's amount instead of adjusting it (bug 14). Events already
+stored that way keep absolute semantics — an adjustment-origin override cannot
+be told from a deliberate pin after the fact, and guessing would silently
+rewrite history.
+
+The visible consequence: the ~12 `override` events in the live database used
+to render as "Rent Adjustment" and now render as "Manual Entry", and they
+match the `manual` filter rather than `adjustment`. Their arithmetic has not
+changed — the new label is the accurate one — but someone filtering for past
+adjustments will not find them there.
+

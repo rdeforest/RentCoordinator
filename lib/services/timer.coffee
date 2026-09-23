@@ -20,10 +20,26 @@ recalculateFor = (log) ->
   await rentService.createOrUpdateRentPeriod date.getFullYear(), date.getMonth() + 1
 
 
+CLOSEABLE = ['active', 'paused']
+
+
 # Close a session, and when it counts as completed work turn it into a work
 # log. Shared by an explicit stop and by the timeout sweep below, so a session
 # that timed out is recorded exactly the way a stopped one is.
+#
+# The session is re-read here rather than trusted from the caller. stopTimer
+# awaits twice before reaching this point, and two overlapping requests — a
+# double-clicked Stop button — each arrived carrying their own stale copy and
+# each wrote a work log. One hour worked, credited twice: $100 off the rent
+# instead of $50.
 finishSession = (worker, session, { completed, at }) ->
+  current = workSessionModel.getSession session.id
+
+  unless current?.status in CLOSEABLE
+    throw new Error "Session #{session.id} is already #{current?.status ? 'gone'}"
+
+  session = current
+
   await workSessionModel.createWorkEvent session.id, (if completed then 'stop' else 'cancel'), at
 
   duration = await workSessionModel.calculateSessionDuration session.id

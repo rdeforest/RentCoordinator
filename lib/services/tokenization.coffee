@@ -74,9 +74,27 @@ EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
 # alone. `tokenize` replaces the whole value, which is right for a metadata
 # field that is an address and wrong for free text — a stack trace reduced to
 # one token is unreadable, which is a different way of losing the log.
+# Every match is a synchronous SQLite insert and two permanent cache entries,
+# and this runs on the unauthenticated login path, where the input is
+# whatever was posted. One request carrying a 50 kB field of addresses wrote
+# three thousand rows, blocked the event loop long enough for other
+# connections to see "database is locked", and produced a 73 kB log line.
+# Free text gets a length cap and a match cap; a real address is far inside
+# both, and the caps are visible in the output rather than silent.
+MAX_TOKENIZE_LENGTH = 4096
+MAX_TOKENIZE_MATCHES = 20
+
 tokenizeEmbedded = (text) ->
   return text unless typeof text is 'string' and text.includes '@'
-  text.replace EMAIL_PATTERN, (match) -> tokenize match
+
+  if text.length > MAX_TOKENIZE_LENGTH
+    text = text[0...MAX_TOKENIZE_LENGTH] + "…[truncated from #{text.length} chars]"
+
+  matches = 0
+  text.replace EMAIL_PATTERN, (match) ->
+    matches += 1
+    return '[redacted: too many addresses]' if matches > MAX_TOKENIZE_MATCHES
+    tokenize match
 
 
 TOKEN_PATTERN = /token:[0-9a-f]{16}/g
@@ -128,4 +146,5 @@ detokenizeObject = (obj) ->
       result[key] = value
   result
 
-module.exports = { tokenize, tokenizeEmbedded, detokenize, detokenizeEmbedded, detokenizeObject }
+module.exports = { tokenize, tokenizeEmbedded, detokenize, detokenizeEmbedded, detokenizeObject,
+                   MAX_TOKENIZE_LENGTH, MAX_TOKENIZE_MATCHES }

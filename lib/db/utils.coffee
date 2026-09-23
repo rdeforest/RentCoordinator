@@ -19,10 +19,13 @@ depth = 0
 # async callback would have its COMMIT run before the awaited work did — a
 # silent partial commit. Refusing one is louder than pretending it worked.
 transaction = (fn) ->
-  name   = "sp_#{depth}"
-  depth += 1
+  name = "sp_#{depth}"
 
+  # Opened before the counter moves: if SAVEPOINT throws there is no
+  # savepoint to unwind, and a depth that was incremented anyway would leave
+  # the next transaction using a name one level too deep.
   db.exec "SAVEPOINT #{name}"
+  depth += 1
 
   try
     result = fn()

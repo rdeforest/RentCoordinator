@@ -21,4 +21,11 @@ fi
 export DB_PATH="${DB_PATH:-./tenant-coordinator.db}"
 
 echo "Applying migrations against ${DB_PATH}"
-npx coffee scripts/run-migrations.coffee
+
+# The same script ships in the compiled artifact, where the runner is .js and
+# there is no CoffeeScript to run it with.
+if [ -f scripts/run-migrations.coffee ]; then
+  npx coffee scripts/run-migrations.coffee
+else
+  node scripts/run-migrations.js
+fi

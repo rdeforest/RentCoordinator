@@ -62,15 +62,27 @@ describe 'A month can always be paid exactly (bug 35)', ->
 
     fields = ['discount_applied', 'total_discount', 'retroactive_credit', 'base_rent',
               'agreed_payment', 'effective_agreed_payment', 'amount_due',
-              'amount_due_calculated', 'amount_paid', 'display_amount_due',
-              'cumulative_shortfall']
+              'amount_due_calculated', 'amount_paid', 'display_amount_due']
 
     for field in fields
       assert.equal period[field], money.dollars(period[field]),
         "#{field} is #{period[field]}, which is not a payable amount"
 
-  it 'leaves hours alone — they are not money', ->
+  it 'leaves the carried-forward values alone — they are not display money', ->
     period = computeAllPeriods([work '2026-01', FRACTIONAL], NOW)['2026-01']
 
     assert.equal period.hours_worked, FRACTIONAL,
       'rounding hours would silently lose carry-over'
+
+    # cumulative_shortfall feeds the next month's retroactive credit. Rounding
+    # a running balance before carrying it forward makes it drift against the
+    # exact figure, and nothing displays it.
+    exact = computeAllPeriods([work '2026-01', 1 / 3], NOW)['2026-01']
+    assert.notEqual exact.cumulative_shortfall, money.dollars(exact.cumulative_shortfall),
+      'the shortfall is carried at full precision'
+
+  it 'does not launder a corrupt amount into a confident zero', ->
+    assert.ok Number.isNaN(money.cents NaN),
+      'NaN must stay NaN; `or 0` turned it into $0.00 and the month read PAID'
+    assert.equal money.cents(null),      0
+    assert.equal money.cents(undefined), 0

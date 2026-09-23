@@ -93,7 +93,12 @@ requireAuth = (req, res, next) ->
 # which one.
 requireAdmin = (req, res, next) ->
   if req.session?.authenticated and config.isAdminEmail req.session.email
-    next()
+    return next()
+
+  # A browser asking for a page gets sent somewhere it can use; an API caller
+  # gets the status and the reason. requireAuth draws the same distinction.
+  if req.accepts('html') and not req.xhr
+    res.redirect 302, '/'
   else
     res.status(403).json error: 'Admin only'
 

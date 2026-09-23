@@ -1,5 +1,11 @@
 # RentCoordinator TODO
 
+> **Stale (2026-09-23):** the `install.sh` / `uninstall.sh` refactor below
+> describes files that no longer exist — `scripts/install.sh` was deleted
+> with bug 43, since production is the CloudFormation path and local
+> development is `npm install` + `npm start`. The shared-helper reasoning
+> may still be worth applying to the remaining `scripts/` shell code.
+
 Post-v1.0 improvements and technical debt.
 
 ## Installation Scripts Refactoring (Post-v1.0)

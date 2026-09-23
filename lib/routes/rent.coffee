@@ -11,8 +11,8 @@ eventsModel   = require '../models/events.coffee'
 money         = require '../money.coffee'
 { asyncRoute } = require '../middleware.coffee'
 
-{ AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY, BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } =
-  require '../config.coffee'
+config = require '../config.coffee'
+{ AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY, BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } = config
 
 
 # Map the new period view onto the response shape the front-end already
@@ -43,11 +43,7 @@ eventToWireShape = (e, deleted) ->
     when 'override'     then 'manual'
     else e.action
 
-  amount = switch e.action
-    when 'payment-made' then e.payload?.amount
-    when 'adjustment'   then e.payload?.delta
-    when 'override'     then e.payload?.new_value
-    else undefined
+  amount = e.payload?[AMOUNT_FIELD[e.action]]
 
   Object.assign {}, e,
     type:        type
@@ -67,6 +63,14 @@ EVENT_TYPE_ACTIONS =
   payment:    'payment-made'
   adjustment: 'adjustment'
   manual:     'override'
+
+
+# Where each action keeps its number. One table, so the write path, the read
+# projection and the edit path cannot disagree about it.
+AMOUNT_FIELD =
+  'payment-made': 'amount'
+  'adjustment':   'delta'
+  'override':     'new_value'
 
 
 buildEventPayload = (action, body) ->
@@ -93,7 +97,7 @@ buildEventPayload = (action, body) ->
 
 actorFromRequest = (req, fallback = 'landlord') ->
   email = req.session?.email or 'unknown@unknown'
-  actor = if email is 'lynz57@hotmail.com' then 'tenant' else fallback
+  actor = if config.normalizeEmail(email) is config.TENANT_EMAIL then 'tenant' else fallback
   { actor, actor_user: email }
 
 
@@ -176,22 +180,8 @@ setup = (app) ->
   # before the 15th) are excluded — they can be paid early but they aren't
   # part of the "what do I owe" total.
   app.get '/rent/outstanding', asyncRoute 'rent.getOutstanding', (req, res) ->
-    periods = periodViewer.getAllPeriods()
-    rows    = Object.values(periods)
-      .filter (p) -> p.payment_status isnt 'NOT DUE'
-      .map (p) ->
-        owed = p.display_amount_due
-        paid = p.amount_paid or 0
-        outstanding = Math.max 0, money.minus owed, paid
-        { year: p.year, month: p.month, owed, paid, outstanding }
-      # A month settled to the cent is settled. Comparing raw floats left
-      # fully-paid months outstanding by fractions of a cent (bug 35).
-      .filter (r) -> money.cents(r.outstanding) > 0
-      .sort   (a, b) -> (a.year - b.year) or (a.month - b.month)   # oldest first
-
-    res.json
-      total_outstanding: money.dollars rows.reduce ((s, r) -> s + r.outstanding), 0
-      months:            rows
+    { total, months } = periodViewer.computeOutstanding()
+    res.json total_outstanding: total, months: months
 
   # ---- period writes (overrides) ------------------------------------------
 
@@ -320,8 +310,14 @@ setup = (app) ->
     all        = eventsModel.listAllEvents()
     deletedIds = period.deletedEventIds all
 
-    filtered = all.filter (e) ->
-      return false if e.action in ['edited', 'deleted', 'undeleted']
+    # Fold edits in, the way the period math does. Listing the raw events
+    # meant an edited amount or note never showed here, so the table and the
+    # ledger disagreed about the same event. resolveEditsAndDeletes drops
+    # deleted events, so they are re-attached when showDeleted is on.
+    resolved = new Map ([e.id, e] for e in period.resolveEditsAndDeletes all)
+    visible  = (resolved.get(e.id) ? e for e in all when e.action not in period.META_ACTIONS)
+
+    filtered = visible.filter (e) ->
       return false if deletedIds.has(e.id) and not showDeleted
       if year and month
         return e.effective_for is period.monthKey parseInt(year), parseInt(month)
@@ -373,9 +369,16 @@ setup = (app) ->
 
     { actor, actor_user } = actorFromRequest req, 'landlord'
 
+    # The key that holds the number depends on the action: a payment has
+    # `amount`, an adjustment a `delta`, an override a `new_value`. Writing
+    # `amount` unconditionally meant an edit merged a key nothing reads, and
+    # the event kept its original figure while the UI reported success.
     new_payload = {}
-    new_payload.amount = parseFloat req.body.amount if req.body.amount?
-    new_payload.note   = req.body.description if req.body.description?
+    new_payload[AMOUNT_FIELD[existing.action]] = parseFloat req.body.amount if req.body.amount?
+    new_payload.note = req.body.description if req.body.description?
+
+    unless Object.keys(new_payload).length > 0
+      return res.status(400).json error: 'Nothing to change'
 
     eventsModel.recordEvent
       occurred_at:     new Date().toISOString()

@@ -86,7 +86,7 @@ recordPaymentFromIntent = (paymentIntent) ->
         occurred_at:   occurredAt
         effective_for: monthKey
         actor:         'tenant'
-        actor_user:    'lynz57@hotmail.com'
+        actor_user:    config.TENANT_EMAIL
         action:        'payment-made'
         payload:
           amount:                   a.amount
