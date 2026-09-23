@@ -10,6 +10,8 @@
     "clean": "rm -rf static/js/ tenant-coordinator.db* node_modules/.cache/ && echo 'Clean complete'",
     "clean:all": "npm run clean && rm -rf node_modules/ && echo 'Full clean complete - run npm install'",
     "start": "NODE_ENV=${NODE_ENV:-development} coffee main.coffee",
+    "migrate": "NODE_ENV=${NODE_ENV:-development} coffee scripts/run-migrations.coffee",
+    "migrate:check": "NODE_ENV=${NODE_ENV:-development} coffee scripts/run-migrations.coffee --check",
     "test": "NODE_ENV=test coffee scripts/run-tests.coffee",
     "test:unit": "NODE_ENV=test coffee scripts/run-tests.coffee",
     "test:integration": "NODE_ENV=test coffee scripts/test-integration.coffee",

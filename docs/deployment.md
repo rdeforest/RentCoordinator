@@ -52,6 +52,13 @@ cd /opt/rent-coordinator && sudo -u rent-coordinator git pull --ff-only
 #    the server also applies pending migrations at boot, so this is belt and
 #    braces — but running it here means a bad migration fails while you are
 #    watching, rather than during the restart.
+#
+#    A run is all-or-nothing: the runner snapshots the database first and
+#    restores it if any migration fails, leaving the snapshot as
+#    <db>.pre-migration-<timestamp>. To find that out before touching the
+#    instance at all, run the migrations against a backup from your
+#    workstation first:
+#      DB_PATH=./backups/<latest>.db npm run migrate:check
 sudo -u rent-coordinator ./scripts/upgrade.sh
 
 # 6. Guard against replacement during the restart, then restart:

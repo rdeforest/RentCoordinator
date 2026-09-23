@@ -27,6 +27,35 @@ database that is not there is how the documented upgrade came to do nothing at a
 - **Instance bootstrap** — the CloudFormation UserData calls `scripts/upgrade.sh` under `set -e`,
   so a failing migration stops the boot instead of scrolling past (bug 46).
 
+## If a migration fails
+
+A run is all-or-nothing. Each migration already wraps its own work in a
+transaction, so one migration cannot half-apply — but a *run* could: migration
+seven of ten failing left the first six committed, on a schema no version of
+the code expects.
+
+So the runner takes a snapshot first (SQLite's own `VACUUM INTO`, which is
+consistent even with the application holding the database open) and restores
+it if anything fails. The snapshot is kept, named
+`<db>.pre-migration-<timestamp>`, rather than cleaned up — if you need to know
+what the database looked like before a bad deploy, it is right there.
+
+The restore writes into the existing file rather than replacing it, so a
+connection the application already holds sees the restored content. Renaming a
+new file over the path would be atomic and useless: an open handle follows the
+inode, not the name.
+
+## Trying it first
+
+```bash
+# Against a copy of whatever DB_PATH points at. Nothing is written to it.
+DB_PATH=/path/to/a/production/backup npm run migrate:check
+```
+
+Pull the latest backup, point this at it, and you have run the thing you are
+about to run — against the data it will actually meet. It exits non-zero if
+any migration fails, so it drops into a deploy script or a CI job as-is.
+
 **Migrations must be idempotent.** All three paths can re-run one, and the first boot after
 `schema_migrations` was introduced replays every existing migration to populate it.
 

@@ -20,7 +20,10 @@ ROOT      = path.join __dirname, '..', '..'
 MIGRATION_COUNT = fs.readdirSync(path.join ROOT, 'migrations')
   .filter((n) -> n.endsWith '.coffee').length
 
-tmpDir = null
+# Created at load, not in a hook: a suite's `after` would pull the directory
+# out from under the suites declared below it.
+tmpDir = fs.mkdtempSync path.join os.tmpdir(), 'rc-migrations-'
+process.on 'exit', -> fs.rmSync tmpDir, recursive: true, force: true
 
 
 # Runs something in a child and reports whether the process got to the end on
@@ -64,8 +67,6 @@ applied = (dbPath) ->
 
 
 describe 'Migration runner', ->
-  before -> tmpDir = fs.mkdtempSync path.join os.tmpdir(), 'rc-migrations-'
-  after  -> fs.rmSync tmpDir, recursive: true, force: true
 
 
   it 'applies every migration to a fresh database', ->
@@ -177,3 +178,102 @@ describe 'Migration runner', ->
 
     assert.ok names.every((n) -> not n.endsWith('.coffee') and not n.endsWith('.js')),
       "recorded names must be extension-free stems, got: #{names[0]}"
+
+
+# --- rollback ----------------------------------------------------------------
+#
+# Each migration already wraps its own work in a transaction, so one migration
+# is all-or-nothing. A *run* was not: migration seven of ten failing left the
+# first six committed, on a schema no version of the code expects.
+
+describe 'A failed run leaves the database as it was', ->
+  migrationsDir = null
+
+  # Migrations are ordinary scripts, so a throwaway directory of them exercises
+  # the real path without a deliberately broken file living in migrations/.
+  writeMigrations = (specs) ->
+    migrationsDir = fs.mkdtempSync path.join tmpDir, 'migrations-'
+    for [name, body] in specs
+      fs.writeFileSync path.join(migrationsDir, name), """
+        { DatabaseSync } = require 'node:sqlite'
+        db = new DatabaseSync process.env.DB_PATH
+        try
+        #{body.split('\n').map((l) -> '  ' + l).join '\n'}
+        finally
+          db.close()
+      """
+    migrationsDir
+
+  runAgainst = (dbPath, dir, args = '') ->
+    script = "require('./scripts/run-migrations.coffee').runMigrations(); console.log('SENTINEL-REACHED')"
+    try
+      output = execFileSync 'coffee', ['-e', script],
+        cwd:      ROOT
+        env:      Object.assign {}, process.env, DB_PATH: dbPath, NODE_ENV: 'test', MIGRATIONS_DIR: dir
+        encoding: 'utf8'
+        stdio:    ['ignore', 'pipe', 'pipe']
+      { ok: true, output }
+    catch err
+      { ok: false, output: "#{err.stdout ? ''}#{err.stderr ? ''}" }
+
+  seedDb = (name) ->
+    dbPath = path.join tmpDir, name
+    withDb dbPath, (db) ->
+      db.exec 'CREATE TABLE keepsake (v TEXT)'
+      db.prepare('INSERT INTO keepsake VALUES (?)').run 'original'
+    dbPath
+
+
+  it 'undoes a migration that committed before it failed', ->
+    # The case a per-migration transaction cannot cover: the work is committed,
+    # and only then does something go wrong.
+    dir = writeMigrations [
+      ['001-ok.coffee',     "db.exec 'CREATE TABLE first_one (x INTEGER)'"]
+      ['002-broken.coffee', """
+        db.exec 'CREATE TABLE committed_then_failed (x INTEGER)'
+        throw new Error 'simulated failure after a committed step'
+      """]
+    ]
+    dbPath = seedDb 'rollback.db'
+
+    result = runAgainst dbPath, dir
+
+    assert.equal result.ok, false, 'the run must fail'
+    assert.match result.output, /Restored\. The database is as it was/
+
+    withDb dbPath, (db) ->
+      exists = (table) ->
+        db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name = ?").get(table).n > 0
+
+      assert.equal db.prepare('SELECT v FROM keepsake').get().v, 'original',
+        'existing data survives'
+      assert.ok not exists('committed_then_failed'),
+        'the committed table from the failed migration is gone'
+      assert.ok not exists('first_one'),
+        'and so is the one from the migration that succeeded before it — a run is all or nothing'
+      assert.equal db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n, 0,
+        'nothing is recorded as applied'
+
+
+  it 'keeps the snapshot it restored from', ->
+    dir    = writeMigrations [['001-broken.coffee', "throw new Error 'nope'"]]
+    dbPath = seedDb 'snapshot-kept.db'
+
+    runAgainst dbPath, dir
+
+    snapshots = fs.readdirSync(tmpDir).filter (n) -> n.startsWith 'snapshot-kept.db.pre-migration-'
+    assert.equal snapshots.length, 1, 'the evidence is left on disk, not silently discarded'
+
+
+  it 'records everything when the run succeeds', ->
+    dir    = writeMigrations [
+      ['001-ok.coffee', "db.exec 'CREATE TABLE a (x INTEGER)'"]
+      ['002-ok.coffee', "db.exec 'CREATE TABLE b (x INTEGER)'"]
+    ]
+    dbPath = seedDb 'success.db'
+
+    result = runAgainst dbPath, dir
+
+    assert.ok result.ok, "the run should succeed:\n#{result.output}"
+    withDb dbPath, (db) ->
+      assert.equal db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n, 2

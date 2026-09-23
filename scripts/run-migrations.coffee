@@ -13,13 +13,45 @@
 # Deliberately standalone: it opens the database directly rather than going
 # through lib/config.coffee, so it can run before the app is configured and
 # cannot be stopped by an app-level boot check.
+#
+# Each migration wraps its own work in a transaction, so one migration is
+# already all-or-nothing. A *run* was not: migration seven of ten failing left
+# the first six committed and recorded, on a schema no version of the code
+# expects. So a run takes a snapshot first and restores it if anything fails.
+#
+# The snapshot is restored with copyFileSync, which writes into the existing
+# file rather than replacing it, so a connection the application already holds
+# follows the restored content. Renaming a new file over the path would be
+# atomic and useless — an open handle tracks the inode, not the name.
 
 { DatabaseSync } = require 'node:sqlite'
 fs               = require 'node:fs'
 path             = require 'node:path'
 
 DB_PATH        = process.env.DB_PATH or './tenant-coordinator.db'
-MIGRATIONS_DIR = path.join __dirname, '..', 'migrations'
+# Overridable so the rollback path can be tested against throwaway migrations
+# rather than by putting a deliberately broken one in the real directory.
+MIGRATIONS_DIR = process.env.MIGRATIONS_DIR or path.join __dirname, '..', 'migrations'
+
+
+snapshotPath = (dbPath) ->
+  stamp = new Date().toISOString().replace /[:.]/g, '-'
+  "#{dbPath}.pre-migration-#{stamp}"
+
+
+# SQLite's own consistent copy, rather than a file copy: the application may
+# hold this database open, and copying the file behind a live connection can
+# capture a state the journal has not finished describing.
+takeSnapshot = (dbPath, target) ->
+  fs.rmSync target, force: true
+
+  db = new DatabaseSync dbPath
+  try
+    db.exec "VACUUM INTO '#{target.replace /'/g, "''"}'"
+  finally
+    db.close()
+
+  target
 
 
 pendingMigrations = (db) ->
@@ -75,6 +107,10 @@ runMigrations = ->
 
   console.log "Migrations: #{pending.length} pending"
 
+  snapshot = snapshotPath DB_PATH
+  takeSnapshot DB_PATH, snapshot
+  console.log "  pre-migration snapshot: #{snapshot}"
+
   # A migration is a script, and a script can call process.exit. One of them
   # did, as an "already applied, nothing to do" shortcut — which ended the
   # server's own boot, before app.listen, with status 0. Nothing downstream
@@ -96,28 +132,84 @@ runMigrations = ->
   # enough to push startup past a health check.
   process.env.DB_PATH = DB_PATH
 
-  for [stem, name] in pending
-    console.log "  applying #{name}"
-    require path.join MIGRATIONS_DIR, name
+  try
+    for [stem, name] in pending
+      console.log "  applying #{name}"
+      require path.join MIGRATIONS_DIR, name
 
-    db = new DatabaseSync DB_PATH
-    try
-      db.prepare('INSERT OR REPLACE INTO schema_migrations (name) VALUES (?)').run stem
-    finally
-      db.close()
+      db = new DatabaseSync DB_PATH
+      try
+        db.prepare('INSERT OR REPLACE INTO schema_migrations (name) VALUES (?)').run stem
+      finally
+        db.close()
+
+  catch err
+    console.error "Migration failed: #{err.message}"
+    console.error "Restoring the pre-migration database from #{snapshot}"
+    fs.copyFileSync snapshot, DB_PATH
+    console.error 'Restored. The database is as it was before this run.'
+    finished = true
+    throw err
 
   finished = true
   console.log "Migrations: applied #{pending.length}"
   (stem for [stem] in pending)
 
 
-module.exports = { runMigrations, pendingMigrations }
+# Apply the pending migrations to a throwaway copy and report, leaving the
+# database alone. The point is to find out that a migration fails against real
+# production data *before* the deploy that runs it for real — take a backup,
+# point this at it, and you have tried the thing you are about to do.
+#
+# Migrations are required in-process and Node caches modules, so the check runs
+# in a child: a migration required here would not run again in the same process
+# afterwards.
+checkMigrations = ->
+  { execFileSync } = require 'node:child_process'
+
+  unless fs.existsSync DB_PATH
+    throw new Error "No database at #{DB_PATH}. Point DB_PATH at the backup you want to test."
+
+  scratch = "#{DB_PATH}.check-#{process.pid}"
+  takeSnapshot DB_PATH, scratch
+
+  console.log "Checking migrations against a copy of #{DB_PATH}"
+
+  # Invoked the way this file itself can be run: source is CoffeeScript, the
+  # compiled artifact is plain JavaScript.
+  [command, args] =
+    if __filename.endsWith '.coffee'
+    then ['npx', ['coffee', __filename]]
+    else [process.execPath, [__filename]]
+
+  try
+    execFileSync command, args,
+      env:   Object.assign {}, process.env, DB_PATH: scratch
+      stdio: 'inherit'
+    console.log 'Migrations apply cleanly. The real database was not touched.'
+    true
+  catch
+    console.error 'Migrations FAILED against a copy. Do not deploy this yet.'
+    false
+  finally
+    # The child takes its own snapshot of the scratch copy, so clear everything
+    # named after it rather than just the copy itself.
+    dir    = path.dirname scratch
+    prefix = path.basename scratch
+    for name in fs.readdirSync dir when name.startsWith prefix
+      fs.rmSync path.join(dir, name), force: true
+
+
+module.exports = { runMigrations, checkMigrations, pendingMigrations, takeSnapshot }
 
 
 # Run when invoked directly; stay quiet when required by schema.initialize().
 if require.main is module
   try
-    runMigrations()
+    if process.argv.includes '--check'
+      process.exit if checkMigrations() then 0 else 1
+    else
+      runMigrations()
   catch err
     console.error "Migration failed: #{err.message}"
     process.exit 1
