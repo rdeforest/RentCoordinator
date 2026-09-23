@@ -3,20 +3,34 @@
 
 tokenService = null  # Lazy load to avoid circular dependency
 
+# The one place a string is checked for PII. Everything that reaches the log —
+# metadata values, error messages, stack frames — goes through here, so a
+# tokenizer improvement lands everywhere at once. Only the address is
+# replaced; the text around it survives, or the log stops being a log.
+tokenizeString = (value) ->
+  return value unless typeof value is 'string' and value.includes '@'
+
+  try
+    tokenService ?= require './services/tokenization.coffee'
+    tokenService.tokenizeEmbedded value
+  catch err
+    # Tokenizing writes to SQLite, so logging a database failure can fail
+    # here too. Losing the log entirely is the worse outcome; redact visibly
+    # and say why, rather than letting the logger throw from inside the
+    # error handler.
+    value.replace /\S+@\S+/g, "[redacted: tokenizer failed: #{err.message}]"
+
 # Recursively tokenize emails in metadata objects
 tokenizeMetadata = (obj) ->
   return obj unless typeof obj is 'object' and obj?
-
-  # Lazy load tokenization service
-  tokenService ?= require './services/tokenization.coffee'
 
   if Array.isArray obj
     return obj.map tokenizeMetadata
 
   result = {}
   for key, value of obj
-    if typeof value is 'string' and value.includes '@'
-      result[key] = tokenService.tokenize value
+    if typeof value is 'string'
+      result[key] = tokenizeString value
     else if typeof value is 'object'
       result[key] = tokenizeMetadata value
     else
@@ -31,9 +45,9 @@ error = (operation, errorObj, metadata = {}, requestId = null) ->
     operation: operation
 
   log.requestId = requestId if requestId
-  log.error     = if errorObj.message then errorObj.message else String(errorObj)
+  log.error     = tokenizeString (if errorObj.message then errorObj.message else String(errorObj))
   log.metadata  = tokenizeMetadata metadata
-  log.stack     = errorObj.stack if errorObj.stack
+  log.stack     = tokenizeString errorObj.stack if errorObj.stack
 
   console.error JSON.stringify log
 
@@ -43,7 +57,7 @@ warn = (operation, message, metadata = {}, requestId = null) ->
     timestamp: new Date().toISOString()
     level:     'warn'
     operation: operation
-    message:   message
+    message:   tokenizeString message
 
   log.requestId = requestId if requestId
   log.metadata  = tokenizeMetadata metadata

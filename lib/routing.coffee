@@ -1,6 +1,5 @@
 config                = require './config.coffee'
 timerService          = require './services/timer.coffee'
-workLogModel          = require './models/work_log.coffee'
 rentRoutes            = require './routes/rent.coffee'
 workRoutes            = require './routes/work.coffee'
 recurringEventsRoutes = require './routes/recurring_events.coffee'
@@ -11,7 +10,7 @@ backupRoutes          = require './routes/backup.coffee'
 adminRoutes           = require './routes/admin.coffee'
 observabilityRoutes   = require './routes/observability.coffee'
 middleware            = require './middleware.coffee'
-{ DatabaseSync }      = require 'node:sqlite'
+{ db }                = require './db/schema.coffee'
 pkg                   = require '../package.json'
 fs                    = require 'node:fs'
 
@@ -43,17 +42,13 @@ healthCheck = (req, res) ->
         error:   'Database file not found'
         dbPath:  config.DB_PATH
 
-    # Try to connect and query database
-    db = new DatabaseSync config.DB_PATH
-    db.exec 'PRAGMA foreign_keys = ON'
-
-    # Verify critical tables exist
+    # The shared handle, not a fresh one: opening a second writer-capable
+    # connection per health check contends with the app for the write lock,
+    # and the ALB polls this constantly (bug 42).
     tables = db.prepare("""
       SELECT name FROM sqlite_master
       WHERE type='table' AND name IN ('work_logs', 'rent_periods', 'timer_state')
     """).all()
-
-    db.close()
 
     if tables.length < 3
       return res.status(503).json
@@ -136,7 +131,7 @@ setup = (app, getServer) ->
   app.get '/work',     (req, res) -> res.sendFile 'work.html',    root: config.STATIC_DIR
   app.get '/payment',  (req, res) -> res.sendFile 'payment.html', root: config.STATIC_DIR
   app.get '/payments', (req, res) -> res.sendFile 'payments.html', root: config.STATIC_DIR
-  app.get '/admin',    (req, res) -> res.sendFile 'admin.html',   root: config.STATIC_DIR
+  app.get '/admin',    middleware.requireAdmin, (req, res) -> res.sendFile 'admin.html', root: config.STATIC_DIR
 
 
   app.post '/timer/start', (req, res) ->
@@ -221,20 +216,6 @@ setup = (app, getServer) ->
       res.json sessions
     catch err
       res.status(400).json error: err.message
-
-
-  app.get '/work-logs', (req, res) ->
-    { worker, project_id, limit } = req.query
-
-    try
-      logs = await workLogModel.getWorkLogs
-        worker:     worker
-        project_id: project_id
-        limit:      limit ? 50
-
-      res.json logs
-    catch err
-      res.status(500).json error: err.message
 
 
   rentRoutes           .setup app

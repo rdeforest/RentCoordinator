@@ -1,8 +1,11 @@
-config = require '../config.coffee'
+config        = require '../config.coffee'
+{ randomInt } = require 'node:crypto'
 
 
+# Math.random's state is recoverable from a handful of observed outputs, and
+# this value gates authentication — it has to come from the CSPRNG.
 generateCode = ->
-  Math.floor(100000 + Math.random() * 900000).toString()
+  randomInt(100000, 1000000).toString()
 
 
 sendVerificationCode = (email, code) ->

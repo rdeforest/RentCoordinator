@@ -1,15 +1,21 @@
-express = require 'express'
-cors    = require 'cors'
-session = require 'express-session'
-crypto  = require 'crypto'
-config  = require './config.coffee'
-logger  = require './logger.coffee'
+express   = require 'express'
+cors      = require 'cors'
+session   = require 'express-session'
+crypto    = require 'crypto'
+config    = require './config.coffee'
+logger    = require './logger.coffee'
 
 
 setup = (app) ->
   app.set 'trust proxy', 1
 
-  app.use cors()
+  # Reflecting every origin is a default nobody chose, and `origin: false` is
+  # not the opposite of it — cors@2.8.5 reads a falsy origin as "allow any"
+  # and is saved only by an early return elsewhere in the library. This app is
+  # same-origin, so cors is simply not mounted; CORS_ORIGINS exists for the
+  # day that stops being true, and then it needs credentials to be of any use.
+  if config.CORS_ORIGINS.length > 0
+    app.use cors origin: config.CORS_ORIGINS, credentials: true
   # Capture the raw request bytes so the Stripe webhook can verify its
   # signature (a re-serialized body won't match). JSON parsing for every
   # other route is unchanged.
@@ -24,6 +30,7 @@ setup = (app) ->
     cookie:
       secure:   config.NODE_ENV is 'production'
       httpOnly: true
+      sameSite: 'lax'
       maxAge:   config.SESSION_MAX_AGE
 
   app.get '/vendor/coffeescript.js', (req, res) ->
@@ -45,14 +52,24 @@ setup = (app) ->
     req.id = crypto.randomUUID()
     next()
 
-  # Error handler with structured logging
+
+# Express only selects a 4-argument error handler that was registered after
+# the route that failed, so this must be the last thing mounted on the app —
+# call it after routing.setup, not from setup above.
+setupErrorHandler = (app) ->
   app.use (err, req, res, next) ->
     logger.error 'middleware.errorHandler', err,
       { path: req.path, method: req.method },
       req.id
 
-    res.status(500).json
-      error:   'Internal server error'
+    # Honour the status the error carries. Body-parser marks a malformed JSON
+    # body 400; while this handler was dead (bug 21) Express's own handler
+    # respected that, and turning every one of them into a 500 would be a
+    # regression introduced by fixing the ordering.
+    status = err.status or err.statusCode or 500
+
+    res.status(status).json
+      error:   if status >= 500 then 'Internal server error' else err.message
       message: if config.NODE_ENV is 'development' then err.message else undefined
 
 
@@ -69,6 +86,16 @@ requireAuth = (req, res, next) ->
       res.status(401).json
         error:    'Authentication required'
         redirect: '/login.html'
+
+
+# requireAuth only proves the caller is one of the two whitelisted users.
+# Admin routes hand back detokenized PII and raw logs, so they need to know
+# which one.
+requireAdmin = (req, res, next) ->
+  if req.session?.authenticated and config.isAdminEmail req.session.email
+    next()
+  else
+    res.status(403).json error: 'Admin only'
 
 
 asyncRoute = (name, handler) -> (req, res) ->
@@ -89,4 +116,4 @@ asyncRoute = (name, handler) -> (req, res) ->
     res.status(statusCode).json error: err.message
 
 
-module.exports = { setup, requireAuth, asyncRoute }
+module.exports = { setup, setupErrorHandler, requireAuth, requireAdmin, asyncRoute }

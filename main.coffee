@@ -18,8 +18,9 @@ startServer = ->
   app    = express()
   server = null
 
-  middleware.setup app
-  routing   .setup app, -> server
+  middleware.setup             app
+  routing   .setup             app, -> server
+  middleware.setupErrorHandler app
 
   server = app.listen config.PORT, ->
     console.log """

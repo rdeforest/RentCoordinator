@@ -5,10 +5,10 @@
 
 logger                       = require '../logger.coffee'
 config                       = require '../config.coffee'
+middleware                   = require '../middleware.coffee'
 { readFileSync, existsSync } = require 'node:fs'
 
 LOG_PATH  = process.env.APP_LOG_PATH or '/var/log/rent-coordinator/application.log'
-ADMIN     = 'robert@defore.st'
 MAX_LINES = 2000
 
 
@@ -33,10 +33,7 @@ setup = (app) ->
 
   # Admin-only log tail — the review surface. Robert only, since logs can
   # carry more than the tokenizer catches.
-  app.get '/admin/logs', (req, res) ->
-    unless req.session?.email is ADMIN
-      return res.status(403).json error: 'Admin only'
-
+  app.get '/admin/logs', middleware.requireAdmin, (req, res) ->
     lines = Math.min (parseInt(req.query.lines) or 200), MAX_LINES
 
     unless existsSync LOG_PATH

@@ -76,7 +76,7 @@ describe 'Auth Integration Tests', ->
     db               = new DatabaseSync testConfig.dbPath
     stored           = db.prepare("""
       SELECT code FROM auth_sessions
-      WHERE email = ? AND verified = 0
+      WHERE email = ?
       ORDER BY created_at DESC
       LIMIT 1
     """).get email
@@ -128,7 +128,7 @@ describe 'Auth Integration Tests', ->
     db               = new DatabaseSync testConfig.dbPath
     stored           = db.prepare("""
       SELECT code FROM auth_sessions
-      WHERE email = ? AND verified = 0
+      WHERE email = ?
       ORDER BY created_at DESC
       LIMIT 1
     """).get email
@@ -201,7 +201,7 @@ describe 'Auth Integration Tests', ->
     db = new DatabaseSync testConfig.dbPath
     stored = db.prepare("""
       SELECT code FROM auth_sessions
-      WHERE email = ? AND verified = 0
+      WHERE email = ?
       ORDER BY created_at DESC
       LIMIT 1
     """).get email
@@ -228,7 +228,7 @@ describe 'Auth Integration Tests', ->
     assert.equal secondResponse.status, 400, 'Second verification should fail'
 
     assert.equal secondData.success, false, 'Response should indicate failure'
-    # After using a code, it's marked verified=1, so subsequent attempts should fail
-    # Either "No verification code found" (correct) or "Invalid" (if old unverified codes exist)
-    assert.match secondData.error, /no verification code found|invalid/i,
+    # A used code is deleted outright (bug 38) rather than flagged, so the
+    # second attempt finds nothing at all.
+    assert.match secondData.error, /no verification code found/i,
       "Error should indicate code cannot be reused (got: '#{secondData.error}')"

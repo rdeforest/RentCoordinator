@@ -61,6 +61,32 @@ tokenize = (value) ->
   valueCache.set token, normalized
   token
 
+# The ordinary email shape, and nothing else. Anchoring the local part to
+# address characters is what keeps a stack frame naming a scoped package —
+# node_modules/@aws-sdk/client-s3/index.js — from matching: the character
+# before its `@` is a slash, so there is no local part. The looser
+# <non-space>@<non-space>.<letters> form replaced that whole frame with a
+# token and filed the filesystem path in the PII store as somebody's address.
+# @aws-sdk/client-s3 is a direct dependency, so it hit the traces that matter.
+EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
+
+# Tokenize every address *inside* a string, leaving the rest of the text
+# alone. `tokenize` replaces the whole value, which is right for a metadata
+# field that is an address and wrong for free text — a stack trace reduced to
+# one token is unreadable, which is a different way of losing the log.
+tokenizeEmbedded = (text) ->
+  return text unless typeof text is 'string' and text.includes '@'
+  text.replace EMAIL_PATTERN, (match) -> tokenize match
+
+
+TOKEN_PATTERN = /token:[0-9a-f]{16}/g
+
+# Reverse of tokenizeEmbedded: restores every token found in a string.
+detokenizeEmbedded = (text) ->
+  return text unless typeof text is 'string' and text.includes 'token:'
+  text.replace TOKEN_PATTERN, (match) -> detokenize match
+
+
 # Convert token back to original value
 detokenize = (token) ->
   return token unless token?.startsWith 'token:'
@@ -94,12 +120,12 @@ detokenizeObject = (obj) ->
 
   result = {}
   for key, value of obj
-    if typeof value is 'string' and value.startsWith 'token:'
-      result[key] = detokenize value
+    if typeof value is 'string'
+      result[key] = detokenizeEmbedded value
     else if typeof value is 'object'
       result[key] = detokenizeObject value
     else
       result[key] = value
   result
 
-module.exports = { tokenize, detokenize, detokenizeObject }
+module.exports = { tokenize, tokenizeEmbedded, detokenize, detokenizeEmbedded, detokenizeObject }

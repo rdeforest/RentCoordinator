@@ -169,6 +169,10 @@ SCHEMA = """
     recurring_event_id TEXT NOT NULL REFERENCES recurring_events(id) ON DELETE CASCADE,
     period_id TEXT NOT NULL REFERENCES rent_periods(id) ON DELETE CASCADE,
     amount REAL NOT NULL,
+    status TEXT,
+    message TEXT,
+    error_details TEXT,
+    events_created TEXT, -- JSON array of event ids
     processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -177,7 +181,7 @@ SCHEMA = """
     email TEXT NOT NULL,
     code TEXT NOT NULL,
     expires_at DATETIME NOT NULL,
-    verified BOOLEAN DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -208,6 +212,15 @@ initialize = ->
   console.log "Initializing SQLite database at #{config.DB_PATH}"
 
   db.exec SCHEMA
+
+  # Migrations run here, not only in the instance bootstrap. CREATE TABLE IF
+  # NOT EXISTS above never alters an existing table, so a database that
+  # predates a column the running code needs would otherwise serve errors
+  # until someone remembered to migrate by hand — and the documented in-place
+  # upgrade (git pull, restart) has no such step. Failing to migrate has to
+  # stop the boot; old schema plus new code is the outage.
+  { runMigrations } = require '../../scripts/run-migrations.coffee'
+  runMigrations()
 
   initTimerState = db.prepare """
     INSERT OR IGNORE INTO timer_state (worker, status, session_id, start_time, project_id, task_id)
