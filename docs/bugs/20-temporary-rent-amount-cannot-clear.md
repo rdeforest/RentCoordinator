@@ -1,7 +1,11 @@
 # Bug 20 — temporary_rent_amount can never be cleared
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+The guard is `if 'temporary_rent_amount' of req.body`, which distinguishes an explicit null (clear it) from an absent field (leave it).
 
 ## Symptom
 

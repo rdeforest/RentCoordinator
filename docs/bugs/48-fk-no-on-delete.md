@@ -1,7 +1,11 @@
 # Bug 48 — projects/tasks/sessions FKs lack ON DELETE (same class as bug 02)
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Migration adds `ON DELETE` to all five. `tasks.project_id`, `work_events.session_id` and `current_sessions.session_id` cascade because those rows are parts of their parent; `work_logs.project_id` and `.task_id` are `SET NULL` because a work log records that something happened and must outlive the project it was filed under. Verified: deleting a session removes its events and current-session row, and deleting a project removes its tasks while the work log keeps its hours.
 
 ## Symptom
 

@@ -1,7 +1,11 @@
 # Bug 31 — Timer-created work logs bypass rent-period recalculation
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`stopTimer` runs the same recalculation the manual work-log routes run. The tenant check is `config.isTenant`, derived from `WORKER_IDENTITY`, rather than a fourth bare `'lyndzie'` literal.
 
 ## Symptom
 

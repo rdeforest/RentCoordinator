@@ -1,7 +1,13 @@
 # Bug 35 — Money handled as floating-point dollars throughout
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** partly resolved 2026-09-23
+
+## Resolution
+
+**Partly.** The reachable failure is fixed: a month could owe $1,433.3333333333333 (200 minutes at $50/hour is a credit of $166.666…), which no payment method can settle, so paying $1,433.33 left it `PARTIAL` for ever over a third of a cent. Every currency value now leaves `computeMonth` rounded to the cent via `lib/money.coffee`, and the places that subtract money to decide what is owed compare cents. Hours stay unrounded — they are not money and carry-over needs their precision.
+
+Not done: the full integer-cents representation this file proposes. Event payloads still carry dollars, and changing that means migrating historical events. Worth doing as its own change; the specific `remaining -= chunk` overage loop cited above no longer exists (the allocation is frozen into the intent metadata at create time).
 
 ## Symptom
 

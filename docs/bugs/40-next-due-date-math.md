@@ -1,7 +1,11 @@
 # Bug 40 — calculateNextDueDate month/year math is fragile
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`day_of_month` is clamped to the target month's length (`setDate(31)` in a 30-day month rolls into the next month), and yearly events build their date from the configured `month`/`day_of_month` and advance the year, instead of deriving the day from whenever the computation ran.
 
 ## Symptom
 

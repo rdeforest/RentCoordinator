@@ -1,7 +1,11 @@
 # Bug 16 — Undelete is a no-op in the event fold
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Undelete records an `undeleted` event targeting the *original* event. `period.deletedEventIds` resolves delete/undelete per target by `occurred_at` (event id as tiebreak), so delete → undelete → delete ends deleted, and `GET /rent/events` uses the same function — the list and the ledger can no longer disagree. Undeleting something that is not deleted is a 400.
 
 ## Symptom
 

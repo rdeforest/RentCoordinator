@@ -1,7 +1,11 @@
 # Bug 21 — Global error handler registered before routes; never catches route errors
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`middleware.setupErrorHandler` is exported separately and called from `main.coffee` after `routing.setup`, where Express will select it. It honours `err.status`/`err.statusCode`: making the handler live would otherwise have turned every body-parser 400 into a 500, including the webhook's.
 
 ## Symptom
 

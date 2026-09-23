@@ -14,6 +14,10 @@ If you're investigating a problem, start with these before diving into code:
 - **[docs/fixes/](docs/fixes/)** — proposed patches for the known bugs.
 - **[docs/code-review-2026-05.md](docs/code-review-2026-05.md)** — most
   recent code review with structural concerns and recommended cleanups.
+- **[docs/review-loop.md](docs/review-loop.md)** — the adversarial review
+  loop (`/review-loop`): reviewers that see only the diff and are told to
+  assume it is wrong, then a fixer that applies their findings. Run it
+  before committing anything non-trivial.
 - **[docs/disaster-recovery.md](docs/disaster-recovery.md)** — full
   disaster recovery procedures.
 - **[docs/deployment.md](docs/deployment.md)** — deployment procedures.

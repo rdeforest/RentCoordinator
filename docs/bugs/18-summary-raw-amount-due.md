@@ -1,7 +1,11 @@
 # Bug 18 — /rent/summary uses raw amount_due, not display_amount_due
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`/rent/summary` sums `display_amount_due` and clamps each month at zero, so it agrees with the rows beneath it and with `/rent/outstanding`.
 
 ## Symptom
 

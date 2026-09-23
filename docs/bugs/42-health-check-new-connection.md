@@ -1,7 +1,11 @@
 # Bug 42 — health check opens/closes a fresh DB connection per hit
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+The health check queries the shared `db` handle from `schema.coffee`.
 
 ## Symptom
 

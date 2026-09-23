@@ -1,7 +1,11 @@
 # Bug 34 — Backup restore isn't atomic; fixed safety-copy name self-clobbers
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+The pre-restore safety copy is timestamped, so consecutive restores no longer overwrite each other, and both restore paths stage the incoming database next to the live one and `rename` it into place. Verified: two consecutive restores leave two distinct safety copies and the source backup files intact.
 
 ## Symptom
 

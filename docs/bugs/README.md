@@ -6,74 +6,84 @@ the proposed fix in `docs/fixes/`.
 
 ## Active
 
-| # | Title | Severity | Fix |
+Four remain, all deferred deliberately rather than missed. Three are the same
+structural question and the fourth waits on it.
+
+| # | Title | Severity | Why it is still here |
 |---|---|---|---|
-| 01 | Periods table shows raw `amount_due` instead of stress-free display | Low (UX) | [fixes/01](../fixes/01-periods-table-display.md) |
-| 02 | Cannot delete rent period (FK constraint) | High | [fixes/02](../fixes/02-cascade-delete-migration.md) |
-| 03 | Soft-delete UI wired to hard-delete model | Medium | [fixes/03](../fixes/03-soft-delete-events.md) |
-| 05 | `recalculateAllRent` retroactive logic discarded | Medium | [fixes/05](../fixes/05-recalculate-persists-retroactive.md) |
+| 23 | [`NODE_ENV=test` fully bypasses auth](23-test-env-auth-bypass.md) | Medium (security) | Removing the bypass means the integration suite has to establish real sessions — worth doing, but it touches every test file and the owner asked to understand the tradeoffs first. |
+| 26 | [Recurring-events scheduler writes legacy tables](26-recurring-events-legacy-tables.md) | Medium | Needs the port-or-delete decision below. |
+| 27 | [Payment-history page reads legacy `rent_events`](27-payment-history-legacy-table.md) | Medium | Same decision. |
+| 29 | [Timer `project_id`/`task_id` silently dropped](29-timer-project-task-dropped.md) | Low | Add the columns or drop the parameters; deferred pending that call. |
 
-### 2026-08-15 audit batch
+### The remaining structural debt
 
-Found in a full-codebase sweep; fixes described inline in each file, not
-yet in `docs/fixes/`.
+The app still runs two "what's owed" models: the event-sourced `events` table
+that the dashboard, the rent math and the Stripe path all read, and the legacy
+`rent_periods` / `rent_events` tables that the recurring-events scheduler and
+the payment-history page still write. Nothing reconciles them.
 
-| # | Title | Severity | Fix |
-|---|---|---|---|
-| 07 | [Timer-stopped work logs always save duration 0](07-timer-duration-zero.md) | High | inline |
-| 11 | [`SESSION_SECRET` falls back to a public default in prod](11-session-secret-default.md) | High (security) | inline |
-| 12 | [Verification code brute-forceable (no lockout)](12-verification-code-brute-force.md) | High (security) | inline |
-| 13 | [Verification codes use `Math.random()`](13-verification-code-weak-random.md) | High (security) | inline |
-| 14 | [Adjustment/manual events overwrite `amount_due` instead of adding](14-adjustment-overwrites-amount-due.md) | Medium | inline |
-| 15 | [`work_value_change` events silently recorded as payments](15-work-value-change-as-payment.md) | Medium | inline |
-| 16 | [Undelete is a no-op in the event fold](16-undelete-noop.md) | Medium | inline |
-| 18 | [`/rent/summary` uses raw `amount_due`, not display value](18-summary-raw-amount-due.md) | Medium | inline |
-| 20 | [`temporary_rent_amount` can never be cleared](20-temporary-rent-amount-cannot-clear.md) | Medium | inline |
-| 21 | [Global error handler registered before routes; never catches](21-error-handler-registration-order.md) | Medium | inline |
-| 22 | [Email casing mismatch can break verification](22-email-casing-mismatch.md) | Medium | inline |
-| 23 | [`NODE_ENV=test` fully bypasses auth](23-test-env-auth-bypass.md) | Medium (security) | inline |
-| 24 | [Edit-work billable checkbox uses `isnt false`](24-billable-checkbox-isnt-false.md) | Medium | inline |
-| 25 | [Duplicate `GET /work-logs`; richer handler is dead code](25-duplicate-work-logs-route.md) | Medium | inline |
-| 26 | [Recurring-events scheduler writes legacy tables](26-recurring-events-legacy-tables.md) | Medium | inline |
-| 27 | [Payment-history page reads legacy `rent_events` table](27-payment-history-legacy-table.md) | Medium | inline |
-| 28 | [Recurring-event processing logs hardcode `status: success`](28-recurring-logs-hardcoded-success.md) | Medium | inline |
-| 29 | [Timer `project_id`/`task_id` silently dropped](29-timer-project-task-dropped.md) | Low | inline |
-| 30 | [Documented 8-hour auto-timeout not implemented](30-session-timeout-not-implemented.md) | Low | inline |
-| 31 | [Timer-created logs bypass rent recalc](31-timer-bypasses-recalc.md) | Low | inline |
-| 32 | [`resumeSession` lacks ownership/state validation](32-resume-session-no-validation.md) | Low | inline |
-| 33 | [`admin/detokenize` gated only by shared auth, not admin role](33-admin-detokenize-no-role.md) | Low (privilege) | inline |
-| 34 | [Backup restore not atomic; safety-copy name self-clobbers](34-backup-restore-not-atomic.md) | Low | inline |
-| 35 | [Money handled as floating-point dollars throughout](35-money-floating-point.md) | Low | inline |
-| 36 | [Logger doesn't tokenize error message/stack (PII leak)](36-logger-untokenized-errors.md) | Low (PII) | inline |
-| 37 | [Wide-open CORS, no explicit `sameSite`, no CSRF token](37-cors-csrf-hardening.md) | Low (security) | inline |
-| 38 | [Used/expired verification codes never purged](38-verification-codes-not-purged.md) | Low | inline |
-| 40 | [`calculateNextDueDate` month/year math fragile](40-next-due-date-math.md) | Low | inline |
-| 41 | [`transaction()` helper doesn't await callback, can't nest](41-transaction-helper-not-await.md) | Low | inline |
-| 42 | [Health check opens/closes a fresh DB connection per hit](42-health-check-new-connection.md) | Low | inline |
-| 43 | [`scripts/install.sh` targets abandoned Deno stack](43-install-sh-deno-stale.md) | Low (stale infra) | inline |
-| 44 | [`dist` build never copies `package.json`](44-dist-missing-package-json.md) | Medium (latent) | inline |
-| 45 | [`backup-*.sh` mangle `.env` secrets via `xargs`](45-backup-env-parsing.md) | Medium | inline |
-| 46 | [Boot-time migration loop swallows failures (no `set -e`)](46-migration-loop-no-set-e.md) | Medium (infra) | inline |
-| 47 | [`scripts/upgrade.sh` is empty but docs say it runs migrations](47-upgrade-sh-empty.md) | Low | inline |
-| 48 | [Projects/tasks/sessions FKs lack `ON DELETE` (same class as 02)](48-fk-no-on-delete.md) | Medium (latent) | inline |
+Everything else in this catalog has been fixed *within* the event model, which
+makes the split the largest thing left. Bugs 26 and 27 are the two places
+writes still go to the dead side. Picking one model and routing all writes
+through it is the durable fix; deleting the recurring-events scheduler outright
+is the smaller half of it, since rent-due is already derivable from the fold.
 
 ## Resolved
 
 | # | Title | Resolved | Notes |
 |---|---|---|---|
-| 04 | Lyndzie's work hours not appearing in rent periods | 2026-08-17 | Same root cause as 06 (no `work-reported` event emitted); fixed by 06. |
-| 06 | Work hours never credit rent (event model) | 2026-08-17 | `createWorkLog` now emits a `work-reported` event. |
-| 08 | `DELETE /work-logs/:id` always 500s | 2026-08-17 | Added `deleteWorkLog`; also retracts the credit. |
-| 09 | ACH payments never recorded (no webhook) | 2026-08-17 | Added `POST /payment/webhook` (signature-verified). Ships with 10. |
-| 10 | Payment confirmation not idempotent | 2026-08-17 | One recorder, idempotent on the Stripe intent id. Ships with 09. |
-| 17 | Rent events table always empty | 2026-09-04 | Route projects events onto the flat shape the client reads. |
-| 19 | Summary "total credits" renders `$NaN` | 2026-09-04 | Client reads `total_discount` (the key the route sends). |
-| 39 | period.coffee DEFAULT_CONFIG duplicates config constants | 2026-09-08 | period.coffee derives defaults from config.coffee; single source. |
+| 01 | Periods table shows raw `amount_due` | 2026-09-23 | Already fixed in the client; the file had not been updated. |
+| 02 | Cannot delete rent period (FK constraint) | 2026-09-23 | Cascade migration + the route no longer hard-deletes at all. |
+| 03 | Soft-delete UI wired to hard-delete model | 2026-09-23 | `deleted_at` and `undeleteRentEvent` both exist. |
+| 04 | Lyndzie's work hours not appearing | 2026-08-17 | Same root cause as 06. |
+| 05 | `recalculateAllRent` retroactive logic discarded | 2026-09-23 | The event fold retires the shortfall forward rather than rewriting history. |
+| 06 | Work hours never credit rent | 2026-08-17 | `createWorkLog` emits a `work-reported` event. |
+| 07 | Timer logs always save duration 0 | 2026-09-23 | Duration comes from the event timeline, not the dead column. |
+| 08 | `DELETE /work-logs/:id` always 500s | 2026-08-17 | Added `deleteWorkLog`; retracts the credit. |
+| 09 | ACH payments never recorded | 2026-08-17 | Signature-verified webhook. |
+| 10 | Payment confirmation not idempotent | 2026-08-17 | Idempotent on the Stripe intent id. |
+| 11 | `SESSION_SECRET` falls back to a public default | 2026-09-23 | No committed secret exists now; unset outside dev/test refuses to boot. |
+| 12 | Verification code brute-forceable | 2026-09-23 | Attempt counter burns the code; throttled per (address, email). |
+| 13 | Verification codes use `Math.random()` | 2026-09-23 | `crypto.randomInt`. |
+| 14 | Adjustments overwrite `amount_due` | 2026-09-23 | Additive `adjustment` action; `override` stays the absolute pin. |
+| 15 | `work_value_change` recorded as a payment | 2026-09-23 | Unknown types are a 400; the option is gone from the UI. |
+| 16 | Undelete is a no-op in the fold | 2026-09-23 | `undeleted` action; delete/undelete resolved by time. |
+| 17 | Rent events table always empty | 2026-09-04 | Route projects events onto the flat shape. |
+| 18 | `/rent/summary` uses raw `amount_due` | 2026-09-23 | Sums `display_amount_due`, clamped per month. |
+| 19 | Summary "total credits" renders `$NaN` | 2026-09-04 | Client reads `total_discount`. |
+| 20 | `temporary_rent_amount` can never be cleared | 2026-09-23 | Presence check, not a null check. |
+| 21 | Error handler registered before routes | 2026-09-23 | Mounted last; honours `err.status`. |
+| 22 | Email casing mismatch breaks verification | 2026-09-23 | Normalized at the route boundary. |
+| 24 | Billable checkbox uses `isnt false` | 2026-09-23 | `!!log.billable`. |
+| 25 | Duplicate `GET /work-logs` | 2026-09-23 | One handler; the session-merging one would now double-count. |
+| 28 | Processing logs hardcode `status: success` | 2026-09-23 | Outcome columns added and used. |
+| 30 | Documented 8-hour timeout not implemented | 2026-09-23 | Implemented: the open segment is capped and the session closed at the cap. |
+| 31 | Timer logs bypass rent recalc | 2026-09-23 | `stopTimer` recalculates for the tenant. |
+| 32 | `resumeSession` lacks validation | 2026-09-23 | Ownership and state checked. |
+| 33 | `admin/detokenize` not admin-gated | 2026-09-23 | `requireAdmin` on all admin routes and the page. |
+| 34 | Backup restore not atomic | 2026-09-23 | Timestamped safety copy; rename into place. |
+| 35 | Money as floating-point dollars | 2026-09-23 (partly) | Amounts round to the cent so a month can be paid exactly; the full integer-cents representation is still open. |
+| 36 | Logger doesn't tokenize error text | 2026-09-23 | Addresses inside messages and stacks are tokenized; the trace survives. |
+| 37 | Wide-open CORS, no `sameSite` | 2026-09-23 | cors not mounted unless configured; `sameSite: 'lax'`. |
+| 38 | Verification codes never purged | 2026-09-23 | Deleted on use, superseded on reissue, swept on expiry. |
+| 39 | `DEFAULT_CONFIG` duplicates constants | 2026-09-08 | Derived from `config.coffee`. |
+| 40 | `calculateNextDueDate` month/year math | 2026-09-23 | Day clamped to month length; yearly uses its configured date. |
+| 41 | `transaction()` doesn't await, can't nest | 2026-09-23 | `SAVEPOINT`; async callbacks refused. |
+| 42 | Health check opens a fresh connection | 2026-09-23 | Uses the shared handle. |
+| 43 | `scripts/install.sh` targets Deno | 2026-09-23 | Deleted; CLAUDE.md corrected. |
+| 44 | `dist` build never copies `package.json` | 2026-09-23 | Three separate faults; the artifact now starts. |
+| 45 | `backup-*.sh` mangle `.env` secrets | 2026-09-23 | Source the file instead of `xargs`. |
+| 46 | Migration loop swallows failures | 2026-09-23 | `set -euo pipefail`, delegating to `upgrade.sh`. |
+| 47 | `scripts/upgrade.sh` is empty | 2026-09-23 | Real runner; migrations also apply at boot. |
+| 48 | Projects/tasks/sessions FKs lack `ON DELETE` | 2026-09-23 | Cascade for parts, `SET NULL` for references. |
 
-Not in the numbered catalog but fixed this cycle (infra): the daily-backup
-cron hit an auth-gated endpoint (now `backup-now.sh`), and the init script's
-pidfile daemonization broke restart (now `exec node`, not `npx`). See the CF
-template and commit history.
+Not in the numbered catalog but fixed this cycle: the daily-backup cron hit an
+auth-gated endpoint (now `backup-now.sh`); the init script's pidfile
+daemonization broke restart (now `exec node`); `npm run test:focus` had never
+run anything (`scripts/run-tests.coffee` did not parse and searched a `tests/`
+directory that does not exist); and `scripts/build.coffee` had been failing
+since May on a stale copy of the repo under `tmp/`, because it compiled `.`.
 
 ## Adding a bug
 

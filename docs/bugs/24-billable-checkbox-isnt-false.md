@@ -1,7 +1,11 @@
 # Bug 24 — Edit-work billable checkbox uses `isnt false`, flips non-billable to billable
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+The checkbox reads `!!log.billable`.
 
 ## Symptom
 

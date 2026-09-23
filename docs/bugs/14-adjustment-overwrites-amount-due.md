@@ -1,7 +1,11 @@
 # Bug 14 — Adjustment/manual rent events overwrite amount_due instead of adding
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+An `adjustment` action carries a `delta` that `computeMonth` sums into `amount_due_calculated`; `override` remains the absolute pin and the only thing that sets `amount_due_override`. A $100 late fee on a $1,600 month now leaves $1,700 owing. As this file anticipated, adjustment-origin events already stored as `override` cannot be told apart from genuine pins after the fact, so they keep absolute semantics — deliberately, not by oversight.
 
 ## Symptom
 

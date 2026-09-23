@@ -1,7 +1,11 @@
 # Bug 45 — backup-*.sh parse .env via `export $(cat .env | xargs)` and mangle secrets
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+All three scripts use `set -a && . ./.env && set +a`, matching the pattern the CloudFormation userdata and the init unit already use.
 
 ## Symptom
 

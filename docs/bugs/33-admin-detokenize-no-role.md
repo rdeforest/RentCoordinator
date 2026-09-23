@@ -1,7 +1,11 @@
 # Bug 33 — admin/detokenize gated only by shared auth, not an admin role
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`middleware.requireAdmin` gates `/admin/detokenize`, `/admin/logs` and the `/admin` page itself — the tenant previously received the page with a 200 and only its XHRs failed. It checks `session.authenticated` as well as the address, and the hardcoded `ADMIN` constant in `observability.coffee` is replaced by `config.ADMIN_EMAILS`.
 
 ## Symptom
 

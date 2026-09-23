@@ -1,7 +1,11 @@
 # Bug 30 — Documented 8-hour auto-timeout is not implemented
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Implemented rather than removed. `calculateSessionDuration` caps an open segment at `SESSION_TIMEOUT`, and every timer operation reads the current session through one seam in `timer.coffee` that closes a session past the cap, recording it exactly the way an explicit stop would. That also unblocks the next session, which an abandoned timer used to prevent.
 
 ## Symptom
 

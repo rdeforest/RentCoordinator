@@ -1,7 +1,11 @@
 # Bug 07 — Timer-stopped work logs always save duration 0
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`sessionToWorkLog` computes the duration from the `work_events` timeline via `calculateSessionDuration` instead of reading `work_sessions.total_duration`, which is written as 0 at INSERT and never maintained. The unit test seeds a 90-minute session and asserts the log records 90; it fails against the old code.
 
 ## Symptom
 

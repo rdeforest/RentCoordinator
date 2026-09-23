@@ -45,14 +45,22 @@ cd /opt/rent-coordinator && sudo -u rent-coordinator git pull --ff-only
 
 # 4. If Secrets Manager gained a new key since the instance booted, append it
 #    to .env (a running instance's .env is only written once, at boot).
+#    SESSION_SECRET must be present: the app refuses to start without it
+#    rather than fall back to a shared default.
 
-# 5. Guard against replacement during the restart, then restart:
+# 5. Apply any pending database migrations. Safe to run when there are none;
+#    the server also applies pending migrations at boot, so this is belt and
+#    braces — but running it here means a bad migration fails while you are
+#    watching, rather than during the restart.
+sudo -u rent-coordinator ./scripts/upgrade.sh
+
+# 6. Guard against replacement during the restart, then restart:
 #    (run the suspend/resume from your workstation; the restart on the box)
 aws autoscaling suspend-processes --auto-scaling-group-name RentCoordinator-production \
   --scaling-processes HealthCheck ReplaceUnhealthy
 sudo /etc/init.d/rent-coordinator restart      # cycles cleanly since the pidfile fix
 
-# 6. Verify, then resume:
+# 7. Verify, then resume:
 curl -s http://localhost:8080/health           # on the box; or the ALB /health
 aws autoscaling resume-processes --auto-scaling-group-name RentCoordinator-production \
   --scaling-processes HealthCheck ReplaceUnhealthy

@@ -1,7 +1,11 @@
 # Bug 28 — Recurring-event processing logs hardcode status=success
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`recurring_event_logs` gained `status`, `message`, `error_details` and `events_created` (migration), and both the insert and the read use them. Rows written before the columns existed report `status: null` — honestly unknown — rather than being backfilled as successes.
 
 ## Symptom
 

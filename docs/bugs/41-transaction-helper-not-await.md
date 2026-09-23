@@ -1,7 +1,11 @@
 # Bug 41 — transaction() helper doesn't await its callback and can't nest
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`transaction()` uses `SAVEPOINT`/`RELEASE`/`ROLLBACK TO` so it nests, and refuses an async callback outright — `node:sqlite` is synchronous, so the commit would fire before the awaited work ran. A rollback that itself fails is attached to the original error rather than discarded by a bare `try`.
 
 ## Symptom
 

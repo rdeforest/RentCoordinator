@@ -1,7 +1,11 @@
 # Bug 12 — Verification code is brute-forceable (no lockout)
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active (security)
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Five wrong guesses delete the code (`auth_sessions.attempts`, added by migration), and both auth endpoints are windowed. The budget is keyed on (client address, email) rather than email alone: an email-only bucket would have been an unauthenticated lockout, since both addresses are public and any third party could have spent the real user's budget from anywhere. Issuing a code also supersedes the previous one, so the attempt budget is per address rather than per outstanding code.
 
 ## Symptom
 

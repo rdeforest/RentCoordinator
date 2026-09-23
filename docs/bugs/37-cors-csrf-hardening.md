@@ -1,7 +1,11 @@
 # Bug 37 — Wide-open CORS, no explicit cookie sameSite, no CSRF token
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`cors` is not mounted at all unless `CORS_ORIGINS` names a real cross-origin client. `origin: false` is not the opposite of reflect-all — cors@2.8.5 reads a falsy origin as "allow any" and the app was safe only because a separate early return made the middleware a no-op. The session cookie sets `sameSite: 'lax'` explicitly. No CSRF token: for a same-origin two-user app the explicit `sameSite` is the stance, and it is now a decision rather than a browser default.
 **Category:** security (low-medium)
 
 ## Symptom

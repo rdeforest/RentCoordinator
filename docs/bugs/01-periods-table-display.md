@@ -1,7 +1,11 @@
 # Bug 01 — Periods table shows raw amount_due
 
 **Reported:** 2026-05-19
-**Status:** fix-proposed
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Already fixed in the client ahead of this sweep: `loadAllPeriods` renders `formatCurrency displayDue` in the Amount Due cell and keeps the raw value in `data-value`/`title` for the inline editor. Verified against static/coffee/rent.coffee; the bug file had simply not been updated.
 
 ## Symptom
 

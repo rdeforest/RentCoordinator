@@ -1,7 +1,11 @@
 # Bug 36 — Logger tokenizes metadata but not the error message/stack
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`logger.tokenizeString` runs error messages and stacks through a shared tokenizer that replaces only the address and leaves the surrounding text intact — a stack reduced to a single token is a different way of losing the log. The pattern is anchored to address characters so a stack frame naming a scoped package (`node_modules/@aws-sdk/client-s3/index.js`) is not matched and filed in the PII store as somebody's address. Tokenizing writes to SQLite, so a failure there falls back to a visible redaction marker rather than throwing from inside the error handler.
 
 ## Symptom
 

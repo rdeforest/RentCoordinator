@@ -1,7 +1,11 @@
 # Bug 02 — Cannot delete rent period (FK constraint)
 
 **Reported:** 2026-05-19 (long-standing)
-**Status:** fix-proposed
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Resolved by the 2026-05-19 cascade migration plus the route rewrite. Both FKs into `rent_periods` now carry `ON DELETE CASCADE` (verified against the live database), and a period delete with a blocking `recurring_event_logs` row succeeds, taking its children with it. Separately, `DELETE /rent/period/:year/:month` no longer hard-deletes at all — it records a `period-suppressed` event — so `deleteRentPeriod` has no reachable caller.
 
 ## Symptom
 

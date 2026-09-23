@@ -1,7 +1,11 @@
 # Bug 03 — Soft-delete UI wired to hard-delete model
 
 **Reported:** 2026-05-19 (latent, discovered during review)
-**Status:** fix-proposed
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Resolved by the 2026-05-19 soft-delete migration. `rent_events` has a `deleted_at` column and `rentModel.undeleteRentEvent` is defined, so the soft-delete model the UI was built for exists. Note that the rent events UI is now served by the event-sourced path, where delete/undelete are handled by bug 16's fix; the legacy model remains only for the payment-history page (bug 27).
 
 ## Symptom
 

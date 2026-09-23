@@ -1,7 +1,11 @@
 # Bug 32 — resumeSession lacks ownership/state validation
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`resumeSession` verifies the session exists, belongs to the worker, and is paused.
 
 ## Symptom
 

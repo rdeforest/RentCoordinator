@@ -1,7 +1,11 @@
 # Bug 11 — SESSION_SECRET falls back to a public default in production
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active (security)
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+There is no longer a committed secret to fall back to. Outside dev/test an unset `SESSION_SECRET` throws at config load; in dev/test it is a random per-process key. The guard reads `process.env.NODE_ENV` rather than the defaulted value, because an unset NODE_ENV is a misconfiguration rather than a claim that this is a laptop — the previous form would have let a production box with a dropped env line run on the public default with a non-Secure cookie. The CloudFormation bootstrap now asserts the secret reached `.env`.
 
 ## Symptom
 

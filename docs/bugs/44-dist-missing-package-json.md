@@ -1,7 +1,11 @@
 # Bug 44 — dist build never copies package.json; dist runtime crashes on load
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Three things were wrong, not one. `package.json` was never copied into `dist/`; `fixImportPaths` rewrote ESM `import`/`from` but not `require './x.coffee'`, which is how this codebase imports, so every compiled module asked for a file `dist/` does not contain; and the compiled output is CommonJS under a `"type": "module"` manifest, so the artifact described itself as something it is not. The build also compiled `.`, which swept in scratch directories — a stale copy of the repo under `tmp/` had been failing the build since May, which is why none of this had been noticed. `npx coffee scripts/build.coffee` now produces a `dist/` that starts and serves.
 
 ## Symptom
 

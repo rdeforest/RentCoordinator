@@ -1,7 +1,11 @@
 # Bug 22 — Email casing mismatch can break verification
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`normalizeEmail` lives in `config.coffee` alongside the address lists, and the auth routes normalize at the boundary so the rest of the system only ever sees one spelling.
 
 ## Symptom
 

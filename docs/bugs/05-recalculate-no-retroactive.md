@@ -1,7 +1,11 @@
 # Bug 05 — `recalculateAllRent` retroactive logic discarded
 
 **Reported:** 2026-05-19 (discovered during review)
-**Status:** fix-proposed
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+Resolved by the event model, though not in the shape this file proposed. `computeMonth` carries `cumulative_shortfall` forward and retires it with `retroactive_credit` in the later month, rather than rewriting the earlier month's stored value — an append-only log does not rewrite history. Demonstrated: January with 4 hours owes $1,400 and carries a $200 shortfall; February with 16 hours takes a $200 retroactive credit, owes $1,000, and carries nothing forward. Economically the outcome this file asked for.
 
 ## Symptom
 

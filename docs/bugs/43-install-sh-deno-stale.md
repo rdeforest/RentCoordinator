@@ -1,7 +1,11 @@
 # Bug 43 — scripts/install.sh targets the abandoned Deno stack
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-23
+
+## Resolution
+
+`scripts/install.sh` is deleted and `CLAUDE.md` no longer points at it. Retired rather than rewritten against npm/coffee: production is the CloudFormation path and local development is `npm install` + `npm start`, so a second installer would be a second thing to keep true. The Deno helpers it used (`install_deno`, `get_deno_install_path` in `scripts/lib/common.sh`) are now dead and are worth a separate cleanup.
 
 ## Symptom
 
