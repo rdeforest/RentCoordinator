@@ -294,6 +294,15 @@ Resources:
             chown rent-coordinator:rent-coordinator /opt/rent-coordinator/.env
             chmod 600 /opt/rent-coordinator/.env
 
+            # The app refuses to start without SESSION_SECRET rather than fall
+            # back to a shared default, so confirm the secret actually arrived
+            # from Secrets Manager. Failing here names the cause; failing later
+            # looks like a mystery crash loop.
+            if ! grep -q '^SESSION_SECRET=.\+' /opt/rent-coordinator/.env; then
+              echo "FATAL: SESSION_SECRET missing from .env — check the rent-coordinator/config secret" >&2
+              exit 1
+            fi
+
             # Create data directory
             mkdir -p /var/lib/rent-coordinator
             chown rent-coordinator:rent-coordinator /var/lib/rent-coordinator
@@ -332,15 +341,18 @@ Resources:
             # this is the only place that closes the gap between an old S3
             # backup's schema and the schema the deployed code expects.
             echo "Applying database migrations..."
+            # set -e: a migration that fails must stop the boot. Without it the
+            # loop carried on and the exit status reflected only the last
+            # migration, so the service started against a half-migrated schema
+            # and the failure merely scrolled past in the cloud-init log.
+            # The runner records what it has applied, so re-running is cheap.
             sudo -u rent-coordinator bash -c '
+              set -euo pipefail
               cd /opt/rent-coordinator
               . ~/.nvm/nvm.sh
               nvm use >/dev/null
               set -a && . .env && set +a
-              for migration in $(ls migrations/*.coffee | sort); do
-                echo "Running migration: $migration"
-                npx coffee "$migration"
-              done
+              ./scripts/upgrade.sh
             '
 
             # Create SysVInit service

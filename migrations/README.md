@@ -7,8 +7,22 @@ migration framework — migrations are plain CoffeeScript scripts that run again
 
 ## How Migrations Work
 
-Migrations are executed manually or by `scripts/upgrade.sh` in alphabetical order. Each migration
-is a `.coffee` file that opens the database and performs schema or data changes.
+Migrations run in filename order. Each is a `.coffee` file that opens the database and performs
+schema or data changes.
+
+Three things run them, all through the same runner (`scripts/run-migrations.coffee`), which records
+what it has applied in a `schema_migrations` table so a re-run is a no-op:
+
+- **Application startup** — `lib/db/schema.coffee::initialize` applies anything pending before the
+  server serves a request. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so without
+  this an in-place upgrade (`git pull` + restart) would run new code against an old schema.
+- **`./scripts/upgrade.sh`** — the manual/deploy entry point. Previously this file was empty while
+  this document claimed it ran migrations (bug 47).
+- **Instance bootstrap** — the CloudFormation UserData calls `scripts/upgrade.sh` under `set -e`,
+  so a failing migration stops the boot instead of scrolling past (bug 46).
+
+**Migrations must be idempotent.** All three paths can re-run one, and the first boot after
+`schema_migrations` was introduced replays every existing migration to populate it.
 
 ## Creating a Migration
 

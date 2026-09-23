@@ -179,6 +179,18 @@ getEnabledRecurringEvents = ->
   return events
 
 
+# Rows written before the outcome columns existed report status null — an
+# honest "unknown" rather than the hardcoded 'success' that used to be
+# invented on read, which made a run that threw look like one that worked.
+hydrateProcessingLog = (log) ->
+  return log unless log
+
+  log.processing_date = log.processed_at
+  log.created_at      = log.processed_at
+  log.events_created  = try JSON.parse(log.events_created or '[]') catch then []
+  log
+
+
 createProcessingLog = (data) ->
   id  = v1()
   now = new Date().toISOString()
@@ -186,34 +198,27 @@ createProcessingLog = (data) ->
   unless data.period_id
     throw new Error "period_id is required for processing logs"
 
-  # XXX: Schema only has: id, recurring_event_id, period_id, amount, processed_at
-  # But we want to preserve: events_created, status, message, error_details
-  # Consider extending schema or using metadata approach
   db.prepare("""
     INSERT INTO recurring_event_logs (
-      id, recurring_event_id, period_id, amount, processed_at
+      id, recurring_event_id, period_id, amount,
+      status, message, error_details, events_created, processed_at
     )
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   """).run(
     id,
     data.recurring_event_id,
     data.period_id,
     data.amount or 0,
+    data.status or 'success',
+    data.message or null,
+    data.error_details or null,
+    JSON.stringify(data.events_created or []),
     data.processing_date or now
   )
 
-  return
-    id:                 id
-    recurring_event_id: data.recurring_event_id
-    period_id:          data.period_id or ''
-    amount:             data.amount or 0
-    processing_date:    data.processing_date or now
-    events_created:     data.events_created or []
-    status:             data.status or 'success'
-    message:            data.message or null
-    error_details:      data.error_details or null
-    created_at:         now
-    processed_at:       data.processing_date or now
+  return hydrateProcessingLog db.prepare("""
+    SELECT * FROM recurring_event_logs WHERE id = ?
+  """).get id
 
 
 getProcessingLogs = (recurring_event_id = null, limit = 50) ->
@@ -231,15 +236,7 @@ getProcessingLogs = (recurring_event_id = null, limit = 50) ->
       LIMIT ?
     """).all limit
 
-  for log in logs
-    log.processing_date = log.processed_at
-    log.events_created  = []
-    log.status          = 'success'
-    log.message         = null
-    log.error_details   = null
-    log.created_at      = log.processed_at
-
-  return logs
+  hydrateProcessingLog log for log in logs
 
 
 initializeDefaultRecurringEvents = ->

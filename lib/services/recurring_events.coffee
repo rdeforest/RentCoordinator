@@ -4,6 +4,22 @@ rentService          = require './rent.coffee'
 config               = require '../config.coffee'
 
 
+# The last day of the given month (month is 0-based and may be out of range;
+# Date normalizes it, so month 12 is January of the next year).
+lastDayOf = (year, month) -> new Date(year, month + 1, 0).getDate()
+
+
+# `day` in the given month, clamped to that month's length and keeping
+# `fromDate`'s time of day. setDate(31) in a 30-day month silently rolls into
+# the next month, which skewed every monthly due date configured past the
+# 28th (bug 40).
+dayIn = (year, month, day, fromDate) ->
+  clamped = Math.min (day or 1), lastDayOf year, month
+
+  new Date year, month, clamped,
+    fromDate.getHours(), fromDate.getMinutes(), fromDate.getSeconds(), fromDate.getMilliseconds()
+
+
 calculateNextDueDate = (recurringEvent, fromDate = new Date()) ->
   switch recurringEvent.frequency
     when 'daily'
@@ -24,18 +40,20 @@ calculateNextDueDate = (recurringEvent, fromDate = new Date()) ->
       return nextDate
 
     when 'monthly'
-      nextDate = new Date fromDate
-      nextDate.setDate recurringEvent.day_of_month or 1
+      nextDate = dayIn fromDate.getFullYear(), fromDate.getMonth(), recurringEvent.day_of_month, fromDate
 
       if nextDate.getTime() <= fromDate.getTime()
-        nextDate.setMonth nextDate.getMonth() + 1
-        nextDate.setDate recurringEvent.day_of_month or 1
+        nextDate = dayIn fromDate.getFullYear(), fromDate.getMonth() + 1, recurringEvent.day_of_month, fromDate
 
       return nextDate
 
     when 'yearly'
-      nextDate = new Date fromDate
-      nextDate.setFullYear nextDate.getFullYear() + 1
+      targetMonth = (recurringEvent.month ? 1) - 1
+      nextDate    = dayIn fromDate.getFullYear(), targetMonth, recurringEvent.day_of_month, fromDate
+
+      if nextDate.getTime() <= fromDate.getTime()
+        nextDate = dayIn fromDate.getFullYear() + 1, targetMonth, recurringEvent.day_of_month, fromDate
+
       return nextDate
 
     else
@@ -256,6 +274,7 @@ triggerManualProcessing = ->
   return await processAllDueEvents()
 
 module.exports = {
+  calculateNextDueDate
   processAllDueEvents
   initializeRecurringEvents
   scheduleDailyProcessing
