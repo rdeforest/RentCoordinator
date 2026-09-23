@@ -39,9 +39,14 @@ npm start
 :# Run integration tests
 npm run test:integration
 
-:# Local installation (current machine)
-./scripts/install.sh
+:# Apply pending database migrations (safe to re-run)
+./scripts/upgrade.sh
 ```
+
+There is no local installer script. `scripts/install.sh` was written for the
+abandoned Deno stack and was deleted rather than left to fail partway through
+(bug 43); local development is `npm install` + `npm start`, and production is
+the CloudFormation path below.
 
 Deploying to production is a procedure, not a one-liner (AWS ASG, in-place
 `git pull` + restart, init-system and ASG-suspend specifics) — see

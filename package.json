@@ -8,12 +8,13 @@
     "check-env": "scripts/check-env",
     "clean": "rm -rf static/js/ tenant-coordinator.db* node_modules/.cache/ && echo 'Clean complete'",
     "clean:all": "npm run clean && rm -rf node_modules/ && echo 'Full clean complete - run npm install'",
-    "start": "coffee main.coffee",
-    "test": "coffee test/services/rent.coffee",
-    "test:focus": "coffee scripts/run-tests.coffee",
-    "test:integration": "coffee scripts/test-integration.coffee",
+    "start": "NODE_ENV=${NODE_ENV:-development} coffee main.coffee",
+    "test": "NODE_ENV=test coffee scripts/run-tests.coffee",
+    "test:integration": "NODE_ENV=test coffee scripts/test-integration.coffee",
     "lint": "echo 'Linting skipped - configure if needed'",
-    "validate": "coffee scripts/validate.coffee"
+    "validate": "coffee scripts/validate.coffee",
+    "test:unit": "NODE_ENV=test coffee scripts/run-tests.coffee",
+    "test:all": "npm run test:unit && npm run test:integration"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.515.0",

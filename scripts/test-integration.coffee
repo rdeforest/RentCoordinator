@@ -58,7 +58,9 @@ console.log ''
 
 console.log 'Building client-side JavaScript...'
 try
-  execSync 'coffee -b -c -M -o dist/static/js static/coffee', stdio: 'inherit'
+  execSync 'coffee -b -c -M -o dist/static/js static/coffee',
+    stdio: 'inherit'
+    env:   Object.assign {}, process.env, NODE_ENV: process.env.NODE_ENV or 'test'
 catch err
   console.error 'Build failed!'
   process.exit 1
@@ -102,7 +104,11 @@ try
   for testFile in testFiles
     console.log "Running: #{testFile}"
     console.log '─'.repeat 60
-    execSync "coffee #{testFile}", stdio: 'inherit'
+    # Declare the environment: config.coffee refuses to load without an
+    # explicit NODE_ENV rather than defaulting to development (bug 11).
+    execSync "coffee #{testFile}",
+      stdio: 'inherit'
+      env:   Object.assign {}, process.env, NODE_ENV: process.env.NODE_ENV or 'test'
     console.log '─'.repeat 60
     console.log ''
 

@@ -4,12 +4,33 @@
 # multi-instance deployments.
 
 { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = require '@aws-sdk/client-s3'
-{ createReadStream, createWriteStream, copyFileSync, existsSync, mkdirSync, readdirSync, statSync } = require 'node:fs'
+{ createReadStream, createWriteStream, copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } = require 'node:fs'
 { readFile } = require 'node:fs/promises'
 { join, dirname, basename } = require 'node:path'
 config = require '../config.coffee'
 
 BACKUP_VERSION = '2.0.0'  # SQLite-based backups
+
+# A restore is the one operation that can destroy the live database, so it
+# gets a safety copy that does not collide with the previous one, and it
+# lands via rename — which is atomic within a filesystem — rather than a copy
+# over the file the app is reading.
+safetyCopyPath = (dbPath) ->
+  stamp = new Date().toISOString().replace /[:.]/g, '-'
+  "#{dbPath}.before-restore-#{stamp}"
+
+
+# `incoming` must already be on the same filesystem as dbPath for the rename
+# to stay atomic; both callers stage it next to the database for that reason.
+swapInDatabase = (incoming, dbPath) ->
+  if existsSync dbPath
+    backupPath = safetyCopyPath dbPath
+    console.log "Backing up current database to: #{backupPath}"
+    copyFileSync dbPath, backupPath
+
+  renameSync incoming, dbPath
+  backupPath
+
 
 # Get database path dynamically (allows test overrides)
 getDbPath = -> process.env.DB_PATH or './tenant-coordinator.db'
@@ -196,19 +217,8 @@ restoreFromS3 = ->
   tempPath = "#{dbPath}.restore-temp"
   await downloadBackupFromS3 latest.key, tempPath
 
-  # Backup current database if it exists
-  if existsSync dbPath
-    backupPath = "#{dbPath}.before-restore"
-    console.log "Backing up current database to: #{backupPath}"
-    copyFileSync dbPath, backupPath
-
-  # Replace current database with downloaded backup
   console.log "Restoring database from S3 backup"
-  copyFileSync tempPath, dbPath
-
-  # Clean up temp file
-  fs = require 'node:fs'
-  fs.unlinkSync tempPath
+  swapInDatabase tempPath, dbPath
 
   console.log "Database restored successfully from S3"
   { restored: true, backup: latest }
@@ -302,14 +312,16 @@ restoreFromFile = (filepath) ->
 
   dbPath = getDbPath()
 
-  # Backup current database
-  if existsSync dbPath
-    backupPath = "#{dbPath}.before-restore"
-    console.log "Backing up current database to: #{backupPath}"
-    copyFileSync dbPath, backupPath
+  # Staged next to the database so the rename below stays on one filesystem,
+  # and so the source backup file is not consumed by the rename.
+  staged = "#{dbPath}.restore-staged"
+  copyFileSync filepath, staged
 
-  # Restore from backup
-  copyFileSync filepath, dbPath
+  try
+    swapInDatabase staged, dbPath
+  catch err
+    unlinkSync staged if existsSync staged
+    throw err
 
   console.log "Database restored successfully"
   { restored: true, source: filepath }

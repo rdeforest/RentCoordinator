@@ -10,7 +10,10 @@ cd "$(dirname "$0")/.."
 
 # Load environment if .env exists
 if [ -f .env ]; then
-  export $(cat .env | grep -v '^#' | xargs)
+  # `xargs` word-splits and strips quotes, so any value containing a space,
+  # quote or '#' — Stripe keys, SMTP_PASS, SESSION_SECRET — arrived mangled
+  # and the backup authenticated with a corrupted credential (bug 45).
+  set -a && . ./.env && set +a
 fi
 
 # Ensure we're using the right node version

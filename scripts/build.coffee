@@ -7,6 +7,10 @@ path          = require 'path'
 
 execAsync = promisify exec
 
+# What the running server actually needs. migrations/ ships because the boot
+# migration runner executes them from the deployed tree.
+SERVER_SOURCES = ['main.coffee', 'lib', 'migrations', 'scripts']
+
 
 fixImportPaths = (dir) ->
   return unless fs.existsSync dir
@@ -18,8 +22,14 @@ fixImportPaths = (dir) ->
       fixImportPaths filePath
     else if file.isFile() and file.name.endsWith '.js'
       content = fs.readFileSync filePath, 'utf8'
-      content = content.replace /from\s+['"](\.\.?\/[^'"]+)\.coffee['"]/g,              "from '$1.js'"
-      content = content.replace /import\s*\(\s*['"](\.\.?\/[^'"]+)\.coffee['"]\s*\)/g, "import('$1.js')"
+      content = content.replace /from\s+['"](\.\.?\/[^'"]+)\.coffee['"]/g,               "from '$1.js'"
+      content = content.replace /import\s*\(\s*['"](\.\.?\/[^'"]+)\.coffee['"]\s*\)/g,  "import('$1.js')"
+      # This project requires its modules by path — `require './config.coffee'`
+      # — and only the two import forms above were being rewritten, so every
+      # compiled file asked for a .coffee that dist/ does not contain. Together
+      # with the missing package.json (bug 44) that meant the dist artifact had
+      # never been able to start.
+      content = content.replace /require\s*\(\s*['"](\.\.?\/[^'"]+)\.coffee['"]\s*\)/g, "require('$1.js')"
 
       fs.writeFileSync filePath, content, 'utf8'
 
@@ -44,8 +54,17 @@ build = ->
     console.log 'Running pre-build validation...'
     await execAsync 'npx coffee scripts/validate.coffee'
 
+    # Named sources, not '.'. Compiling the whole working tree swept in
+    # scratch directories, previous dist output and anything else lying
+    # around — on this checkout a stale copy of the repo under tmp/ had been
+    # failing the build since May, which is why the dist artifact was never
+    # exercised and bug 44 went unnoticed.
     console.log 'Compiling server-side CoffeeScript...'
-    await execAsync 'npx coffee -b -c -M -o dist .'
+    for source in SERVER_SOURCES
+      # A directory keeps its own name under dist/; a lone file lands at the
+      # top. `coffee -o dist lib` would flatten lib/ into dist/ instead.
+      outDir = if fs.statSync(source).isDirectory() then path.join 'dist', source else 'dist'
+      await execAsync "npx coffee -b -c -M -o #{outDir} #{source}"
 
     console.log 'Fixing import paths...'
     fixImportPaths 'dist'
@@ -55,6 +74,19 @@ build = ->
 
     console.log 'Copying static assets...'
     copyDir 'static', 'dist/static'
+
+    # lib/routing.coffee does `require '../package.json'`, which compiles to
+    # dist/lib/routing.js resolving dist/package.json — a file the build never
+    # produced (bug 44).
+    #
+    # It is not a straight copy. The root package is "type": "module", but
+    # `coffee -b -c` emits CommonJS, so copying the root manifest verbatim
+    # declares the compiled output to be something it is not and every require
+    # in it fails. The artifact describes itself accurately instead.
+    console.log 'Writing dist/package.json...'
+    pkg = JSON.parse fs.readFileSync 'package.json', 'utf8'
+    fs.writeFileSync 'dist/package.json',
+      JSON.stringify(Object.assign({}, pkg, type: 'commonjs', main: 'main.js'), null, 2) + '\n'
 
     console.log '✓ Build complete!'
 
