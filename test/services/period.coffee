@@ -528,3 +528,143 @@ test "computeMonth marks the month so every route agrees", ->
 
   assert.equal periods['2026-01'].corrupt, true
   assert.equal periods['2026-02'].corrupt, false
+
+
+# --- the current month, after the due date ------------------------------------
+#
+# Every test above this point puts "now" before the 15th, so the branch that
+# decides what the tenant sees for the second half of every month was computed
+# by nothing. These pin "now" after the due date.
+
+AFTER_DUE  = new Date '2026-06-20T12:00:00Z'   # current month = 2026-06, past the 15th
+ON_DUE_DAY = new Date '2026-06-15T09:00:00Z'
+DAY_BEFORE = new Date '2026-06-14T23:00:00Z'
+
+currentMonth = (events, now) -> computeAllPeriods(events, now)['2026-06']
+
+
+test "current month on the due date shows the agreed payment, not the full rent", ->
+  p = currentMonth [work('2026-06', 0)], ON_DUE_DAY
+
+  assert.equal p.display_amount_due, 950, 'the 15th is due, not the day before due'
+  assert.equal p.amount_due,         1600, 'while the real figure is untouched underneath'
+  assert.notEqual p.payment_status,  'NOT DUE'
+
+
+test "the day before the due date is still NOT DUE", ->
+  p = currentMonth [work('2026-06', 0)], DAY_BEFORE
+
+  assert.equal p.display_amount_due, 0
+  assert.equal p.payment_status,     'NOT DUE'
+
+
+test "current month after the due date, nothing paid: UNPAID at the agreed payment", ->
+  p = currentMonth [work('2026-06', 0)], AFTER_DUE
+
+  assert.equal p.display_amount_due, 950
+  assert.equal p.payment_status,     'UNPAID'
+
+
+test "current month after the due date, agreed payment received: PAID", ->
+  p = currentMonth [work('2026-06', 0), payment('2026-06', 950)], AFTER_DUE
+
+  assert.equal p.payment_status, 'PAID',
+    'paying the displayed figure settles the month, even though $1,600 is owed underneath'
+
+
+test "current month after the due date, part paid: PARTIAL", ->
+  p = currentMonth [work('2026-06', 0), payment('2026-06', 400)], AFTER_DUE
+
+  assert.equal p.payment_status, 'PARTIAL'
+
+
+test "work credit does not reduce what the current month displays after the due date", ->
+  # The mask is a flat agreed payment; the credit shows up in the real figure.
+  p = currentMonth [work('2026-06', 4)], AFTER_DUE
+
+  assert.equal p.display_amount_due, 950,  'the tenant still sees the agreed payment'
+  assert.equal p.amount_due,         1400, 'and the credit is real underneath it'
+  assert.equal p.discount_applied,   200
+
+
+test "an override pins the current month even after the due date", ->
+  p = currentMonth [work('2026-06', 0), override('2026-06', 'amount_due', 725)], AFTER_DUE
+
+  assert.equal p.display_amount_due, 725, 'a pinned month shows the pin, not the mask'
+  assert.equal p.amount_due_override, true
+
+
+test "a future month shows the real figure, never the mask", ->
+  p = computeAllPeriods([work('2026-06', 0), work('2026-08', 0)], AFTER_DUE)['2026-08']
+
+  assert.equal p.display_amount_due, 1600
+
+
+test "the current month after the due date is owed, and enters the outstanding total", ->
+  # computeOutstanding drops NOT DUE months. Before the 15th the current month
+  # is excluded; after it, it has to appear or the tenant cannot pay it.
+  events = [work('2026-06', 0)]
+
+  assert.deepEqual owedFrom(events, DAY_BEFORE).months, [], 'not yet'
+
+  { months, total } = owedFrom events, AFTER_DUE
+  assert.equal months.length, 1
+  assert.equal months[0].month, 6
+  assert.equal total, 950, 'and it is the displayed figure that is billed, not $1,600'
+
+
+# --- the temporary rent override ---------------------------------------------
+#
+# apply_override + temporary_rent_amount replace the agreed payment. Nothing
+# tested that it changes a number — only that the config value round-trips.
+
+test "a temporary rent amount replaces the agreed payment once applied", ->
+  events = [
+    work('2026-06', 0)
+    configChange 'temporary_rent_amount', 700
+    configChange 'apply_override',        true
+  ]
+  p = currentMonth events, AFTER_DUE
+
+  assert.equal p.agreed_payment,     700
+  assert.equal p.display_amount_due, 700, 'this is what the tenant is asked for'
+  assert.equal owedFrom(events, AFTER_DUE).total, 700
+
+
+test "a temporary amount that is not applied changes nothing", ->
+  events = [work('2026-06', 0), configChange 'temporary_rent_amount', 700]
+  p = currentMonth events, AFTER_DUE
+
+  assert.equal p.agreed_payment,     950
+  assert.equal p.display_amount_due, 950
+
+
+test "apply_override with no amount falls back to the configured payment", ->
+  events = [work('2026-06', 0), configChange 'apply_override', true]
+
+  assert.equal currentMonth(events, AFTER_DUE).display_amount_due, 950
+
+
+test "clearing the amount reverts the month, even with the override still on", ->
+  # Bug 20: an explicit null is a clear. The fold has to honour it.
+  events = [
+    work('2026-06', 0)
+    configChange 'temporary_rent_amount', 700,  '2025-01-01T00:00:00Z'
+    configChange 'apply_override',        true, '2025-01-02T00:00:00Z'
+    configChange 'temporary_rent_amount', null, '2025-01-03T00:00:00Z'
+  ]
+
+  assert.equal currentMonth(events, AFTER_DUE).display_amount_due, 950
+
+
+test "a temporary amount does not reach into past months", ->
+  events = [
+    work('2026-05', 0), work('2026-06', 0)
+    configChange 'temporary_rent_amount', 700
+    configChange 'apply_override',        true
+  ]
+  periods = computeAllPeriods events, AFTER_DUE
+
+  assert.equal periods['2026-05'].display_amount_due, 1600,
+    'past months show what was actually owed; the mask is current-month only'
+  assert.equal periods['2026-06'].display_amount_due, 700
