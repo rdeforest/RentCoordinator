@@ -75,25 +75,28 @@ EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
 # field that is an address and wrong for free text — a stack trace reduced to
 # one token is unreadable, which is a different way of losing the log.
 # Every match is a synchronous SQLite insert and two permanent cache entries,
-# and this runs on the unauthenticated login path, where the input is
-# whatever was posted. One request carrying a 50 kB field of addresses wrote
-# three thousand rows, blocked the event loop long enough for other
-# connections to see "database is locked", and produced a 73 kB log line.
-# Free text gets a length cap and a match cap; a real address is far inside
-# both, and the caps are visible in the output rather than silent.
-MAX_TOKENIZE_LENGTH = 4096
+# and this runs on the unauthenticated login path, where the input is whatever
+# was posted. One request carrying a field of three thousand addresses wrote
+# three thousand rows and blocked the event loop long enough for other
+# connections to see "database is locked".
+#
+# The bound is a match budget, and the caller owns it — one budget per log
+# record, not per string, or a thousand short strings cost a thousand times
+# the cap. Text is never truncated to enforce it: truncating cut addresses in
+# half (filing a fabricated one in the PII store) and shortened long stack
+# traces that contained no address at all, which is the failure this module
+# exists to avoid.
 MAX_TOKENIZE_MATCHES = 20
+REDACTED = '[redacted: address budget exhausted]'
 
-tokenizeEmbedded = (text) ->
+newBudget = (remaining = MAX_TOKENIZE_MATCHES) -> { remaining }
+
+tokenizeEmbedded = (text, budget = newBudget()) ->
   return text unless typeof text is 'string' and text.includes '@'
 
-  if text.length > MAX_TOKENIZE_LENGTH
-    text = text[0...MAX_TOKENIZE_LENGTH] + "…[truncated from #{text.length} chars]"
-
-  matches = 0
   text.replace EMAIL_PATTERN, (match) ->
-    matches += 1
-    return '[redacted: too many addresses]' if matches > MAX_TOKENIZE_MATCHES
+    return REDACTED if budget.remaining <= 0
+    budget.remaining -= 1
     tokenize match
 
 
@@ -146,5 +149,5 @@ detokenizeObject = (obj) ->
       result[key] = value
   result
 
-module.exports = { tokenize, tokenizeEmbedded, detokenize, detokenizeEmbedded, detokenizeObject,
-                   MAX_TOKENIZE_LENGTH, MAX_TOKENIZE_MATCHES }
+module.exports = { tokenize, tokenizeEmbedded, newBudget, detokenize, detokenizeEmbedded,
+                   detokenizeObject, MAX_TOKENIZE_MATCHES }

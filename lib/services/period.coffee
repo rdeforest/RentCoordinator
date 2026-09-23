@@ -49,11 +49,13 @@ deletedEventIds = (events) ->
   new Set (id for [id, isDeleted] from state when isDeleted)
 
 
-# Given the raw event log, return events with edits applied and deletes
-# removed. Pure — does not touch the input array. `edited` events fold their
-# new_payload onto the original (last write wins). A target left deleted by
-# `deletedEventIds` drops out of the result.
-resolveEditsAndDeletes = (events) ->
+# Every non-meta event with its edits folded in, deleted or not. `edited`
+# events merge their new_payload onto the original, last write wins.
+#
+# Kept separate from the delete filter because the events list needs the
+# edited payload for deleted rows too — folding and filtering together meant a
+# deleted event displayed its pre-edit amount.
+applyEdits = (events) ->
   byId = new Map()
   for e in events when e.action not in META_ACTIONS
     byId.set e.id, e
@@ -63,10 +65,14 @@ resolveEditsAndDeletes = (events) ->
     payload = Object.assign {}, orig.payload, e.payload.new_payload
     byId.set e.target_event_id, Object.assign {}, orig, { payload }
 
-  for id from deletedEventIds events
-    byId.delete id
-
   Array.from byId.values()
+
+
+# Given the raw event log, return events with edits applied and deletes
+# removed. Pure — does not touch the input array.
+resolveEditsAndDeletes = (events) ->
+  deleted = deletedEventIds events
+  (e for e in applyEdits events when not deleted.has e.id)
 
 
 # Fold every config-changed event with occurred_at <= asOf into a config
@@ -264,6 +270,7 @@ module.exports = {
   monthKey
   parseMonthKey
   deletedEventIds
+  applyEdits
   resolveEditsAndDeletes
   resolveConfig
   computeMonth

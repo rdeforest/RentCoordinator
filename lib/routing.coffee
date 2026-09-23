@@ -131,7 +131,7 @@ setup = (app, getServer) ->
   app.get '/work',     (req, res) -> res.sendFile 'work.html',    root: config.STATIC_DIR
   app.get '/payment',  (req, res) -> res.sendFile 'payment.html', root: config.STATIC_DIR
   app.get '/payments', (req, res) -> res.sendFile 'payments.html', root: config.STATIC_DIR
-  app.get '/admin',    middleware.requireAdmin, (req, res) -> res.sendFile 'admin.html', root: config.STATIC_DIR
+  app.get '/admin',    middleware.requireAdminPage, (req, res) -> res.sendFile 'admin.html', root: config.STATIC_DIR
 
 
   app.post '/timer/start', (req, res) ->

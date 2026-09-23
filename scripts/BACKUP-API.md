@@ -1,4 +1,17 @@
-# Backup API Reference
+# Backup API
+
+> **Access (2026-09-23):** every `/api/backup*` endpoint now requires the
+> landlord, not merely an authenticated session. `POST /api/backup/restore`
+> overwrites the live database with the last S3 backup, discarding everything
+> written since — the tenant could previously do that.
+>
+> **Restoring from a shell script** (`scripts/backup-restore.sh`) requires the
+> service to be stopped first, and the script refuses to run while its pidfile
+> shows it alive. The HTTP route can restore in place because it reopens the
+> server's database connection; a separate process cannot reach that handle,
+> and the running server would keep serving the pre-restore database while
+> failing every write.
+
 
 The RentCoordinator application includes a complete backup API for managing database backups locally and in S3.
 

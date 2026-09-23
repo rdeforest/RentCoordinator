@@ -2,7 +2,11 @@ PORT     = process.env.PORT     or 3000
 NODE_ENV = process.env.NODE_ENV or 'development'
 DB_PATH  = process.env.DB_PATH  or './tenant-coordinator.db'
 
-STATIC_DIR = './static'
+# Resolved against the application root, not the working directory. This file
+# sits at lib/config.coffee in both the source tree and the compiled artifact,
+# so the same expression finds static/ in either — and the service is started
+# from $PREFIX, one directory above dist/, where './static' does not exist.
+STATIC_DIR = process.env.STATIC_DIR or require('node:path').join __dirname, '..', 'static'
 
 TIMER_POLL_INTERVAL   = 1000
 SESSION_TIMEOUT       = 8 * 60 * 60 * 1000

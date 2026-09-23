@@ -36,7 +36,15 @@ finishSession = (worker, session, { completed, at }) ->
   current = workSessionModel.getSession session.id
 
   unless current?.status in CLOSEABLE
-    throw new Error "Session #{session.id} is already #{current?.status ? 'gone'}"
+    # Already closed — most often by the timeout sweep that a /timer/status
+    # poll triggered a moment earlier. Stopping something that is stopped is
+    # what the caller asked for, so report the outcome rather than a 400
+    # carrying an internal session id.
+    return
+      session:  current ? session
+      duration: (if current then workSessionModel.calculateSessionDuration current.id else 0)
+      event:    if current?.status is 'cancelled' then 'cancelled' else 'completed'
+      already:  true
 
   session = current
 

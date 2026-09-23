@@ -1,17 +1,32 @@
 express         = require 'express'
 cors            = require 'cors'
 { execSync }    = require 'child_process'
+fs              = require 'node:fs'
 config          = require './lib/config.coffee'
 middleware      = require './lib/middleware.coffee'
 routing         = require './lib/routing.coffee'
 db              = require './lib/db/schema.coffee'
 
 
-startServer = ->
-  # Compile client-side CoffeeScript on startup
+CLIENT_SOURCE = 'static/coffee'
+
+
+# Running from source, the client JavaScript is compiled at startup so an edit
+# needs no separate step. The compiled artifact has no CoffeeScript to compile
+# — the build did it — and this used to run unconditionally against a path
+# that is not there, so the artifact exited before it ever listened.
+compileClient = ->
+  unless fs.existsSync CLIENT_SOURCE
+    console.log 'No client CoffeeScript source; serving the compiled output in static/js'
+    return
+
   console.log 'Compiling client-side CoffeeScript...'
-  execSync 'npx coffee -b -c -M -o static/js static/coffee', stdio: 'inherit'
+  execSync "npx coffee -b -c -M -o static/js #{CLIENT_SOURCE}", stdio: 'inherit'
   console.log '✓ Client-side compilation complete\n'
+
+
+startServer = ->
+  compileClient()
 
   await db.initialize()
 

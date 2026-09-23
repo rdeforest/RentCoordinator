@@ -1,9 +1,42 @@
 { DatabaseSync } = require 'node:sqlite'
 config           = require '../config.coffee'
 
-db = new DatabaseSync config.DB_PATH
 
-db.exec 'PRAGMA foreign_keys = ON'
+openConnection = ->
+  handle = new DatabaseSync config.DB_PATH
+  handle.exec 'PRAGMA foreign_keys = ON'
+  handle
+
+
+connection = openConnection()
+
+
+# Callers hold this object, not the connection underneath it.
+#
+# A restore renames a new file over the database path, and an open handle
+# follows the inode rather than the name: after a restore the process would
+# keep answering reads from the pre-restore database and fail every write with
+# SQLITE_READONLY, while /health — which queries this same handle — went on
+# reporting healthy. The indirection lets reopen() swap the connection without
+# every module re-requiring it. Nothing caches a prepared statement across
+# calls, so there is nothing to invalidate.
+db =
+  prepare: (args...) -> connection.prepare args...
+  exec:    (args...) -> connection.exec    args...
+  close:   (args...) -> connection.close   args...
+
+
+reopen = ->
+  try
+    connection.close()
+  catch err
+    # Expected when a restore has already renamed another file over the path:
+    # this handle's file is gone. Closing it is best-effort — what matters is
+    # that the next statement runs against the file that is there now.
+    console.warn "Closing the previous database handle failed: #{err.message}"
+
+  connection = openConnection()
+  db
 
 SCHEMA = """
   CREATE TABLE IF NOT EXISTS projects (
@@ -219,6 +252,8 @@ initialize = ->
   # until someone remembered to migrate by hand — and the documented in-place
   # upgrade (git pull, restart) has no such step. Failing to migrate has to
   # stop the boot; old schema plus new code is the outage.
+  # db.exec SCHEMA above has already created the file, so the runner's
+  # "no database" guard cannot fire here.
   { runMigrations } = require '../../scripts/run-migrations.coffee'
   runMigrations()
 
@@ -236,4 +271,4 @@ initialize = ->
   await recurringEventsService.initializeRecurringEvents()
 
 
-module.exports = { db, initialize }
+module.exports = { db, reopen, initialize }

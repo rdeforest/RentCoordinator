@@ -288,7 +288,7 @@ setup = (app) ->
       total_amount_due:    money.dollars rows.reduce ((s, p) -> s + p.display_amount_due), 0
       total_amount_paid:   money.dollars rows.reduce ((s, p) -> s + p.amount_paid),        0
       total_discount:      money.dollars rows.reduce ((s, p) -> s + p.discount_applied),   0
-      outstanding_balance: money.dollars rows.reduce ((s, p) -> s + Math.max 0, money.minus p.display_amount_due, p.amount_paid), 0
+      outstanding_balance: periodViewer.computeOutstanding().total
       periods:             rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
 
   app.post '/rent/recalculate-all', asyncRoute 'rent.recalculateAll', (req, res) ->
@@ -310,12 +310,16 @@ setup = (app) ->
     all        = eventsModel.listAllEvents()
     deletedIds = period.deletedEventIds all
 
-    # Fold edits in, the way the period math does. Listing the raw events
-    # meant an edited amount or note never showed here, so the table and the
-    # ledger disagreed about the same event. resolveEditsAndDeletes drops
-    # deleted events, so they are re-attached when showDeleted is on.
-    resolved = new Map ([e.id, e] for e in period.resolveEditsAndDeletes all)
-    visible  = (resolved.get(e.id) ? e for e in all when e.action not in period.META_ACTIONS)
+    # Fold edits in, the way the period math does. Listing the raw events meant
+    # an edited amount or note never showed here, so the table and the ledger
+    # disagreed about the same event.
+    #
+    # Edits are applied without dropping deletes: resolveEditsAndDeletes
+    # removes deleted rows from its map, so using it here showed the raw,
+    # pre-edit payload for exactly the rows includeDeleted exists to inspect —
+    # the same event displaying two different amounts depending on the toggle.
+    edited = new Map ([e.id, e] for e in period.applyEdits all)
+    visible = (edited.get(e.id) ? e for e in all when e.action not in period.META_ACTIONS)
 
     filtered = visible.filter (e) ->
       return false if deletedIds.has(e.id) and not showDeleted
@@ -373,9 +377,19 @@ setup = (app) ->
     # `amount`, an adjustment a `delta`, an override a `new_value`. Writing
     # `amount` unconditionally meant an edit merged a key nothing reads, and
     # the event kept its original figure while the UI reported success.
+    #
+    # An action with no amount at all — work-reported, config-changed,
+    # period-suppressed — is a 400 rather than a key named "undefined" merged
+    # permanently onto the event.
+    amountField = AMOUNT_FIELD[existing.action]
+
+    if req.body.amount? and not amountField
+      return res.status(400).json
+        error: "#{existing.action} events have no editable amount"
+
     new_payload = {}
-    new_payload[AMOUNT_FIELD[existing.action]] = parseFloat req.body.amount if req.body.amount?
-    new_payload.note = req.body.description if req.body.description?
+    new_payload[amountField] = parseFloat req.body.amount if req.body.amount?
+    new_payload.note         = req.body.description if req.body.description?
 
     unless Object.keys(new_payload).length > 0
       return res.status(400).json error: 'Nothing to change'
@@ -439,7 +453,7 @@ setup = (app) ->
   app.get '/rent/audit-logs', asyncRoute 'rent.getAuditLogs', (req, res) ->
     # The events table IS the audit log. Surface edits and deletes.
     all = eventsModel.listAllEvents()
-    audits = all.filter (e) -> e.action in ['edited', 'deleted', 'undeleted', 'override', 'adjustment']
+    audits = all.filter (e) -> e.action in [period.META_ACTIONS..., 'override', 'adjustment']
 
     res.json audits.map (e) ->
       action:      e.action

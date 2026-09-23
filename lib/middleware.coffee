@@ -91,16 +91,28 @@ requireAuth = (req, res, next) ->
 # requireAuth only proves the caller is one of the two whitelisted users.
 # Admin routes hand back detokenized PII and raw logs, so they need to know
 # which one.
-requireAdmin = (req, res, next) ->
-  if req.session?.authenticated and config.isAdminEmail req.session.email
-    return next()
+isAdmin = (req) ->
+  req.session?.authenticated and config.isAdminEmail req.session.email
 
-  # A browser asking for a page gets sent somewhere it can use; an API caller
-  # gets the status and the reason. requireAuth draws the same distinction.
-  if req.accepts('html') and not req.xhr
-    res.redirect 302, '/'
-  else
-    res.status(403).json error: 'Admin only'
+
+# The API gate: always a status and a reason. Sniffing Accept to decide
+# between JSON and a redirect does not work — `Accept: */*` is what fetch,
+# curl and most HTTP clients send, and req.accepts('html') answers 'html' for
+# it, so every API caller would be redirected into a 200 HTML page and its
+# response.json() would throw on the doctype.
+requireAdmin = (req, res, next) ->
+  return next() if isAdmin req
+
+  res.status(403).json error: 'Admin only'
+
+
+# The page gate, for the one route that serves HTML to a browser. A person who
+# is not the admin gets sent somewhere they can use rather than a JSON body
+# rendered as a document.
+requireAdminPage = (req, res, next) ->
+  return next() if isAdmin req
+
+  res.redirect 302, '/'
 
 
 asyncRoute = (name, handler) -> (req, res) ->
@@ -121,4 +133,4 @@ asyncRoute = (name, handler) -> (req, res) ->
     res.status(statusCode).json error: err.message
 
 
-module.exports = { setup, setupErrorHandler, requireAuth, requireAdmin, asyncRoute }
+module.exports = { setup, setupErrorHandler, requireAuth, requireAdmin, requireAdminPage, asyncRoute }

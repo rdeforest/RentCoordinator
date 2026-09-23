@@ -12,7 +12,23 @@ hydrate = (row) ->
   Object.assign {}, row, payload: JSON.parse row.payload
 
 
+# Amounts that are not numbers poison every downstream sum, and the event log
+# is append-only — a bad row cannot be taken back. Reject at the boundary
+# rather than discovering it as a month that quietly reports nothing owed.
+AMOUNT_KEYS = ['amount', 'delta', 'new_value', 'hours']
+
+validateAmounts = (event) ->
+  for key in AMOUNT_KEYS when event.payload?[key]?
+    value = event.payload[key]
+    unless typeof value is 'number' and Number.isFinite value
+      throw new Error "#{event.action} payload.#{key} must be a finite number, got #{JSON.stringify value}"
+
+  return
+
+
 recordEvent = (event) ->
+  validateAmounts event
+
   params = formatSQLParameters
     id:              event.id              ? uuidv7()
     occurred_at:     event.occurred_at     ? new Date().toISOString()

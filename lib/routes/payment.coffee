@@ -1,8 +1,8 @@
 paymentService = require '../services/payment.coffee'
 periodViewer   = require '../services/period_viewer.coffee'
+money          = require '../money.coffee'
 config         = require '../config.coffee'
 logger         = require '../logger.coffee'
-money          = require '../money.coffee'
 
 
 setup = (app) ->
@@ -27,7 +27,7 @@ setup = (app) ->
         if expected <= 0 and period.amount_paid < period.effective_agreed_payment
           expected = period.effective_agreed_payment - period.amount_paid
 
-        if Math.abs(amount - expected) > 0.01
+        unless money.same amount, expected
           return res.status(400).json
             error:     'Amount mismatch'
             expected:  expected
@@ -44,7 +44,7 @@ setup = (app) ->
         if expected <= 0
           return res.status(400).json error: 'Nothing outstanding to pay'
 
-        if Math.abs(amount - expected) > 0.01
+        unless money.same amount, expected
           return res.status(400).json
             error:     'Amount mismatch'
             expected:  expected

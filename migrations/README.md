@@ -11,7 +11,13 @@ Migrations run in filename order. Each is a `.coffee` file that opens the databa
 schema or data changes.
 
 Three things run them, all through the same runner (`scripts/run-migrations.coffee`), which records
-what it has applied in a `schema_migrations` table so a re-run is a no-op:
+what it has applied in a `schema_migrations` table so a re-run is a no-op. The recorded key is the
+filename without its extension, so a database migrated from source is not migrated again from the
+compiled artifact (where the same migrations are `.js`); rows written under an older convention,
+with the extension, still count as applied.
+
+A database path that does not exist is an error, not an empty result — reporting success against a
+database that is not there is how the documented upgrade came to do nothing at all (bug 47):
 
 - **Application startup** — `lib/db/schema.coffee::initialize` applies anything pending before the
   server serves a request. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so without

@@ -1,24 +1,25 @@
 # Backup API Routes
 
 backupService = require '../services/backup.coffee'
+middleware    = require '../middleware.coffee'
 
 
 setup = (app) ->
   # POST /api/backup
   # Create a database backup (local + S3)
-  app.post '/api/backup', createBackupRoute
+  app.post '/api/backup', middleware.requireAdmin, createBackupRoute
 
   # GET /api/backup/list
   # List available backups in S3
-  app.get '/api/backup/list', listBackupsRoute
+  app.get '/api/backup/list', middleware.requireAdmin, listBackupsRoute
 
   # POST /api/backup/restore
   # Restore database from latest S3 backup
-  app.post '/api/backup/restore', restoreFromS3Route
+  app.post '/api/backup/restore', middleware.requireAdmin, restoreFromS3Route
 
   # GET /api/backup/status
   # Get backup system status
-  app.get '/api/backup/status', backupStatusRoute
+  app.get '/api/backup/status', middleware.requireAdmin, backupStatusRoute
 
 
 # POST /api/backup
@@ -71,20 +72,6 @@ listBackupsRoute = (req, res) ->
       error:   error.message
 
 
-# The restore renamed a new file over the database path, but this process
-# still holds a connection to the old inode — it would serve stale reads and
-# fail every write. Exiting hands the supervisor a clean restart against the
-# file that is now there. Deliberately after the response is flushed, so the
-# caller learns the restore succeeded.
-restartAfterRestore = (res) ->
-  console.log 'Restore complete — exiting so the service restarts on the restored database'
-
-  finish = ->
-    process.exit 0
-
-  if res.writableEnded then setTimeout finish, 250 else res.on 'finish', -> setTimeout finish, 250
-
-
 # POST /api/backup/restore
 # Restore database from latest S3 backup
 restoreFromS3Route = (req, res) ->
@@ -98,12 +85,9 @@ restoreFromS3Route = (req, res) ->
 
     if result
       res.json
-        success:         true
-        restored:        true
-        backup:          result.backup
-        requiresRestart: result.requiresRestart is true
-
-      restartAfterRestore res if result.requiresRestart
+        success:  true
+        restored: true
+        backup:   result.backup
     else
       res.json
         success:  true

@@ -20,6 +20,22 @@ if [ -f ~/.nvm/nvm.sh ]; then
   nvm use
 fi
 
+# The server holds one long-lived SQLite connection. A restore swaps the file
+# underneath it, and an open handle follows the inode, not the name — so a
+# restore run while the service is up leaves it answering from the old
+# database and failing every write, with /health still reporting healthy.
+# Nothing in this process can reopen that connection.
+PIDFILE="${PIDFILE:-/var/run/rent-coordinator.pid}"
+
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  echo "ERROR: rent-coordinator is running (pid $(cat "$PIDFILE"))." >&2
+  echo "Stop it first, restore, then start it again:" >&2
+  echo "  sudo /etc/init.d/rent-coordinator stop" >&2
+  echo "  $0" >&2
+  echo "  sudo /etc/init.d/rent-coordinator start" >&2
+  exit 1
+fi
+
 echo "Restoring from latest S3 backup..."
 npx coffee -e "
   backup = require('./lib/services/backup.coffee')

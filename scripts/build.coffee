@@ -92,11 +92,12 @@ build = ->
       JSON.stringify(Object.assign({}, pkg,
         type:    'commonjs'
         main:    'main.js'
-        # The source scripts run .coffee files that dist/ does not contain.
-        # A manifest that describes the artifact has to describe this too.
-        scripts:
-          start:     'node main.js'
-          'migrate': 'node scripts/run-migrations.js'
+        # The source scripts run .coffee files that dist/ does not contain, so
+        # the two that matter are rewritten — the rest are kept rather than
+        # dropped, which replacing the whole block would have done.
+        scripts: Object.assign {}, pkg.scripts,
+          start:   'node main.js'
+          migrate: 'node scripts/run-migrations.js'
       ), null, 2) + '\n'
 
     # The shell entry points are not compiled, so they have to be copied.

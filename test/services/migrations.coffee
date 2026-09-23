@@ -131,6 +131,40 @@ describe 'Migration runner', ->
       assert.ok db.prepare("SELECT sql FROM sqlite_master WHERE name = 'work_logs'").get().sql.includes 'ON DELETE'
 
 
+  it 'treats a migration recorded under its old filename as applied', ->
+    # An earlier version of this runner wrote `name` with the extension. The
+    # move to stems compared against the bare stem, so every one of those rows
+    # matched nothing and every migration became pending again — re-running,
+    # among others, the one that deletes every stored verification code.
+    dbPath = path.join tmpDir, 'legacy-names.db'
+    bootDatabase dbPath
+
+    withDb dbPath, (db) ->
+      db.exec 'DELETE FROM schema_migrations'
+      insert = db.prepare 'INSERT INTO schema_migrations (name) VALUES (?)'
+      insert.run name for name in fs.readdirSync(path.join ROOT, 'migrations') when name.endsWith '.coffee'
+
+    result = runMigrations dbPath
+
+    assert.match result.output, /already up to date/,
+      "rows written under the old convention must count as applied:\n#{result.output}"
+
+    names = withDb dbPath, (db) ->
+      (row.name for row in db.prepare('SELECT name FROM schema_migrations').all())
+
+    assert.equal names.length, MIGRATION_COUNT,
+      "the table must not end up holding both spellings (got #{names.length})"
+
+
+  it 'refuses a database path that does not exist', ->
+    # Reporting success against a database that is not there is how the
+    # documented upgrade came to do nothing at all.
+    result = runMigrations path.join tmpDir, 'no-such.db'
+
+    assert.equal result.ok, false, 'a missing database must be an error, not an empty result'
+    assert.match result.output, /No database at/
+
+
   it 'records a migration once, whether it ran from source or from the build', ->
     # dist/ ships the same migrations compiled to .js. Recording the filename
     # rather than the stem would have re-run all ten the first time the

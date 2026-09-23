@@ -12,13 +12,26 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [ -f .env ]; then
-  set -a
-  . ./.env
-  set +a
-fi
+# The installed tree keeps its environment in .env (CloudFormation) or
+# config.sh (the systemd unit's EnvironmentFile); a copy of this script also
+# ships inside dist/, one directory below both of them.
+for env_file in .env ../.env config.sh ../config.sh; do
+  if [ -f "$env_file" ]; then
+    set -a
+    . "$env_file"
+    set +a
+    break
+  fi
+done
 
 export DB_PATH="${DB_PATH:-./tenant-coordinator.db}"
+
+if [ ! -f "$DB_PATH" ]; then
+  echo "ERROR: no database at ${DB_PATH}." >&2
+  echo "Set DB_PATH to the database you mean to migrate — reporting success" >&2
+  echo "against a database that isn't there is how migrations got skipped." >&2
+  exit 1
+fi
 
 echo "Applying migrations against ${DB_PATH}"
 

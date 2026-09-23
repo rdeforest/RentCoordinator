@@ -37,21 +37,34 @@ pendingMigrations = (db) ->
   # report "already up to date" against a completely unmigrated database.
   # Recorded under the stem so a database migrated from source is not migrated
   # again from the artifact, or the other way round.
+  #
+  # An earlier version of this runner recorded the full filename. A row is
+  # therefore "applied" under any of the three spellings — without that, the
+  # move to stems would have re-run every migration on every database the
+  # previous version had already migrated, and one of them deletes every
+  # stored verification code.
+  isApplied = (stem) ->
+    applied.has(stem) or applied.has("#{stem}.coffee") or applied.has("#{stem}.js")
+
   stems = new Map()
   for name in fs.readdirSync(MIGRATIONS_DIR).sort()
     [_, stem, ext] = name.match(/^(.*)\.(coffee|js)$/) ? []
     continue unless stem
     stems.set stem, name unless stems.has(stem) and ext is 'js'
 
-  [stem, name] for [stem, name] from stems when not applied.has stem
+  [stem, name] for [stem, name] from stems when not isApplied stem
 
 
 # Each migration is a standalone script that opens its own connection, so this
 # connection is closed around the run and the result recorded afterwards.
 runMigrations = ->
   unless fs.existsSync DB_PATH
-    console.log "No database at #{DB_PATH} yet; nothing to migrate."
-    return []
+    # The application's own boot creates the schema before calling this, so a
+    # missing file here means the caller is pointed somewhere wrong — which is
+    # exactly the silent no-op this runner exists to stop. Say so; the CLI
+    # turns it into a non-zero exit.
+    throw new Error "No database at #{DB_PATH}. Set DB_PATH to the database you
+                     mean to migrate."
 
   db      = new DatabaseSync DB_PATH
   pending = try pendingMigrations db finally db.close()

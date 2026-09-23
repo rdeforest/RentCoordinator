@@ -3,16 +3,29 @@
 
 tokenService = null  # Lazy load to avoid circular dependency
 
+# A single log record must not be able to grow without bound: asyncRoute logs
+# req.body, which body-parser will happily fill with 100 kB.
+MAX_LOGGED_STRING = 4096
+
+
 # The one place a string is checked for PII. Everything that reaches the log —
 # metadata values, error messages, stack frames — goes through here, so a
 # tokenizer improvement lands everywhere at once. Only the address is
 # replaced; the text around it survives, or the log stops being a log.
-tokenizeString = (value) ->
-  return value unless typeof value is 'string' and value.includes '@'
+#
+# The budget is per log record. Passing it in is what keeps a thousand short
+# strings from each costing the full per-string cap.
+tokenizeString = (value, budget) ->
+  return value unless typeof value is 'string'
+
+  if value.length > MAX_LOGGED_STRING
+    value = value[0...MAX_LOGGED_STRING] + "…[#{value.length - MAX_LOGGED_STRING} more chars]"
+
+  return value unless value.includes '@'
 
   try
     tokenService ?= require './services/tokenization.coffee'
-    tokenService.tokenizeEmbedded value
+    tokenService.tokenizeEmbedded value, budget
   catch err
     # Tokenizing writes to SQLite, so logging a database failure can fail
     # here too. Losing the log entirely is the worse outcome; redact visibly
@@ -20,22 +33,25 @@ tokenizeString = (value) ->
     # error handler.
     value.replace /\S+@\S+/g, "[redacted: tokenizer failed: #{err.message}]"
 
-# Recursively tokenize emails in metadata objects
-tokenizeMetadata = (obj) ->
+# Recursively tokenize emails in metadata objects, spending one shared budget.
+tokenizeMetadata = (obj, budget) ->
   return obj unless typeof obj is 'object' and obj?
 
   if Array.isArray obj
-    return obj.map tokenizeMetadata
+    return obj.map (v) -> tokenizeMetadata v, budget
 
   result = {}
   for key, value of obj
-    if typeof value is 'string'
-      result[key] = tokenizeString value
-    else if typeof value is 'object'
-      result[key] = tokenizeMetadata value
-    else
-      result[key] = value
+    result[key] =
+      if      typeof value is 'string' then tokenizeString   value, budget
+      else if typeof value is 'object' then tokenizeMetadata value, budget
+      else                                  value
   result
+
+
+newBudget = ->
+  tokenService ?= require './services/tokenization.coffee'
+  tokenService.newBudget()
 
 # Log an error with structured format
 error = (operation, errorObj, metadata = {}, requestId = null) ->
@@ -44,23 +60,27 @@ error = (operation, errorObj, metadata = {}, requestId = null) ->
     level:     'error'
     operation: operation
 
+  budget = newBudget()
+
   log.requestId = requestId if requestId
-  log.error     = tokenizeString (if errorObj.message then errorObj.message else String(errorObj))
-  log.metadata  = tokenizeMetadata metadata
-  log.stack     = tokenizeString errorObj.stack if errorObj.stack
+  log.error     = tokenizeString (if errorObj.message then errorObj.message else String(errorObj)), budget
+  log.metadata  = tokenizeMetadata metadata, budget
+  log.stack     = tokenizeString errorObj.stack, budget if errorObj.stack
 
   console.error JSON.stringify log
 
 # Log a warning (use sparingly - only for actual warnings)
 warn = (operation, message, metadata = {}, requestId = null) ->
+  budget = newBudget()
+
   log =
     timestamp: new Date().toISOString()
     level:     'warn'
     operation: operation
-    message:   tokenizeString message
+    message:   tokenizeString message, budget
 
   log.requestId = requestId if requestId
-  log.metadata  = tokenizeMetadata metadata
+  log.metadata  = tokenizeMetadata metadata, budget
 
   console.error JSON.stringify log
 
@@ -74,7 +94,7 @@ clientError = (info = {}, requestId = null) ->
     source:    'client'
 
   log.requestId = requestId if requestId
-  log.metadata  = tokenizeMetadata info
+  log.metadata  = tokenizeMetadata info, newBudget()
 
   console.error JSON.stringify log
 

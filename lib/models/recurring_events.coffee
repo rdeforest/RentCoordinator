@@ -1,4 +1,5 @@
 { v1 } = require 'uuid'
+logger = require '../logger.coffee'
 { db } = require '../db/schema.coffee'
 config = require '../config.coffee'
 
@@ -179,18 +180,19 @@ getEnabledRecurringEvents = ->
   return events
 
 
-# A row whose events_created is unparseable is a real problem; returning []
-# for it would replace the hardcoded 'success' this migration removed with a
-# quieter lie in the adjacent field.
+# null, not [] — the same shape `status` uses for "this row predates the
+# column". An empty list would say "this run created nothing", which is a
+# claim, and inventing claims about what happened is the defect the outcome
+# columns were added to fix.
 parseEventsCreated = (log) ->
-  return [] unless log.events_created
+  return null unless log.events_created
 
   try
     JSON.parse log.events_created
   catch err
-    console.error "recurring_event_logs #{log.id}: events_created is not JSON
-                   (#{err.message}); stored value: #{log.events_created}"
-    []
+    logger.error 'recurringEvents.parseEventsCreated', err,
+      { logId: log.id, stored: log.events_created }
+    null
 
 
 # Rows written before the outcome columns existed report status null — an

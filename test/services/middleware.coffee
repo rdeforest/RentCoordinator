@@ -109,15 +109,28 @@ describe 'Admin gate (bug 33)', ->
   # would make the gate sound by coincidence rather than by construction.
   authed = (email) -> { email, authenticated: true }
 
-  run = (session, accepts = false) ->
-    new Promise (resolve) ->
-      req = session: session, xhr: not accepts, accepts: -> accepts
-      res =
-        status: (code) ->
-          statusCode: code
-          json: (body) -> resolve { status: code, body }
-        redirect: (code, location) -> resolve { status: code, location }
-      middleware.requireAdmin req, res, -> resolve status: 200
+  # A real request object, through a real Express app, because the previous
+  # version of this test hand-stubbed `accepts` and `xhr` — and hard-coded the
+  # one combination Express never produces, so it passed against a gate that
+  # redirected every API caller into an HTML page.
+  serve = (gate, session) ->
+    app = express()
+    app.set 'env', 'test'
+    app.use (req, res, next) -> req.session = session; next()
+    app.get '/gated', middleware[gate], (req, res) -> res.json ok: true
+    app.get '/',      (req, res) -> res.send '<html>home</html>'
+    app
+
+  call = (gate, session, headers = {}) ->
+    { server, port } = await listen serve gate, session
+    try
+      response = await fetch "http://localhost:#{port}/gated", { headers, redirect: 'manual' }
+      body = try await response.json() catch then null
+      { status: response.status, location: response.headers.get('location'), body }
+    finally
+      server.close()
+
+  run = (session) -> call 'requireAdmin', session
 
   it 'lets the landlord through', ->
     assert.equal (await run authed 'robert@defore.st').status, 200
@@ -136,8 +149,24 @@ describe 'Admin gate (bug 33)', ->
   it 'rejects a request with no session at all', ->
     assert.equal (await run undefined).status, 403
 
-  it 'sends a browser somewhere usable instead of a JSON body', ->
-    result = await run { email: 'lynz57@hotmail.com', authenticated: true }, true
+  it 'answers an ordinary fetch with 403 JSON, not a redirect', ->
+    # Accept: */* is what fetch and curl send by default, and Express reports
+    # that as accepting html. A gate that keyed off it redirected every API
+    # caller into a 200 HTML page, where response.json() throws on the doctype.
+    for accept in ['*/*', 'application/json', undefined]
+      headers = if accept then { Accept: accept } else {}
+      result  = await call 'requireAdmin', authed('lynz57@hotmail.com'), headers
+
+      assert.equal result.status, 403, "Accept: #{accept ? '(none)'} should get 403"
+      assert.match result.body.error, /admin/i
+
+  it 'sends a browser asking for the admin page somewhere usable', ->
+    result = await call 'requireAdminPage', authed('lynz57@hotmail.com'),
+      Accept: 'text/html,application/xhtml+xml'
+
     assert.equal result.status,   302
     assert.equal result.location, '/',
-      'the tenant used to get a raw {"error":"Admin only"} rendered as a page'
+      'a JSON body rendered as a document is not a useful answer to a person'
+
+  it 'still lets the landlord reach the page', ->
+    assert.equal (await call 'requireAdminPage', authed 'robert@defore.st').status, 200

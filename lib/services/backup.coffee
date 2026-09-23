@@ -8,6 +8,7 @@
 { readFile } = require 'node:fs/promises'
 { join, dirname, basename } = require 'node:path'
 config = require '../config.coffee'
+schema = require '../db/schema.coffee'
 
 BACKUP_VERSION = '2.0.0'  # SQLite-based backups
 
@@ -17,12 +18,16 @@ BACKUP_VERSION = '2.0.0'  # SQLite-based backups
 # file the app is reading.
 #
 # The rename is only half the story. schema.coffee holds one long-lived
-# connection opened at module load, and a rename swaps the directory entry
-# while that handle keeps the old inode: the process would go on answering
-# reads from the pre-restore database and fail every write with
-# SQLITE_READONLY, all while /health reported healthy. So a restore inside the
-# server process ends that process — the supervisor restarts it against the
-# file that is actually there now. Callers get requiresRestart to say so.
+# connection, and a rename swaps the directory entry while that handle keeps
+# the old inode: the process would go on answering reads from the pre-restore
+# database and fail every write with SQLITE_READONLY, all while /health
+# reported healthy. So the swap reopens that connection.
+#
+# Exiting the process instead would be worse than the bug: the SysVInit script
+# in the CloudFormation template starts the app with a bare start-stop-daemon
+# and has no respawn, so nothing would bring it back — the ASG would fail the
+# health check, replace the instance, and the replacement would restore its
+# database from the last S3 backup, losing everything written since.
 safetyCopyPath = (dbPath) ->
   stamp = new Date().toISOString().replace /[:.]/g, '-'
   "#{dbPath}.before-restore-#{stamp}"
@@ -37,6 +42,7 @@ swapInDatabase = (incoming, dbPath) ->
     copyFileSync dbPath, backupPath
 
   renameSync incoming, dbPath
+  schema.reopen()
   backupPath
 
 
@@ -229,7 +235,7 @@ restoreFromS3 = ->
   swapInDatabase tempPath, dbPath
 
   console.log "Database restored successfully from S3"
-  { restored: true, backup: latest, requiresRestart: true }
+  { restored: true, backup: latest }
 
 
 # Full backup workflow: local + S3
@@ -332,7 +338,7 @@ restoreFromFile = (filepath) ->
     throw err
 
   console.log "Database restored successfully"
-  { restored: true, source: filepath, requiresRestart: true }
+  { restored: true, source: filepath }
 
 
 module.exports = {
