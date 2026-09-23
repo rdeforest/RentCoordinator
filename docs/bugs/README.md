@@ -6,12 +6,13 @@ the proposed fix in `docs/fixes/`.
 
 ## Active
 
-Three remain, all deferred deliberately rather than missed.
+Three remain, all deferred deliberately rather than missed, plus bug 35 which
+is half done (see Resolved).
 
 | # | Title | Severity | Why it is still here |
 |---|---|---|---|
 | 23 | [`NODE_ENV=test` fully bypasses auth](23-test-env-auth-bypass.md) | Medium (security) | Removing the bypass means the integration suite has to establish real sessions — worth doing, but it touches every test file and the owner asked to understand the tradeoffs first. |
-| 27 | [Payment-history page reads legacy `rent_events`](27-payment-history-legacy-table.md) | Medium | Same decision. |
+| 27 | [Payment-history page reads legacy `rent_events`](27-payment-history-legacy-table.md) | Medium | The architectural review recommends deleting the page, as bug 26 was deleted. Awaiting that call — it removes a linked page from the UI. |
 | 29 | [Timer `project_id`/`task_id` silently dropped](29-timer-project-task-dropped.md) | Low | Add the columns or drop the parameters; deferred pending that call. |
 
 ### The remaining structural debt
