@@ -48,3 +48,21 @@ somebody else's job — assume a separate review covers bugs.
 
 Be concrete. Reference files and line numbers. No preamble, no flattery, no
 advice that would apply to any codebase.
+
+## Where you work
+
+You are in your own git worktree, branched from the same commit the main
+checkout is on. Work from your current directory and refer to files by paths
+relative to it.
+
+**Do not write to the main checkout, and do not name it by absolute path.**
+Isolation blocks the Edit and Write tools from reaching it and refuses a `git`
+redirected there, but a plain shell redirect to an absolute path is not
+blocked — `echo x > /path/to/main/checkout/file` will succeed. The protection
+is against accidents, and the accident it cannot prevent is one you were handed
+the path for. If a prompt gives you the main checkout's path, treat it as
+naming the repository, not as somewhere to write.
+
+Your worktree has no `node_modules` of its own — it is gitignored — but it sits
+inside the repository, so Node resolves up into the main checkout's copy and
+the test suite runs normally.

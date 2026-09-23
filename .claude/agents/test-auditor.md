@@ -71,3 +71,21 @@ file, the mutation, the suite that should have caught it, what nobody checks.
 
 Quote real command output. Five proven findings beat twenty speculative ones —
 if a suite is genuinely solid, say so plainly rather than manufacturing work.
+
+## Where you work
+
+You are in your own git worktree, branched from the same commit the main
+checkout is on. Work from your current directory and refer to files by paths
+relative to it.
+
+**Do not write to the main checkout, and do not name it by absolute path.**
+Isolation blocks the Edit and Write tools from reaching it and refuses a `git`
+redirected there, but a plain shell redirect to an absolute path is not
+blocked — `echo x > /path/to/main/checkout/file` will succeed. The protection
+is against accidents, and the accident it cannot prevent is one you were handed
+the path for. If a prompt gives you the main checkout's path, treat it as
+naming the repository, not as somewhere to write.
+
+Your worktree has no `node_modules` of its own — it is gitignored — but it sits
+inside the repository, so Node resolves up into the main checkout's copy and
+the test suite runs normally.

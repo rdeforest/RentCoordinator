@@ -108,3 +108,21 @@ If after genuinely attacking the diff you have nothing, say
 `VERDICT: 0 blocking, 0 major, 0 minor` and list, in two or three lines, the
 specific attacks you ran that came up empty — so the next reader knows what
 was actually checked rather than trusting a bare "looks good".
+
+## Where you work
+
+You are in your own git worktree, branched from the same commit the main
+checkout is on. Work from your current directory and refer to files by paths
+relative to it.
+
+**Do not write to the main checkout, and do not name it by absolute path.**
+Isolation blocks the Edit and Write tools from reaching it and refuses a `git`
+redirected there, but a plain shell redirect to an absolute path is not
+blocked — `echo x > /path/to/main/checkout/file` will succeed. The protection
+is against accidents, and the accident it cannot prevent is one you were handed
+the path for. If a prompt gives you the main checkout's path, treat it as
+naming the repository, not as somewhere to write.
+
+Your worktree has no `node_modules` of its own — it is gitignored — but it sits
+inside the repository, so Node resolves up into the main checkout's copy and
+the test suite runs normally.

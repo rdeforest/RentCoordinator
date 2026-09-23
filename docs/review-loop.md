@@ -17,8 +17,44 @@ one implementer, two or more adversarial reviewers, one fixer.
 | [`.claude/agents/review-fixer.md`](../.claude/agents/review-fixer.md) | Applies the specific fix each finding asks for, and nothing else. |
 | [`.claude/skills/review-loop/SKILL.md`](../.claude/skills/review-loop/SKILL.md) | `/review-loop` — captures the diff, fans out the reviewers, collates, hands the list to the fixer, re-verifies. |
 
-A newly created `.claude/agents/` directory needs a Claude Code restart before
-the agent names resolve.
+## Isolation
+
+Every agent runs in its own git worktree (`isolation: worktree` in each
+definition). It is what makes the loop safe to run while you are still working:
+a reviewer's most valuable move is mutation testing — breaking the code to see
+whether a test notices — and in a shared checkout that races your edits.
+
+Two things make it work here, and both are easy to get wrong:
+
+- **`.claude/settings.json` sets `worktree.baseRef` to `"head"`.** Without it a
+  subagent worktree branches from the repository's *default* branch, so on a
+  feature branch every agent would review `main` and see none of your work.
+- **A worktree branches from a commit and carries no uncommitted changes.**
+  Commit before delegating, or the agent reviews the previous state and reports
+  on code you have already changed.
+
+Verified rather than assumed, on 2026-09-23: the worktree branched from the
+feature branch's HEAD; `node_modules` resolved upward from the main checkout so
+the suite ran normally; the Write tool and `git -C <main checkout>` were both
+refused; and a mutation to `lib/money.coffee` stayed in the worktree while the
+main checkout kept its original line.
+
+One gap found in the same check: **a plain shell redirect to an absolute path
+is not blocked.** `echo x > /main/checkout/file` succeeds from inside a
+worktree. Isolation guards the Edit and Write tools and git redirection, not
+arbitrary paths — so the agent definitions tell agents to work from their own
+directory and never to treat the main checkout's path as somewhere to write.
+The realistic accident (an agent editing `lib/x.coffee` relative to its own
+cwd) is fully prevented; the one that remains needs someone to hand over the
+absolute path.
+
+**Restarts.** A new `.claude/agents/` directory needs a Claude Code restart
+before the names resolve — and so does an *edit* to an agent already registered
+in a running session. A probe caught this the hard way: the definition had
+`isolation: worktree` on disk, the running session still held the previous
+version, and the agent ran in the main checkout and modified it. Until the
+restart, pass `isolation: "worktree"` on the Agent call itself; that takes
+effect immediately because it does not come from the cached definition.
 
 ## Running it
 
