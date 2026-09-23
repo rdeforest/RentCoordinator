@@ -3,13 +3,76 @@
 config           = require '../config.coffee'
 workLogModel     = require '../models/work_log.coffee'
 workSessionModel = require '../models/work_session.coffee'
+rentService      = require './rent.coffee'
+
+
+clearCurrentSession = (worker) ->
+  db.prepare("DELETE FROM current_sessions WHERE worker = ?").run worker
+
+
+# The manual work-log routes recalculate the tenant's rent period after every
+# write. The timer path did not, so work clocked through the timer never
+# reached the period (bug 31).
+recalculateFor = (log) ->
+  return unless config.isTenant log.worker
+
+  date = new Date log.start_time
+  await rentService.createOrUpdateRentPeriod date.getFullYear(), date.getMonth() + 1
+
+
+# Close a session, and when it counts as completed work turn it into a work
+# log. Shared by an explicit stop and by the timeout sweep below, so a session
+# that timed out is recorded exactly the way a stopped one is.
+finishSession = (worker, session, { completed, at }) ->
+  await workSessionModel.createWorkEvent session.id, (if completed then 'stop' else 'cancel'), at
+
+  duration = await workSessionModel.calculateSessionDuration session.id
+  clearCurrentSession worker
+
+  unless completed and duration >= config.MIN_WORK_LOG_DURATION
+    return
+      session:  session
+      duration: duration
+      event:    if completed then 'completed_too_short' else 'cancelled'
+
+  workLog = await workLogModel.createWorkLog(
+    await workSessionModel.sessionToWorkLog session
+  )
+
+  await recalculateFor workLog
+
+  return
+    session:  session
+    work_log: workLog
+    duration: duration
+    event:    'completed'
+
+
+# The worker's current session, after closing it if the clock has been running
+# past SESSION_TIMEOUT. Every timer operation reads through here, so an
+# abandoned timer stops accruing time and stops blocking the next session.
+# This does write on a read path — /timer/status is polled every second — but
+# a timeout that only fires when someone remembers to stop the timer is not a
+# timeout.
+currentSessionOf = (worker, now = new Date()) ->
+  session = await workSessionModel.getCurrentSession worker
+  return session unless session?.status is 'active'
+
+  openedAt = workSessionModel.openSegmentStart session.id
+  return session unless openedAt
+
+  cutoff = new Date openedAt.getTime() + config.SESSION_TIMEOUT
+  return session if cutoff > now
+
+  await finishSession worker, session, completed: true, at: cutoff.toISOString()
+  return null
 
 
 startTimer = (worker, project_id = null, task_id = null) ->
   unless worker in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
 
-  currentSession = await workSessionModel.getCurrentSession worker
+  currentSession = await currentSessionOf worker
   if currentSession?.status is 'active'
     throw new Error "Timer already running for #{worker}"
 
@@ -27,7 +90,7 @@ pauseTimer = (worker) ->
   unless worker in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
 
-  currentSession = await workSessionModel.getCurrentSession worker
+  currentSession = await currentSessionOf worker
   if not currentSession or currentSession.status isnt 'active'
     throw new Error "No active timer for #{worker}"
 
@@ -41,7 +104,7 @@ resumeTimer = (worker, sessionId = null) ->
     throw new Error "Invalid worker: #{worker}"
 
   unless sessionId
-    currentSession = await workSessionModel.getCurrentSession worker
+    currentSession = await currentSessionOf worker
     unless currentSession
       throw new Error "No session to resume"
     sessionId = currentSession.id
@@ -58,38 +121,15 @@ stopTimer = (worker, completed = true) ->
   unless worker in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
 
-  currentSession = await workSessionModel.getCurrentSession worker
+  currentSession = await currentSessionOf worker
   unless currentSession
     throw new Error "No active timer for #{worker}"
 
-  eventType = if completed then 'stop' else 'cancel'
-  await workSessionModel.createWorkEvent currentSession.id, eventType
-
-  duration = await workSessionModel.calculateSessionDuration currentSession.id
-
-  if completed and duration >= config.MIN_WORK_LOG_DURATION
-    workLog = await workLogModel.createWorkLog(
-      await workSessionModel.sessionToWorkLog currentSession
-    )
-
-    db.prepare("DELETE FROM current_sessions WHERE worker = ?").run worker
-
-    return
-      session:  currentSession
-      work_log: workLog
-      duration: duration
-      event:    'completed'
-  else
-    db.prepare("DELETE FROM current_sessions WHERE worker = ?").run worker
-
-    return
-      session:  currentSession
-      duration: duration
-      event:    if completed then 'completed_too_short' else 'cancelled'
+  return await finishSession worker, currentSession, { completed, at: null }
 
 
 updateDescription = (worker, description) ->
-  currentSession = await workSessionModel.getCurrentSession worker
+  currentSession = await currentSessionOf worker
   unless currentSession
     throw new Error "No active session for #{worker}"
 
@@ -100,7 +140,7 @@ getStatus = (worker) ->
   unless worker in config.WORKERS
     throw new Error "Invalid worker: #{worker}"
 
-  currentSession = await workSessionModel.getCurrentSession worker
+  currentSession = await currentSessionOf worker
 
   unless currentSession
     return

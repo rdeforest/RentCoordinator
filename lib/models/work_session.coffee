@@ -1,5 +1,6 @@
-{ v1 } = require 'uuid'
-{ db } = require '../db/schema.coffee'
+{ v1 }  = require 'uuid'
+{ db }  = require '../db/schema.coffee'
+config  = require '../config.coffee'
 
 
 createWorkSession = (worker) ->
@@ -72,17 +73,32 @@ getCurrentSession = (worker) ->
   return result or null
 
 
-calculateSessionDuration = (sessionId) ->
-  events = db.prepare("""
+sessionEvents = (sessionId) ->
+  db.prepare("""
     SELECT * FROM work_events
     WHERE session_id = ?
     ORDER BY timestamp ASC
   """).all sessionId
 
+
+# When the last event left the clock running, the instant it started. Null
+# for a session that is paused, stopped or cancelled.
+openSegmentStart = (sessionId) ->
+  openedAt = null
+
+  for event in sessionEvents sessionId
+    switch event.event_type
+      when 'start', 'resume'         then openedAt = new Date event.timestamp
+      when 'pause', 'stop', 'cancel'  then openedAt = null
+
+  openedAt
+
+
+calculateSessionDuration = (sessionId, now = new Date()) ->
   totalDuration = 0
   lastStartTime = null
 
-  for event in events
+  for event in sessionEvents sessionId
     switch event.event_type
       when 'start', 'resume'
         lastStartTime = new Date event.timestamp
@@ -92,9 +108,12 @@ calculateSessionDuration = (sessionId) ->
           totalDuration += duration
           lastStartTime  = null
 
+  # A timer nobody stopped — browser closed, laptop slept — would otherwise
+  # accrue wall-clock time without bound. The open segment is capped at
+  # SESSION_TIMEOUT; timerService closes such a session at the cap.
   if lastStartTime
-    duration       = (new Date() - lastStartTime) / 1000
-    totalDuration += duration
+    elapsed        = (now - lastStartTime) / 1000
+    totalDuration += Math.min elapsed, config.SESSION_TIMEOUT / 1000
 
   return Math.round totalDuration
 
@@ -122,6 +141,17 @@ pauseActiveSessions = (worker) ->
 
 
 resumeSession = (sessionId, worker) ->
+  session = db.prepare("SELECT * FROM work_sessions WHERE id = ?").get sessionId
+
+  unless session
+    throw new Error "Session not found: #{sessionId}"
+
+  unless session.worker is worker
+    throw new Error "Session #{sessionId} does not belong to #{worker}"
+
+  unless session.status is 'paused'
+    throw new Error "Cannot resume a #{session.status} session"
+
   await pauseActiveSessions worker
 
   await createWorkEvent sessionId, 'resume'
@@ -135,20 +165,20 @@ resumeSession = (sessionId, worker) ->
 
 
 sessionToWorkLog = (session) ->
-  events = db.prepare("""
-    SELECT * FROM work_events
-    WHERE session_id = ?
-    ORDER BY timestamp ASC
-  """).all session.id
-
+  events     = sessionEvents session.id
   firstEvent = events[0]
   lastEvent  = events[events.length - 1]
+
+  # Not session.total_duration: that column is written as 0 at INSERT and
+  # never maintained. Duration lives in the work_events timeline, and
+  # calculateSessionDuration is the one place that reads it.
+  seconds = calculateSessionDuration session.id
 
   return
     worker:      session.worker
     start_time:  firstEvent?.timestamp or session.created_at
     end_time:    lastEvent?.timestamp or new Date().toISOString()
-    duration:    Math.round session.total_duration / 60
+    duration:    Math.round seconds / 60
     description: session.description
     project_id:  session.project_id or null
     task_id:     session.task_id or null
@@ -159,6 +189,7 @@ module.exports = {
   createWorkEvent
   updateSessionDescription
   getCurrentSession
+  openSegmentStart
   calculateSessionDuration
   getAllSessions
   pauseActiveSessions

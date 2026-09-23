@@ -1,7 +1,6 @@
-workLogModel     = require '../models/work_log.coffee'
-workSessionModel = require '../models/work_session.coffee'
-rentService      = require '../services/rent.coffee'
-config           = require '../config.coffee'
+workLogModel = require '../models/work_log.coffee'
+rentService  = require '../services/rent.coffee'
+config       = require '../config.coffee'
 
 
 setup = (app) ->
@@ -9,38 +8,10 @@ setup = (app) ->
     { worker, project_id, limit } = req.query
 
     try
-      if worker
-        sessions = await workSessionModel.getAllSessions worker
-      else
-        allSessions = []
-        for w in config.WORKERS
-          workerSessions  = await workSessionModel.getAllSessions w
-          allSessions     = allSessions.concat workerSessions
-        sessions = allSessions
-
-      logs = []
-      for session in sessions
-        if session.status in ['completed', 'cancelled']
-          log = await workSessionModel.sessionToWorkLog session
-          logs.push log
-
-      traditionalLogs = await workLogModel.getWorkLogs { worker, limit: 1000 }
-
-      allLogs    = logs.concat traditionalLogs
-      uniqueLogs = []
-      seen       = new Set()
-
-      for log in allLogs
-        unless seen.has log.id
-          seen.add log.id
-          uniqueLogs.push log
-
-      uniqueLogs.sort (a, b) -> new Date(b.start_time) - new Date(a.start_time)
-
-      if limit
-        uniqueLogs = uniqueLogs.slice 0, parseInt limit
-
-      res.json uniqueLogs
+      res.json await workLogModel.getWorkLogs
+        worker:     worker
+        project_id: project_id
+        limit:      limit ? 50
     catch err
       res.status(500).json error: err.message
 
@@ -93,7 +64,7 @@ setup = (app) ->
 
       updated = await workLogModel.updateWorkLog id, updates
 
-      if existing.worker is 'lyndzie' or updated.worker is 'lyndzie'
+      if config.isTenant(existing.worker) or config.isTenant(updated.worker)
         months = new Set()
 
         for timestamp in [existing.start_time, updated.start_time]
@@ -118,7 +89,7 @@ setup = (app) ->
 
       await workLogModel.deleteWorkLog id
 
-      if existing.worker is 'lyndzie'
+      if config.isTenant existing.worker
         date  = new Date existing.start_time
         year  = date.getFullYear()
         month = date.getMonth() + 1
