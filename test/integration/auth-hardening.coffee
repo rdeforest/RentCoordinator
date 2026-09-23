@@ -156,3 +156,38 @@ describe 'Auth hardening (bugs 12/22/38)', ->
     throttled = responses.find (r) -> r.status is 429
     assert.ok throttled.headers.get('retry-after'),
       'a 429 should tell the caller when to come back'
+
+
+  it 'refuses to send a code to an address that is not on the list', ->
+    # The only thing making this a two-user app. Nothing covered it: making
+    # `unless isEmailAllowed email` unconditional left every suite green.
+    for stranger in ['stranger@example.com', 'robert@defore.st.evil.com', 'lynz57@gmail.com']
+      response = await post '/auth/send-code', email: stranger
+
+      assert.equal response.status, 400, "#{stranger} should be refused"
+      assert.match (await response.json()).error, /not authorized/i
+
+      assert.equal storedCodeFor(stranger), undefined,
+        "no code may be stored for #{stranger}"
+
+
+  it 'does not leak whether an address is on the list by timing out or hanging', ->
+    # A refusal and an acceptance should both be prompt; a stranger learning
+    # they are a stranger is unavoidable here (the app has two users and says
+    # so), but it should not cost a request that never returns.
+    started  = Date.now()
+    response = await post '/auth/send-code', email: 'stranger@example.com'
+
+    assert.equal response.status, 400
+    assert.ok Date.now() - started < 3000, 'a refusal should be immediate'
+
+
+  it 'still refuses a stranger who supplies a real code', ->
+    # Verification must not be a way around the allowlist.
+    await post '/auth/send-code', email: LANDLORD
+    real = storedCodeFor(LANDLORD).code
+
+    response = await post '/auth/verify-code', email: 'stranger@example.com', code: real
+
+    assert.equal response.status, 400
+    assert.equal (await response.json()).success, false
