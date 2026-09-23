@@ -60,3 +60,9 @@ CREATE TABLE IF NOT EXISTS recurring_event_logs (
 Both statements use `CREATE TABLE IF NOT EXISTS`, which means existing
 databases keep their pre-migration schema even after you update this file.
 The migration above is what brings existing databases into line.
+
+---
+
+**Superseded 2026-09-23.** Bug 02 is resolved — see
+[`docs/bugs/02-cannot-delete-period.md`](../bugs/02-cannot-delete-period.md) for what was actually done, which is not
+always what this file proposed. Kept for the reasoning, not as a to-do.

@@ -205,3 +205,9 @@ long as the comparison values are in the same format as the stored
 values. The `toISOString()` call produces UTC-suffixed strings, so if
 your logs are stored as local-naive strings, you'll get a mismatch.
 **Verify this on a copy of production first.**
+
+---
+
+**Superseded 2026-09-23.** Bug 04 is resolved — see
+[`docs/bugs/04-missing-work-hours.md`](../bugs/04-missing-work-hours.md) for what was actually done, which is not
+always what this file proposed. Kept for the reasoning, not as a to-do.

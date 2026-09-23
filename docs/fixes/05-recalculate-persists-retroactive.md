@@ -113,3 +113,9 @@ diff /tmp/rent_before.csv /tmp/rent_after.csv
 
 Any unexpected changes are worth understanding before showing the new
 totals to anyone.
+
+---
+
+**Superseded 2026-09-23.** Bug 05 is resolved — see
+[`docs/bugs/05-recalculate-no-retroactive.md`](../bugs/05-recalculate-no-retroactive.md) for what was actually done, which is not
+always what this file proposed. Kept for the reasoning, not as a to-do.

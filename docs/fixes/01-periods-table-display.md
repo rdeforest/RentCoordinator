@@ -53,3 +53,9 @@ need to change.
 ## Risk
 
 Trivial — single-cell display change. No data path is altered.
+
+---
+
+**Superseded 2026-09-23.** Bug 01 is resolved — see
+[`docs/bugs/01-periods-table-display.md`](../bugs/01-periods-table-display.md) for what was actually done, which is not
+always what this file proposed. Kept for the reasoning, not as a to-do.

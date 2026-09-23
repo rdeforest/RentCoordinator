@@ -68,3 +68,9 @@ ROLLBACK, but the standard precautions apply:
 That would unstick deletion today but not tomorrow — every new month
 generates new log rows. The cascade is the right structural fix because
 log rows are intrinsically subordinate to the period they describe.
+
+---
+
+**Superseded 2026-09-23.** Bug 02 is resolved — see
+[`docs/bugs/02-cannot-delete-period.md`](../bugs/02-cannot-delete-period.md) for what was actually done, which is not
+always what this file proposed. Kept for the reasoning, not as a to-do.

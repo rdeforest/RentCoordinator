@@ -216,3 +216,9 @@ verify each one is filter-correct:
 ```bash
 grep -rn "rent_events" lib/
 ```
+
+---
+
+**Superseded 2026-09-23.** Bug 03 is resolved — see
+[`docs/bugs/03-soft-delete-mismatch.md`](../bugs/03-soft-delete-mismatch.md) for what was actually done, which is not
+always what this file proposed. Kept for the reasoning, not as a to-do.
