@@ -1,4 +1,8 @@
-# Bugs 07 / 30 / 32 — the timer's duration accounting.
+# Bugs 07 / 30 / 32 / 29 — work_session.coffee, the model under the timer.
+#
+# Named for the model it exercises rather than the service. As timer.coffee it
+# invited anyone auditing coverage by filename to conclude the timer *service*
+# was tested; it is not — see the untested list in the 2026-09-23 audit.
 #
 # These run against a throwaway database rather than a live server so the
 # elapsed times can be dictated instead of waited for: an eight-hour timeout
