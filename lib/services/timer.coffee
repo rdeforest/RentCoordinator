@@ -3,21 +3,10 @@
 config           = require '../config.coffee'
 workLogModel     = require '../models/work_log.coffee'
 workSessionModel = require '../models/work_session.coffee'
-rentService      = require './rent.coffee'
 
 
 clearCurrentSession = (worker) ->
   db.prepare("DELETE FROM current_sessions WHERE worker = ?").run worker
-
-
-# The manual work-log routes recalculate the tenant's rent period after every
-# write. The timer path did not, so work clocked through the timer never
-# reached the period (bug 31).
-recalculateFor = (log) ->
-  return unless config.isTenant log.worker
-
-  date = new Date log.start_time
-  await rentService.createOrUpdateRentPeriod date.getFullYear(), date.getMonth() + 1
 
 
 CLOSEABLE = ['active', 'paused']
@@ -63,11 +52,12 @@ finishSession = (worker, session, { completed, at }) ->
       duration: duration
       event:    if completed then 'completed_too_short' else 'cancelled'
 
+  # createWorkLog itself emits the work-reported event the fold reads
+  # (bug 06) — nothing further needs to run for the rent period to reflect
+  # this session.
   workLog = await workLogModel.createWorkLog(
     await workSessionModel.sessionToWorkLog session
   )
-
-  await recalculateFor workLog
 
   return
     session:  session

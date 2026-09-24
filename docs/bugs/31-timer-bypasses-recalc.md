@@ -5,7 +5,19 @@
 
 ## Resolution
 
-`stopTimer` runs the same recalculation the manual work-log routes run. The tenant check is `config.isTenant`, derived from `WORKER_IDENTITY`, rather than a fourth bare `'lyndzie'` literal.
+`stopTimer` ran the same recalculation the manual work-log routes ran, using
+`config.isTenant` (derived from `WORKER_IDENTITY`) rather than a fourth bare
+`'lyndzie'` literal.
+
+**2026-09-24 (bug 55):** that recalculation call — `rentService
+.createOrUpdateRentPeriod`, writing the legacy `rent_periods` table — has
+since been removed from `lib/services/timer.coffee` entirely. It wrote a
+table nothing authoritative reads
+(`migrations/2026-09-23_130000_disable_recurring_scheduler.coffee`), and it
+ran after the work log already committed, so a throw there could 500 a stop
+that had already succeeded. `createWorkLog` emits the `work-reported` event
+the fold reads on its own (bug 06), so the call was also redundant. See
+`docs/bugs/55-timer-legacy-rent-write.md`.
 
 ## Symptom
 
