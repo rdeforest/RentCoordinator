@@ -10,7 +10,14 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Under sudo, PATH is secure_path and node lives only in the app user's nvm.
+if ! command -v node >/dev/null && [ -f ~/.nvm/nvm.sh ]; then
+  . ~/.nvm/nvm.sh
+  nvm use >/dev/null
+fi
 
 # The installed tree keeps its environment in .env (CloudFormation) or
 # config.sh (the systemd unit's EnvironmentFile); a copy of this script also
@@ -24,17 +31,19 @@ for env_file in .env ../.env config.sh ../config.sh; do
   fi
 done
 
-# The app refuses to start without SESSION_SECRET (lib/config.coffee) rather
-# than fall back to a shared default — but start-stop-daemon --background
-# returns 0 whether or not the process it launched stayed up, so a missing
-# secret used to surface only as a silent failed restart in step 6 of
-# docs/deployment.md, with nothing here to say why (bug 53). Same check, same
-# message shape, as the one the instance bootstrap already runs against a
-# fresh .env.
-if [ -z "${env_file:-}" ] || [ ! -f "$env_file" ] || ! grep -q '^SESSION_SECRET=.\+' "$env_file"; then
-  echo "FATAL: SESSION_SECRET missing from .env (or config.sh) — check the rent-coordinator/config secret" >&2
-  exit 1
-fi
+# The app refuses to start without SESSION_SECRET unless NODE_ENV is
+# development or test (lib/config.coffee), and start-stop-daemon --background
+# reports success either way (bug 53). Same rule, checked here, where the
+# operator is watching.
+case "${NODE_ENV:-}" in
+  development|test) ;;
+  *)
+    if [ -z "${SESSION_SECRET:-}" ]; then
+      echo "FATAL: SESSION_SECRET is not set and NODE_ENV is '${NODE_ENV:-unset}' — check the rent-coordinator/config secret" >&2
+      exit 1
+    fi
+    ;;
+esac
 
 # Whether DB_PATH was chosen or defaulted decides what a missing file means.
 if [ -n "${DB_PATH:-}" ]; then
@@ -70,7 +79,7 @@ fi
 # after the snapshot was taken (bug 52). docs/deployment.md's procedure now
 # stops the service before this step; this is the check for when that step
 # was skipped.
-. "$(dirname "$0")/lib/service.sh"
+. "$SCRIPT_DIR/lib/service.sh"
 
 if service_is_running; then
   echo "ERROR: rent-coordinator appears to be running." >&2

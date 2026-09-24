@@ -33,9 +33,10 @@ DB_PATH        = process.env.DB_PATH or './tenant-coordinator.db'
 # rather than by putting a deliberately broken one in the real directory.
 MIGRATIONS_DIR = process.env.MIGRATIONS_DIR or path.join __dirname, '..', 'migrations'
 
-# Every successful run leaves its pre-migration snapshot on disk (a failed
-# run's snapshot is the evidence a rollback happened — that one is never
-# pruned). Nothing removed the old ones, so a database that had gone through
+# Every run with pending migrations leaves its pre-migration snapshot on disk,
+# including a failed run's, which is the evidence a rollback happened. Pruning
+# keeps the newest few by name regardless of outcome, so that evidence lasts
+# three more deploys, not for ever. Nothing removed the old ones, so a database that had gone through
 # several rounds of migrations was carrying a full VACUUM'd copy of itself
 # for every single one of them (bug 52). Kept, not deleted outright: a recent
 # snapshot is still useful if a bug shows up right after a deploy.

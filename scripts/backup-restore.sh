@@ -4,7 +4,8 @@
 
 set -e
 
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
 
 # Load environment if .env exists
 if [ -f .env ]; then
@@ -25,7 +26,7 @@ fi
 # restore run while the service is up leaves it answering from the old
 # database and failing every write, with /health still reporting healthy.
 # Nothing in this process can reopen that connection.
-. "$(dirname "$0")/lib/service.sh"
+. "$SCRIPT_DIR/lib/service.sh"
 
 if service_is_running; then
   echo "ERROR: rent-coordinator appears to be running." >&2

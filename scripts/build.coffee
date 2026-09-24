@@ -12,7 +12,7 @@ execAsync = promisify exec
 SERVER_SOURCES = ['main.coffee', 'lib', 'migrations', 'scripts']
 
 # Not CoffeeScript, so the compiler steps above skip them entirely.
-SHELL_SCRIPTS = ['scripts/upgrade.sh']
+SHELL_SCRIPTS = ['scripts/upgrade.sh', 'scripts/lib/service.sh']
 
 
 fixImportPaths = (dir) ->
@@ -107,6 +107,7 @@ build = ->
     # Without upgrade.sh the artifact has no documented way to migrate.
     console.log 'Copying shell scripts...'
     for script in SHELL_SCRIPTS
+      fs.mkdirSync path.dirname(path.join 'dist', script), recursive: true
       fs.copyFileSync script, path.join 'dist', script
       fs.chmodSync path.join('dist', script), 0o755
 
