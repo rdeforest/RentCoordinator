@@ -4,7 +4,6 @@ rentRoutes            = require './routes/rent.coffee'
 workRoutes            = require './routes/work.coffee'
 authRoutes            = require './routes/auth.coffee'
 paymentRoutes         = require './routes/payment.coffee'
-paymentsRoutes        = require './routes/payments.coffee'
 backupRoutes          = require './routes/backup.coffee'
 adminRoutes           = require './routes/admin.coffee'
 observabilityRoutes   = require './routes/observability.coffee'
@@ -141,7 +140,6 @@ setup = (app, getServer) ->
   app.get '/rent',     (req, res) -> res.sendFile 'rent.html',    root: config.STATIC_DIR
   app.get '/work',     (req, res) -> res.sendFile 'work.html',    root: config.STATIC_DIR
   app.get '/payment',  (req, res) -> res.sendFile 'payment.html', root: config.STATIC_DIR
-  app.get '/payments', (req, res) -> res.sendFile 'payments.html', root: config.STATIC_DIR
   app.get '/admin',    middleware.requireAdminPage, (req, res) -> res.sendFile 'admin.html', root: config.STATIC_DIR
 
 
@@ -232,7 +230,6 @@ setup = (app, getServer) ->
   rentRoutes           .setup app
   workRoutes           .setup app
   paymentRoutes        .setup app
-  paymentsRoutes       .setup app
   backupRoutes         .setup app
   adminRoutes          .setup app
   observabilityRoutes  .setup app

@@ -16,20 +16,17 @@ the proposed fix in `docs/fixes/`.
 
 ### The remaining structural debt
 
-The app still runs two "what's owed" models: the event-sourced `events` table
-that the dashboard, the rent math and the Stripe path all read, and the legacy
-`rent_periods` / `rent_events` tables that the recurring-events scheduler and
-the payment-history page still write. Nothing reconciles them.
+The app ran two "what's owed" models: the event-sourced `events` table that
+the dashboard, the rent math and the Stripe path all read, and the legacy
+`rent_periods` / `rent_events` tables that the recurring-events scheduler, the
+payment-history page and the timer used to write. Nothing reconciled them.
 
-Bug 26 — the recurring-events scheduler — has now been deleted rather than
-ported, which removes one of the two remaining writers to the dead side. Bug 27
-(the payment-history page) is the other, and an architectural review recommends
-the same treatment: it reads 11 pre-migration rows, cannot see the 13 real
-`payment-made` events, will never gain a row, and its delete and reassign
-buttons report success while changing nothing about what is owed.
+The scheduler (bug 26), the payment-history page (bug 27) and the timer's
+write (bug 55) are gone. The manual work-log edit and delete routes still
+write `rent_periods` (bug 66), and nothing reads it.
 
-The legacy tables themselves are left in place. They hold real history, nothing
-writes to them after bug 26, and dropping them has its own gotchas — the health
+The legacy tables themselves are left in place. They hold real history, and
+dropping them has its own gotchas — the health
 check in `lib/routing.coffee` asserts `rent_periods` *exists*, so dropping it
 without changing that line turns every instance unhealthy at the ALB.
 
@@ -72,6 +69,7 @@ without changing that line turns every instance unhealthy at the ALB.
 | 36 | Logger doesn't tokenize error text | 2026-09-23 | Addresses inside messages and stacks are tokenized; the trace survives. |
 | 37 | Wide-open CORS, no `sameSite` | 2026-09-23 | cors not mounted unless configured; `sameSite: 'lax'`. |
 | 38 | Verification codes never purged | 2026-09-23 | Deleted on use, superseded on reissue, swept on expiry. |
+| 27 | Payment-history page reads legacy `rent_events` | 2026-09-24 | Deleted; payments already show in the rent page's events table. |
 | 26 | Recurring-events scheduler writes legacy tables | 2026-09-23 | Removed, not ported — no reader, and it sat in the boot path. |
 | 39 | `DEFAULT_CONFIG` duplicates constants | 2026-09-08 | Derived from `config.coffee`. |
 | 40 | `calculateNextDueDate` month/year math | 2026-09-23 | Day clamped to month length; yearly uses its configured date. |

@@ -91,18 +91,13 @@ Browser → Stripe.js → bank account collected
 Browser → Stripe.js → confirms
   → POST /payment/confirm
     → paymentService.confirmPayment
-      → on success: rentModel.recordPayment (creates a payment rent_event)
+      → recordPaymentFromIntent (one `payment-made` event per allocated month,
+        idempotent on the intent id; the Stripe webhook takes the same path)
 ```
 
-Note that `routes/payment.coffee` and `routes/payments.coffee` are
-**different things**:
-
-- `payment.coffee` (singular) is the Stripe checkout flow above
-- `payments.coffee` (plural) is the payment-history CRUD: list,
-  reassign-to-different-period, delete
-
-They probably should be renamed for clarity. See
-`docs/code-review-2026-05.md` §3.1.
+Payment history is the `payment` rows in the rent page's events table, which
+reads the same `events` ledger. The separate `/payments` page read the legacy
+`rent_events` table and was deleted (bug 27).
 
 ## The data model in plain language
 

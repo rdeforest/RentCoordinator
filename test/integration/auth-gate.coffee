@@ -27,7 +27,6 @@ PROTECTED = [
   '/rent/summary'
   '/work-logs'
   '/timer/status?worker=robert'
-  '/v1/api/payments'
   '/admin/logs'
   '/api/backup/list'
 ]

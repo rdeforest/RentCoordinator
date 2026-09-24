@@ -1,7 +1,18 @@
 # Bug 27 — Payment-history page reads the legacy rent_events table
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** active
+**Status:** resolved 2026-09-24 (page and API deleted)
+
+## Resolution
+
+Deleted rather than ported, the same call as bug 26. No page linked to
+`/payments` except its own nav bar; its list could not see a single real
+payment; and its reassign and delete buttons changed legacy rows nothing reads.
+The payment history it was meant to show already appears as the `payment` rows
+in the rent page's events table, which reads the `events` ledger. Gone:
+`lib/routes/payments.coffee` (`GET /v1/api/payments`, `PUT …/:id/reassign`,
+`DELETE …/:id`), `static/payments.html`, `static/coffee/payments.coffee`,
+`static/css/payments.css`, and the `/payments` route.
 
 ## Symptom
 
