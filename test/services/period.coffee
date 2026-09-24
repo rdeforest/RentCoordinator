@@ -249,6 +249,15 @@ test "resolveConfig returns defaults if no config events", ->
   assert.equal snap.agreed_monthly_payment, 950
 
 
+test "a landlord-recorded payment still counts toward amount_paid (bug 51)", ->
+  # POST /rent/events stamps actor: 'landlord' for anything the landlord
+  # records, including a payment. Only work-reported credit is tenant-only.
+  landlordPayment = Object.assign {}, payment('2026-04', 500),
+    { actor: 'landlord', actor_user: 'robert@defore.st' }
+  apr = computeAllPeriods([ landlordPayment ], NOW)['2026-04']
+  assert.equal apr.amount_paid, 500
+
+
 test "non-tenant work-reported events don't count toward credit", ->
   tenantWork   = work '2026-04', 5
   landlordWork = Object.assign {}, work('2026-04', 100), { actor: 'landlord', actor_user: 'robert@defore.st' }

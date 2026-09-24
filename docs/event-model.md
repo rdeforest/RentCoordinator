@@ -45,6 +45,15 @@ events
 No `updated_at`, no `deleted_at`. Events are immutable. To change an event,
 emit an `edited` or `deleted` event referencing it.
 
+`actor` is provenance — who did it — not a filter the fold applies when
+deciding what counts. `payment-made` sums regardless of actor: the landlord
+records payments too (the "Rent Events" UI posts `POST /rent/events` with
+`actor: 'landlord'`), and a payment is money received no matter who logged
+it. `work-reported` is the one action the fold does filter by actor — only
+the tenant's hours earn rent credit — because crediting a landlord's own
+work against the rent they're owed would pay them to fix their own house
+(bug 51).
+
 ## Actions
 
 Seven kinds. The third column says which payload fields are required.
@@ -52,7 +61,7 @@ Seven kinds. The third column says which payload fields are required.
 | action                | actor    | payload                                              |
 |-----------------------|----------|------------------------------------------------------|
 | `work-reported`       | tenant   | `{hours, started_at, ended_at, project, note?}`      |
-| `payment-made`        | tenant   | `{amount, method, stripe_payment_intent_id?, note?}` |
+| `payment-made`        | either   | `{amount, method, stripe_payment_intent_id?, note?}` |
 | `config-changed`      | landlord | `{field, new_value, note?}`                          |
 | `work-acknowledged`   | landlord | `{}` — `target_event_id` points at the work-reported |
 | `override`            | landlord | `{target_kind, target, new_value, note?}`            |

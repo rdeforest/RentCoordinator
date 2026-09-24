@@ -105,11 +105,15 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   config      = resolveConfig allEvents, endOfMonth
   monthEvents = allEvents.filter (e) -> e.effective_for is ymKey
 
+  # actor is provenance, not a filter on which payments count: the landlord
+  # records payments too (POST /rent/events defaults actor to 'landlord'),
+  # and a payment made by either party is still money received (bug 51).
+  # Work credit stays tenant-only — only the tenant's hours earn rent credit.
   hours_worked = 0
   amount_paid  = 0
-  for e in monthEvents when e.actor is 'tenant'
+  for e in monthEvents
     switch e.action
-      when 'work-reported' then hours_worked += e.payload.hours
+      when 'work-reported' then hours_worked += e.payload.hours if e.actor is 'tenant'
       when 'payment-made'  then amount_paid  += e.payload.amount
 
   total_available    = hours_worked + carryOver
