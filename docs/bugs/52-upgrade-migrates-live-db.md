@@ -29,8 +29,8 @@ Three parts:
    the rest. Every prior successful run left its full `VACUUM INTO` copy of
    the database on disk forever; over enough deploys that's an unbounded
    number of full database copies. A failed run's snapshot — the evidence a
-   rollback happened — is never pruned by this path, since pruning only runs
-   after a batch of migrations succeeds.
+   rollback happened — survives the failed run itself, but is an ordinary
+   snapshot to later successful runs and goes once three newer ones exist.
 
 Covered by:
 - `test/services/migrations.coffee` (`pruneSnapshots (bug 52)`) — keeps

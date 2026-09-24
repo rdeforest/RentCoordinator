@@ -11,6 +11,7 @@ the proposed fix in `docs/fixes/`.
 | 35 | [Money as floating-point dollars](35-money-floating-point.md) | Medium | Half done: amounts round to the cent. The integer-cents conversion is next. |
 | 62 | [Nothing checks the database for consistency except migrations](62-no-consistency-checking.md) | Medium | Scheduled report-only check, plus a landlord-only warning icon linking to the findings. |
 | 63 | [A crash is not restarted](63-no-process-supervision.md) | High | Any crash means ASG replacement, which means restore-from-backup. |
+| 66 | [Loose ends in the override rules after bug 56](66-amount-paid-override-and-edits.md) | Medium | August 2026's `amount_paid` pin needs a decision first. |
 | 65 | [Login sessions live in memory](65-sessions-in-memory.md) | Low | Every restart logs both users out. |
 
 ### The remaining structural debt

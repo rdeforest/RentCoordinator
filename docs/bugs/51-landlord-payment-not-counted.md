@@ -51,6 +51,12 @@ credit). It was never meant to gate which payments are real money.
 
 ## Risk
 
-None identified — this only adds previously-dropped landlord-recorded
-payments into the sum; it does not change how tenant-recorded payments are
-handled.
+Any landlord-recorded payment already in the ledger starts counting. If one
+was re-entered through `/rent/payment` because it did not show up, that
+month would now count it twice. Checked against production on 2026-09-24
+before deploying:
+
+    SELECT id, effective_for, payload FROM events
+    WHERE action = 'payment-made' AND actor <> 'tenant';
+
+Zero rows, so no production balance moves.
