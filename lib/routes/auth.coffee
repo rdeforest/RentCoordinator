@@ -68,16 +68,24 @@ setup = (app) ->
       result = await authModel.sendVerificationCode email
       res.json result
     catch err
+      # A refused address is not a user, and not an error worth a stack
+      # trace — it's whatever an anonymous caller typed into the login form.
+      # logger.error tokenizes it into pii_tokens forever regardless of
+      # outcome (bug 60); a rejection this routine and this common must not
+      # be the reason a made-up address becomes a permanent row. Handled
+      # first, and logged at most as a warning with no address and no stack.
+      if err.message is AUTHORIZATION_REJECTION
+        logger.warn 'auth.sendCode.rejected',
+          'refused a send-code request for an address not on the allowlist',
+          {},
+          req.id
+        return res.status(400).json error: err.message
+
       logger.error 'auth.sendCode', err,
         { email },
         req.id
 
-      # Only the rejection this endpoint means to express goes back to an
-      # unauthenticated caller; anything else is internal detail.
-      if err.message is AUTHORIZATION_REJECTION
-        res.status(400).json error: err.message
-      else
-        res.status(500).json error: 'Could not send a verification code'
+      res.status(500).json error: 'Could not send a verification code'
 
   app.post '/auth/verify-code', (req, res) ->
     email    = authModel.normalizeEmail req.body?.email

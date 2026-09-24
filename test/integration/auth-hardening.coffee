@@ -171,6 +171,27 @@ describe 'Auth hardening (bugs 12/22/38)', ->
         "no code may be stored for #{stranger}"
 
 
+  it 'does not log a refused address into the permanent PII store (bug 60)', ->
+    stranger = "never-a-user-#{Date.now()}@example.com"
+
+    response = await post '/auth/send-code', email: stranger
+    assert.equal response.status, 400
+
+    log = fs.readFileSync testConfig.logPath, 'utf8'
+
+    assert.ok not log.includes(stranger),
+      'a refused address is not a user — it must not appear in the log at all, ' +
+      'tokenized or not, since logger.error would tokenize it into pii_tokens forever'
+
+    rejectionLines = log.split('\n').filter (l) -> l.includes 'auth.sendCode.rejected'
+    assert.ok rejectionLines.length > 0, 'the refusal should still be logged, at warn level'
+
+    for line in rejectionLines
+      record = JSON.parse line
+      assert.equal record.level, 'warn', 'a routine refusal is not an error'
+      assert.equal record.stack, undefined, 'no stack trace for an expected rejection'
+
+
   it 'does not leak whether an address is on the list by timing out or hanging', ->
     # A refusal and an acceptance should both be prompt; a stranger learning
     # they are a stranger is unavoidable here (the app has two users and says
