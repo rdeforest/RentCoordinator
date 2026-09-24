@@ -412,7 +412,7 @@ Resources:
             # Set up automated daily backups at 2 AM UTC
             echo "Setting up automated daily backups..."
             sudo -u rent-coordinator bash -c 'cat > /tmp/backup-cron.txt << "CRONEOF"
-            0 2 * * * cd /opt/rent-coordinator && bash scripts/backup-now.sh >> /var/log/rent-coordinator-backup.log 2>&1
+            0 2 * * * cd /opt/rent-coordinator && bash scripts/backup-now.sh >> /var/log/rent-coordinator/backup.log 2>&1
             CRONEOF
             crontab /tmp/backup-cron.txt
             rm /tmp/backup-cron.txt'

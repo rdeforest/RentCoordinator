@@ -22,6 +22,8 @@ stop it.
 A scheduled check that reports and never blocks:
 
 - SQLite `PRAGMA integrity_check` and `PRAGMA foreign_key_check`.
+- Backup age: the newest S3 backup is older than ~26 hours (bug 64 went
+  unnoticed for three weeks).
 - Ledger invariants: every `payment-made` names a real month; no delete of a
   delete (the pre-bug-16 undelete shape); no month the fold marks `corrupt`;
   allocations on Stripe payments sum to the intent amount.
