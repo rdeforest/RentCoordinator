@@ -256,6 +256,29 @@ match the `manual` filter rather than `adjustment`. Their arithmetic has not
 changed — the new label is the accurate one — but someone filtering for past
 adjustments will not find them there.
 
+## Override vs. adjustment ordering (2026-09-24, bug 56)
+
+An `override` pins the amount *at its time*, not for ever. Before this fix,
+`computeMonth` folded every `adjustment` into `amount_due_calculated` and
+then, if any `override` existed on the month, replaced `amount_due`
+wholesale with the override's `new_value` — silently discarding every
+adjustment on that month regardless of when it was recorded. An adjustment
+entered after the landlord had already pinned the month (a late fee added
+on top of a pin) was accepted by the UI and then had no effect at all.
+
+The rule now: find the latest `override` targeting `amount_due` for the
+month, by `occurred_at`. Adjustments with `occurred_at` after that override
+apply on top of it — `amount_due = override.new_value + Σ (adjustment.delta
+for adjustments later than the override)`. Adjustments from before the
+latest override are superseded by it, exactly as if they had never
+happened — the override was a deliberate "the bottom line is $X as of now,"
+and an earlier note about a different number does not un-pin it. A `deleted`
+adjustment or override stays excluded from all of this, as everywhere else
+in the fold.
+
+If a month has no override, nothing changes: `amount_due` is the full
+calculated figure, adjustments and all.
+
 ## Recurring charges, after the scheduler was removed (2026-09-23)
 
 The recurring-events subsystem is gone (bug 26). It wrote to the legacy

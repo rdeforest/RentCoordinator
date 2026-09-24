@@ -359,13 +359,36 @@ test "an override still pins the month absolutely", ->
   assert.equal p.amount_due_override, true
 
 
-test "an override wins over an adjustment on the same month", ->
-  events  = [work('2026-01', 0), adjustment('2026-01', 100), override('2026-01', 'amount_due', 500)]
+test "an override wins over an adjustment made before it (bug 56)", ->
+  # adjustment() defaults occurred_at to the 20th; override() also defaults to
+  # the 20th, so give the adjustment an explicit earlier time to make "before
+  # the override" unambiguous.
+  events  = [
+    work('2026-01', 0)
+    adjustment('2026-01', 100, '2026-01-10T00:00:00Z')
+    override('2026-01', 'amount_due', 500, '2026-01-20T00:00:00Z')
+  ]
   periods = computeAllPeriods events, NOW
 
-  assert.equal periods['2026-01'].amount_due, 500
+  assert.equal periods['2026-01'].amount_due, 500,
+    'an adjustment made before the pin is superseded by it, same as if it had never happened'
   assert.equal periods['2026-01'].amount_due_calculated, 1700,
     'the calculated value still reflects the adjustment underneath the pin'
+
+
+test "an adjustment made after an override applies on top of the pin (bug 56)", ->
+  # The landlord pins the month at $500, then adds a $100 late fee afterward.
+  # The fee must not be silently dropped just because a pin already exists.
+  events  = [
+    work('2026-01', 0)
+    override('2026-01', 'amount_due', 500, '2026-01-10T00:00:00Z')
+    adjustment('2026-01', 100, '2026-01-20T00:00:00Z')
+  ]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_due, 600,
+    'the later adjustment applies on top of the pin: 500 + 100'
+  assert.equal periods['2026-01'].amount_due_override, true
 
 
 # --- delete / undelete (bug 16) ----------------------------------------------

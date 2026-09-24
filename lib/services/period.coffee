@@ -132,19 +132,35 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   # Adjustments move the amount owed; they do not replace it. A $100 late fee
   # on a $1,600 month leaves $1,700 owing, and the month is still calculated
   # rather than pinned. Overrides below are the only thing that pins a value.
-  adjustment_total = 0
-  for e in monthEvents when e.action is 'adjustment' and e.payload.target?.field is 'amount_due'
-    adjustment_total += e.payload.delta
+  amountDueAdjustments = (e for e in monthEvents when e.action is 'adjustment' and e.payload.target?.field is 'amount_due')
+  adjustment_total = amountDueAdjustments.reduce ((sum, e) -> sum + e.payload.delta), 0
 
   amount_due_calculated = config.base_rent - total_discount + adjustment_total
   amount_due            = amount_due_calculated
   amount_due_override   = false
   amount_paid_override  = false
 
+  amountDueOverrides = (e for e in monthEvents when e.action is 'override' and \
+    e.payload.target_kind is 'period-field' and e.payload.target?.field is 'amount_due')
+
+  # An override pins the amount at its time — not for ever. An adjustment
+  # emitted after the latest override (a late fee added after the landlord
+  # already pinned the month) applies on top of the pin; an adjustment from
+  # before it is superseded, exactly as if the pin had never happened (bug
+  # 56 — previously every adjustment was silently discarded once any override
+  # existed on the month, accepted by the UI and then ignored by the calc).
+  if amountDueOverrides.length > 0
+    latestOverride = amountDueOverrides.reduce (a, b) ->
+      if b.occurred_at >= a.occurred_at then b else a
+
+    laterAdjustmentTotal = amountDueAdjustments
+      .filter  (e) -> e.occurred_at > latestOverride.occurred_at
+      .reduce  ((sum, e) -> sum + e.payload.delta), 0
+
+    amount_due          = latestOverride.payload.new_value + laterAdjustmentTotal
+    amount_due_override = true
+
   for e in monthEvents when e.action is 'override' and e.payload.target_kind is 'period-field'
-    if e.payload.target?.field is 'amount_due'
-      amount_due          = e.payload.new_value
-      amount_due_override = true
     if e.payload.target?.field is 'amount_paid'
       amount_paid          = e.payload.new_value
       amount_paid_override = true
