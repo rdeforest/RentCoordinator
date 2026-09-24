@@ -25,19 +25,7 @@ fi
 # restore run while the service is up leaves it answering from the old
 # database and failing every write, with /health still reporting healthy.
 # Nothing in this process can reopen that connection.
-# Asked three ways, because only one of them works on any given host: the
-# CloudFormation SysVInit script writes a pidfile, the systemd unit the
-# installer writes is Type=simple with no PIDFile=, and a process may be
-# running under neither.
-PIDFILE="${PIDFILE:-/var/run/rent-coordinator.pid}"
-PORT="${PORT:-8080}"
-
-service_is_running() {
-  if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then return 0; fi
-  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet rent-coordinator; then return 0; fi
-  if command -v lsof >/dev/null 2>&1 && lsof -ti ":${PORT}" >/dev/null 2>&1; then return 0; fi
-  return 1
-}
+. "$(dirname "$0")/lib/service.sh"
 
 if service_is_running; then
   echo "ERROR: rent-coordinator appears to be running." >&2

@@ -33,10 +33,34 @@ DB_PATH        = process.env.DB_PATH or './tenant-coordinator.db'
 # rather than by putting a deliberately broken one in the real directory.
 MIGRATIONS_DIR = process.env.MIGRATIONS_DIR or path.join __dirname, '..', 'migrations'
 
+# Every successful run leaves its pre-migration snapshot on disk (a failed
+# run's snapshot is the evidence a rollback happened — that one is never
+# pruned). Nothing removed the old ones, so a database that had gone through
+# several rounds of migrations was carrying a full VACUUM'd copy of itself
+# for every single one of them (bug 52). Kept, not deleted outright: a recent
+# snapshot is still useful if a bug shows up right after a deploy.
+MAX_SNAPSHOTS_KEPT = 3
+
 
 snapshotPath = (dbPath) ->
   stamp = new Date().toISOString().replace /[:.]/g, '-'
   "#{dbPath}.pre-migration-#{stamp}"
+
+
+# Keeps the newest MAX_SNAPSHOTS_KEPT pre-migration snapshots for dbPath and
+# removes the rest. Timestamped filenames sort chronologically as strings, so
+# no parsing is needed.
+pruneSnapshots = (dbPath) ->
+  dir    = path.dirname dbPath
+  prefix = "#{path.basename dbPath}.pre-migration-"
+
+  snapshots = fs.readdirSync(dir)
+    .filter (name) -> name.startsWith prefix
+    .sort()
+
+  stale = snapshots[0...-MAX_SNAPSHOTS_KEPT]
+  fs.rmSync path.join(dir, name), force: true for name in stale
+  stale.length
 
 
 # SQLite's own consistent copy, rather than a file copy: the application may
@@ -153,6 +177,10 @@ runMigrations = ->
 
   finished = true
   console.log "Migrations: applied #{pending.length}"
+
+  pruned = pruneSnapshots DB_PATH
+  console.log "  pruned #{pruned} old pre-migration snapshot(s)" if pruned > 0
+
   (stem for [stem] in pending)
 
 
@@ -200,7 +228,7 @@ checkMigrations = ->
       fs.rmSync path.join(dir, name), force: true
 
 
-module.exports = { runMigrations, checkMigrations, pendingMigrations, takeSnapshot }
+module.exports = { runMigrations, checkMigrations, pendingMigrations, takeSnapshot, pruneSnapshots }
 
 
 # Run when invoked directly; stay quiet when required by schema.initialize().

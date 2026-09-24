@@ -33,6 +33,14 @@ Balancer. Key facts that shape the procedure below:
 Because a replacement restores from S3 and cloud-init is flaky, the default
 is to upgrade the running instance in place (preserves the live DB):
 
+Stop before you migrate, migrate before you start. `scripts/upgrade.sh` now
+refuses to run against a live database (bug 52) — a migration that fails
+partway restores its pre-migration snapshot by writing into the existing
+file, which an open connection follows; a rollback while the old process is
+still up would discard whatever it wrote after the snapshot was taken, not
+just leave it stale. The order below keeps that from ever coming up rather
+than relying on the refusal to catch it.
+
 ```bash
 # 1. Back up prod first (see Backups) and confirm it's in S3.
 
@@ -45,29 +53,33 @@ cd /opt/rent-coordinator && sudo -u rent-coordinator git pull --ff-only
 
 # 4. If Secrets Manager gained a new key since the instance booted, append it
 #    to .env (a running instance's .env is only written once, at boot).
-#    SESSION_SECRET must be present: the app refuses to start without it
-#    rather than fall back to a shared default.
+#    SESSION_SECRET must be present: upgrade.sh and the app both refuse to
+#    proceed without it, rather than fall back to a shared default.
 
-# 5. Apply any pending database migrations. Safe to run when there are none;
+# 5. Guard against replacement while the service is down, then stop it:
+#    (run the suspend from your workstation; the stop on the box)
+aws autoscaling suspend-processes --auto-scaling-group-name RentCoordinator-production \
+  --scaling-processes HealthCheck ReplaceUnhealthy
+sudo /etc/init.d/rent-coordinator stop
+
+# 6. Apply any pending database migrations. Safe to run when there are none;
 #    the server also applies pending migrations at boot, so this is belt and
 #    braces — but running it here means a bad migration fails while you are
-#    watching, rather than during the restart.
+#    watching, rather than during startup.
 #
 #    A run is all-or-nothing: the runner snapshots the database first and
 #    restores it if any migration fails, leaving the snapshot as
-#    <db>.pre-migration-<timestamp>. To find that out before touching the
+#    <db>.pre-migration-<timestamp> (the newest 3 are kept; older ones are
+#    pruned on a successful run). To find that out before touching the
 #    instance at all, run the migrations against a backup from your
 #    workstation first:
 #      DB_PATH=./backups/<latest>.db npm run migrate:check
 sudo -u rent-coordinator ./scripts/upgrade.sh
 
-# 6. Guard against replacement during the restart, then restart:
-#    (run the suspend/resume from your workstation; the restart on the box)
-aws autoscaling suspend-processes --auto-scaling-group-name RentCoordinator-production \
-  --scaling-processes HealthCheck ReplaceUnhealthy
-sudo /etc/init.d/rent-coordinator restart      # cycles cleanly since the pidfile fix
+# 7. Start the service back up:
+sudo /etc/init.d/rent-coordinator start        # cycles cleanly since the pidfile fix
 
-# 7. Verify, then resume:
+# 8. Verify, then resume:
 curl -s http://localhost:8080/health           # on the box; or the ALB /health
 aws autoscaling resume-processes --auto-scaling-group-name RentCoordinator-production \
   --scaling-processes HealthCheck ReplaceUnhealthy

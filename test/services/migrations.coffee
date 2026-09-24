@@ -362,3 +362,64 @@ describe 'fk_on_delete migration ignores orphans outside its own tables (bug 54)
 
       # The orphan is untouched — this migration does not own rent_events.
       assert.equal db.prepare("SELECT COUNT(*) AS n FROM rent_events").get().n, 1
+
+
+# --- bug 52: pruning old pre-migration snapshots -----------------------
+#
+# Every successful run left its VACUUM'd pre-migration snapshot on disk
+# forever. Over enough deploys that is a full extra copy of the database per
+# migration ever applied. Keep only the newest few.
+
+describe 'pruneSnapshots (bug 52)', ->
+  { pruneSnapshots } = require '../../scripts/run-migrations.coffee'
+
+  it 'keeps only the newest 3 snapshots for a database, removing the rest', ->
+    dir    = fs.mkdtempSync path.join tmpDir, 'prune-'
+    dbPath = path.join dir, 'tenant-coordinator.db'
+    fs.writeFileSync dbPath, ''
+
+    stamps = ['2026-01-01T00-00-00-000Z', '2026-01-02T00-00-00-000Z',
+              '2026-01-03T00-00-00-000Z', '2026-01-04T00-00-00-000Z',
+              '2026-01-05T00-00-00-000Z']
+    for stamp in stamps
+      fs.writeFileSync "#{dbPath}.pre-migration-#{stamp}", ''
+
+    removed = pruneSnapshots dbPath
+    assert.equal removed, 2, 'five snapshots, keep 3, remove 2'
+
+    remaining = fs.readdirSync(dir)
+      .filter (n) -> n.startsWith 'tenant-coordinator.db.pre-migration-'
+      .sort()
+
+    assert.deepEqual remaining,
+      ["tenant-coordinator.db.pre-migration-#{stamps[2]}",
+       "tenant-coordinator.db.pre-migration-#{stamps[3]}",
+       "tenant-coordinator.db.pre-migration-#{stamps[4]}"],
+      'the three newest (by timestamp in the filename) must survive'
+
+  it 'leaves everything alone when there are 3 or fewer', ->
+    dir    = fs.mkdtempSync path.join tmpDir, 'prune-few-'
+    dbPath = path.join dir, 'tenant-coordinator.db'
+    fs.writeFileSync dbPath, ''
+    fs.writeFileSync "#{dbPath}.pre-migration-2026-01-01T00-00-00-000Z", ''
+    fs.writeFileSync "#{dbPath}.pre-migration-2026-01-02T00-00-00-000Z", ''
+
+    assert.equal pruneSnapshots(dbPath), 0
+    assert.equal fs.readdirSync(dir).filter((n) -> n.includes 'pre-migration').length, 2
+
+  it 'does not touch another database\'s snapshots in the same directory', ->
+    dir     = fs.mkdtempSync path.join tmpDir, 'prune-other-'
+    dbPath  = path.join dir, 'a.db'
+    otherDb = path.join dir, 'b.db'
+    fs.writeFileSync dbPath, ''
+    fs.writeFileSync otherDb, ''
+    for stamp in ['2026-01-01T00-00-00-000Z', '2026-01-02T00-00-00-000Z',
+                  '2026-01-03T00-00-00-000Z', '2026-01-04T00-00-00-000Z']
+      fs.writeFileSync "#{dbPath}.pre-migration-#{stamp}", ''
+      fs.writeFileSync "#{otherDb}.pre-migration-#{stamp}", ''
+
+    pruneSnapshots dbPath
+
+    assert.equal fs.readdirSync(dir).filter((n) -> n.startsWith 'a.db.pre-migration-').length, 3
+    assert.equal fs.readdirSync(dir).filter((n) -> n.startsWith 'b.db.pre-migration-').length, 4,
+      'b.db\'s own snapshots were never pruned'
