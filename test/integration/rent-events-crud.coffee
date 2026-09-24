@@ -71,6 +71,13 @@ describe 'Rent event write path (bugs 14/15/16/18/20)', ->
       'and must not mark the month as manually pinned'
 
 
+  it 'a non-numeric amount is a 400, not a 500 (bug 57)', ->
+    response = await post '/rent/events',
+      { PAST..., type: 'adjustment', amount: 'abc', description: 'Typo' }
+    assert.equal response.status, 400
+    assert.match (await response.json()).error, /finite number/
+
+
   it 'a manual entry still pins the amount due absolutely', ->
     await post '/rent/events',
       { year: 2026, month: 4, type: 'manual', amount: 42, description: 'Pinned' }
