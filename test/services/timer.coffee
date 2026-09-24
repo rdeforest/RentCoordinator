@@ -98,3 +98,33 @@ describe 'stopTimer credits rent through the event fold, not rent_periods (bug 3
     result = await timerService.stopTimer 'lyndzie', true
     assert.equal result.event, 'completed'
     assert.ok result.work_log, 'the work log still commits with rent_periods gone'
+
+
+  it "two concurrent stops on the same session produce exactly one work log (double-stop guard)", ->
+    # finishSession re-reads the session (`current = workSessionModel.getSession
+    # session.id`) rather than trusting the copy stopTimer's caller already
+    # has, specifically so a double-clicked Stop button — two overlapping
+    # requests racing each other — can't each turn the same session into its
+    # own work log. Without the re-read, both requests see the session as
+    # still open and each writes one: one hour worked, credited twice.
+    start = new Date Date.now() - 90 * MINUTE
+    sessionId = seedActiveSession 'lyndzie', start
+
+    logsBefore     = db.prepare("SELECT COUNT(*) AS n FROM work_logs").get().n
+    reportedBefore = eventsModel.listAllEvents().filter((e) -> e.action is 'work-reported').length
+
+    [r1, r2] = await Promise.all [
+      timerService.stopTimer 'lyndzie', true
+      timerService.stopTimer 'lyndzie', true
+    ]
+
+    completed = (r for r in [r1, r2] when r.work_log?)
+    assert.equal completed.length, 1,
+      'exactly one of the two overlapping stops must have created the work log'
+
+    logsAfter = db.prepare("SELECT COUNT(*) AS n FROM work_logs").get().n
+    assert.equal logsAfter - logsBefore, 1, 'exactly one new work log row'
+
+    reportedAfter = eventsModel.listAllEvents().filter((e) -> e.action is 'work-reported').length
+    assert.equal reportedAfter - reportedBefore, 1,
+      'exactly one new work-reported event — the credit is not doubled'

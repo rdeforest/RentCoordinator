@@ -475,6 +475,17 @@ test "a month paid in full is not outstanding", ->
 test "a month paid to the cent is settled, despite float residue", ->
   # 200 minutes of work credits $166.666…, so the month owes $1,433.33 — and
   # raw float subtraction left it owing a third of a cent for ever.
+  #
+  # This does not by itself prove computeOutstanding needs money.minus rather
+  # than plain subtraction: owed and paid both arrive already rounded by
+  # money.dollars (computeMonth rounds both before returning them), so
+  # subtracting two already-cent-exact numbers leaves no meaningful residue
+  # either way — audited by brute-force diffing raw subtraction against
+  # money.minus across a wide grid of already-rounded amounts (no mismatch
+  # above 1e-9), and the `money.cents(outstanding) > 0` filter downstream
+  # would swallow anything that small regardless. What this test protects is
+  # that guard, and the "raw floats leave a fully-paid month outstanding by a
+  # fraction of a cent" failure mode bug 35 was originally about.
   events = [work('2026-01', 200 / 60)]
   due    = computeAllPeriods(events, earlyIn 2026, 2)['2026-01'].display_amount_due
 
@@ -507,6 +518,14 @@ test "an overpaid month does not cancel out a month that is owed", ->
 
 
 test "the current month before the due date is not yet owed", ->
+  # computeOutstanding has no dedicated NOT DUE filter — computeMonth only
+  # ever sets payment_status to 'NOT DUE' in the same branch where it sets
+  # display_amount_due to 0, so a NOT DUE row always has owed: 0, its
+  # outstanding clamps to 0, and the cents > 0 filter drops it the same as
+  # any settled month. A `payment_status isnt 'NOT DUE'` filter was removed
+  # from computeOutstanding (2026-09-24 audit) because it duplicated that
+  # without changing the result — this test still pins the outcome, just not
+  # the mechanism.
   months = owedFrom([work('2026-06', 0)], earlyIn 2026, 6).months
 
   assert.deepEqual months, [], 'NOT DUE months are excluded from what is owed'
