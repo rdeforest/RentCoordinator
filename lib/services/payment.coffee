@@ -1,6 +1,7 @@
 Stripe        = require 'stripe'
 config        = require '../config.coffee'
 eventsModel   = require '../models/events.coffee'
+money         = require '../money.coffee'
 { transaction } = require '../db/utils.coffee'
 
 stripe = null
@@ -19,7 +20,7 @@ getStripe = ->
 createPaymentIntent = (amount, description, metadata = {}) ->
   stripeClient = getStripe()
 
-  amountCents = Math.round amount * 100
+  amountCents = money.cents amount
 
   paymentIntent = await stripeClient.paymentIntents.create
     amount:               amountCents

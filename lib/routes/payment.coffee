@@ -5,6 +5,27 @@ config         = require '../config.coffee'
 logger         = require '../logger.coffee'
 
 
+# The "Pay everything outstanding" plan, built from computeOutstanding's
+# months. A corrupt month is reported there (outstanding forced to 0,
+# flagged rather than dropped, so the dashboard can show it) but must never
+# receive money nobody can compute the meaning of — including a $0 entry,
+# which would still record a payment-made event against a month the calc
+# cannot make sense of the moment it is un-corrupted (bug 59). Pure, so the
+# filtering can be tested without a live Stripe key.
+buildOutstandingAllocation = (outstanding) ->
+  payableMonths = outstanding.months.filter (m) -> not m.corrupt
+  ymList        = (m.year + '-' + String(m.month).padStart(2,'0') for m in payableMonths).join ','
+
+  {
+    payableMonths
+    ymList
+    description: "Rent payment covering #{ymList}"
+    # Freeze the oldest-first split now so confirm and the webhook credit
+    # the same months later, whatever "outstanding" looks like by then.
+    allocation:  ({ year: m.year, month: m.month, amount: m.outstanding } for m in payableMonths)
+  }
+
+
 setup = (app) ->
   # If year/month are supplied, the tenant is paying a specific month
   # (legacy flow + the Stripe checkout link in the rent UI). If they're
@@ -15,6 +36,11 @@ setup = (app) ->
 
     unless amount
       return res.status(400).json error: 'Amount required'
+
+    # Normalized once, at the boundary: every comparison and every allocation
+    # entry built below works from the same rounded-to-the-cent figure Stripe
+    # will actually charge, rather than whatever precision req.body carried in.
+    amount = money.dollars amount
 
     try
       if year and month
@@ -50,12 +76,8 @@ setup = (app) ->
             expected:  expected
             requested: amount
 
-        ymList      = (m.year + '-' + String(m.month).padStart(2,'0') for m in outstanding.months).join ','
-        description = "Rent payment covering #{ymList}"
-        # Freeze the oldest-first split now so confirm and the webhook credit
-        # the same months later, whatever "outstanding" looks like by then.
-        allocation  = ({ year: m.year, month: m.month, amount: m.outstanding } for m in outstanding.months)
-        meta        = { covers: ymList, tenant: req.session.email, allocation: JSON.stringify allocation }
+        { ymList, description, allocation } = buildOutstandingAllocation outstanding
+        meta = { covers: ymList, tenant: req.session.email, allocation: JSON.stringify allocation }
 
       result = await paymentService.createPaymentIntent amount, description, meta
       res.json result
@@ -139,4 +161,4 @@ setupWebhook = (app) ->
       logger.error 'payment.webhook.handle', err, { type: event.type }, req.id
       res.status(500).json error: err.message
 
-module.exports = { setup, setupWebhook }
+module.exports = { setup, setupWebhook, buildOutstandingAllocation }
