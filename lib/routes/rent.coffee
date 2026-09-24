@@ -220,7 +220,7 @@ setup = (app) ->
         payload:
           target_kind: 'period-field'
           target:      { year, month, field }
-          new_value:   updates[field]
+          new_value:   parseFloat updates[field]
 
     res.json toWireShape periodViewer.getPeriod year, month
 

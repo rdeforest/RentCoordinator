@@ -36,11 +36,20 @@ describeValue = (value) ->
   JSON.stringify value
 
 
+# A malformed amount is the caller's mistake, not the server's — err.status
+# lets the error handler (lib/middleware.coffee) respond 400 instead of the
+# 500 a plain Error produces, so a bad request doesn't get logged and
+# reported as an internal failure.
+badRequest = (message) ->
+  err = new Error message
+  err.status = 400
+  err
+
 checkFields = (action, payload, fields) ->
   for key in fields when payload?[key]?
     value = payload[key]
     unless typeof value is 'number' and Number.isFinite value
-      throw new Error "#{action} payload.#{key} must be a finite number, got #{describeValue value}"
+      throw badRequest "#{action} payload.#{key} must be a finite number, got #{describeValue value}"
 
   return
 
