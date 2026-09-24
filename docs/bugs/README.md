@@ -6,12 +6,12 @@ the proposed fix in `docs/fixes/`.
 
 ## Active
 
-One remains, deferred deliberately rather than missed, plus bug 35 which is
-half done (see Resolved).
-
-| # | Title | Severity | Why it is still here |
+| # | Title | Severity | Notes |
 |---|---|---|---|
-| 27 | [Payment-history page reads legacy `rent_events`](27-payment-history-legacy-table.md) | Medium | The architectural review recommends deleting the page, as bug 26 was deleted. Awaiting that call — it removes a linked page from the UI. |
+| 35 | [Money as floating-point dollars](35-money-floating-point.md) | Medium | Half done: amounts round to the cent. The integer-cents conversion is next. |
+| 62 | [Nothing checks the database for consistency except migrations](62-no-consistency-checking.md) | Medium | Scheduled report-only check, plus a landlord-only warning icon linking to the findings. |
+| 63 | [A crash is not restarted](63-no-process-supervision.md) | High | Any crash means ASG replacement, which means restore-from-backup. |
+| 65 | [Login sessions live in memory](65-sessions-in-memory.md) | Low | Every restart logs both users out. |
 
 ### The remaining structural debt
 
@@ -78,6 +78,25 @@ without changing that line turns every instance unhealthy at the ALB.
 | 42 | Health check opens a fresh connection | 2026-09-23 | Uses the shared handle. |
 | 43 | `scripts/install.sh` targets Deno | 2026-09-23 | Deleted; CLAUDE.md corrected. |
 | 44 | `dist` build never copies `package.json` | 2026-09-23 | Three separate faults; the artifact now starts. |
+| 29 | Timer project_id/task_id silently dropped | 2026-09-23 | Parameters dropped; timer sessions carry no project. |
+| 45 | backup-*.sh mangle secrets parsing `.env` | 2026-09-23 | `set -a; . .env`. |
+| 46 | Boot-time migration loop swallows failures | 2026-09-23 | Bootstrap runs `set -euo pipefail` and delegates to `upgrade.sh`. |
+| 47 | `scripts/upgrade.sh` was empty | 2026-09-23 | It runs the migration runner. |
+| 48 | projects/tasks/sessions FKs lack ON DELETE | 2026-09-23 | Rebuild migration. |
+| 49 | Editing a work log does not move the rent credit | 2026-09-23 | Edits emit an event. |
+| 50 | Deeply nested JSON body crashes the process | 2026-09-24 | Depth-bounded log metadata; logging can't escape the error path; unhandled rejections logged. |
+| 51 | Landlord-entered payments never count | 2026-09-24 | Payments count regardless of actor. Production had none, so no balance moved. |
+| 52 | `upgrade.sh` migrates the live database | 2026-09-24 | Refuses while the service runs; deploy order is stop, migrate, start; snapshots pruned. |
+| 53 | Missing `SESSION_SECRET` fails silently on restart | 2026-09-24 | `upgrade.sh` checks it up front. |
+| 54 | Unscoped FK check blocks boot on any orphan | 2026-09-24 | Scoped to the tables the migration rebuilds. |
+| 55 | Timer stop writes the legacy `rent_periods` table | 2026-09-24 | Removed. |
+| 56 | Adjustment on an overridden month ignored | 2026-09-24 | Adjustments after the latest override apply on top of it. |
+| 57 | Amount validation errors surface as 500 | 2026-09-24 | 400 via `err.status`. |
+| 58 | `PUT /work-logs` accepts zero duration | 2026-09-24 | Shared validator with POST. |
+| 59 | "Pay everything" pays corrupt months | 2026-09-24 | Allocation excludes them. |
+| 60 | Refused login address stored as PII | 2026-09-24 | Warn, without the address or a stack. |
+| 61 | Logger truncates before tokenizing | 2026-09-24 | Tokenize first. |
+| 64 | Nightly backup cron never ran | 2026-09-24 | Log redirect into root-owned `/var/log`. Live crontab fixed; Launch Template via `deploy.sh deploy`. |
 | 45 | `backup-*.sh` mangle `.env` secrets | 2026-09-23 | Source the file instead of `xargs`. |
 | 46 | Migration loop swallows failures | 2026-09-23 | `set -euo pipefail`, delegating to `upgrade.sh`. |
 | 47 | `scripts/upgrade.sh` is empty | 2026-09-23 | Real runner; migrations also apply at boot. |
