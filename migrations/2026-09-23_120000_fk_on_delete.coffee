@@ -124,9 +124,18 @@ try
       'CREATE INDEX IF NOT EXISTS idx_work_logs_date ON work_logs(DATE(start_time))'
     ]
 
-  violations = db.prepare('PRAGMA foreign_key_check').all()
-  if violations.length > 0
-    throw new Error "FK violations after rebuild: #{JSON.stringify violations}"
+  # Scoped to the tables this migration rebuilt. `PRAGMA foreign_key_check`
+  # with no argument checks every table in the database — including legacy
+  # ones (e.g. an orphaned rent_events row) this migration has nothing to do
+  # with. Since migrations run from schema.initialize at every boot (bug 54),
+  # an unrelated pre-existing orphan aborted this migration, and therefore
+  # boot, every single time.
+  # PRAGMA does not accept a bound parameter for its argument; these four
+  # names are the fixed list rebuilt above, not external input.
+  for table in ['tasks', 'work_events', 'current_sessions', 'work_logs']
+    violations = db.prepare("PRAGMA foreign_key_check(#{table})").all()
+    if violations.length > 0
+      throw new Error "FK violations in #{table} after rebuild: #{JSON.stringify violations}"
 
   db.exec 'COMMIT'
   console.log 'Migration completed successfully'

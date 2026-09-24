@@ -277,3 +277,88 @@ describe 'A failed run leaves the database as it was', ->
     assert.ok result.ok, "the run should succeed:\n#{result.output}"
     withDb dbPath, (db) ->
       assert.equal db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n, 2
+
+
+# --- bug 54 -------------------------------------------------------------
+#
+# migrations/2026-09-23_120000_fk_on_delete.coffee ran `PRAGMA
+# foreign_key_check` with no table argument after rebuilding five tables, so
+# an orphan row in *any* table — including ones this migration never
+# touches — aborted it. Migrations run from schema.initialize at every boot,
+# so a single legacy orphan row (e.g. in rent_events, from before the
+# cascade-delete migration existed) failed the boot forever.
+
+describe 'fk_on_delete migration ignores orphans outside its own tables (bug 54)', ->
+  FK_MIGRATION = path.join ROOT, 'migrations', '2026-09-23_120000_fk_on_delete.coffee'
+
+  # The pre-migration shape: the same five tables this migration rebuilds,
+  # without any ON DELETE action — plus rent_periods/rent_events, which this
+  # migration does not touch, where the orphan is seeded.
+  seedOldSchema = (dbPath) ->
+    db = new DatabaseSync dbPath
+    try
+      db.exec 'PRAGMA foreign_keys = OFF'
+      db.exec """
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY, name TEXT NOT NULL
+        );
+        CREATE TABLE tasks (
+          id TEXT PRIMARY KEY, project_id TEXT REFERENCES projects(id),
+          name TEXT, description TEXT, status TEXT DEFAULT 'pending',
+          estimated_hours REAL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE work_sessions (
+          id TEXT PRIMARY KEY
+        );
+        CREATE TABLE work_events (
+          id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES work_sessions(id),
+          event_type TEXT NOT NULL, timestamp DATETIME NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE current_sessions (
+          worker TEXT PRIMARY KEY, session_id TEXT REFERENCES work_sessions(id)
+        );
+        CREATE TABLE work_logs (
+          id TEXT PRIMARY KEY, worker TEXT NOT NULL,
+          start_time DATETIME NOT NULL, end_time DATETIME NOT NULL,
+          duration INTEGER NOT NULL, description TEXT NOT NULL,
+          project_id TEXT REFERENCES projects(id), task_id TEXT REFERENCES tasks(id),
+          billable BOOLEAN DEFAULT 1, submitted BOOLEAN DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE rent_periods (
+          id TEXT PRIMARY KEY, year INTEGER NOT NULL, month INTEGER NOT NULL
+        );
+        CREATE TABLE rent_events (
+          id TEXT PRIMARY KEY,
+          period_id TEXT NOT NULL REFERENCES rent_periods(id),
+          type TEXT NOT NULL, amount REAL NOT NULL
+        );
+      """
+
+      # The orphan this migration must not care about: a rent_events row
+      # pointing at a rent_periods id that does not exist. Neither table is
+      # among the five this migration rebuilds.
+      db.prepare('INSERT INTO rent_events (id, period_id, type, amount) VALUES (?, ?, ?, ?)')
+        .run 'orphan-event', 'no-such-period', 'payment', 100
+    finally
+      db.close()
+
+  it 'migrates cleanly with an unrelated orphan already in the database', ->
+    dbPath = path.join tmpDir, 'bug54-orphan.db'
+    seedOldSchema dbPath
+
+    result = inChild dbPath, "require('#{FK_MIGRATION}')"
+
+    assert.ok result.survived, "migration failed:\n#{result.output}"
+    assert.doesNotMatch result.output, /FK violations/,
+      'an orphan outside the rebuilt tables must not fail this migration'
+
+    withDb dbPath, (db) ->
+      sql = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'work_logs'").get().sql
+      assert.match sql, /ON DELETE/, 'the rebuild itself must still have happened'
+
+      # The orphan is untouched — this migration does not own rent_events.
+      assert.equal db.prepare("SELECT COUNT(*) AS n FROM rent_events").get().n, 1
