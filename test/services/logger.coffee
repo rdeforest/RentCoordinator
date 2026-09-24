@@ -8,9 +8,14 @@
 { describe, it }  = require 'node:test'
 assert            = require 'node:assert/strict'
 { spawnSync }     = require 'node:child_process'
+fs                = require 'node:fs'
 path              = require 'node:path'
 
 ROOT = path.join __dirname, '..', '..'
+
+process.on 'exit', ->
+  for name in fs.readdirSync __dirname when name.startsWith '.logger-tok-'
+    fs.rmSync path.join(__dirname, name), force: true
 
 # execFileSync only returns stdout; console.error (what logger writes to)
 # goes to stderr, so the child's output has to be captured explicitly.
@@ -59,8 +64,19 @@ describe 'logger.error survives pathological input (bug 50)', ->
 
 
 describe 'logger tokenizes before truncating (bug 61)', ->
-  dbScript = (body) -> """
-    process.env.DB_PATH = '#{path.join ROOT, 'test', 'services', ".logger-tok-\#{process.pid}.db"}'
+  scratchDbCount = 0
+
+  # Computed once per call, entirely in this (parent) process — no need for
+  # the child to interpolate its own pid, which single-quoting it here
+  # previously defeated anyway, leaving a literal "#{process.pid}" filename
+  # on disk instead of a real one.
+  dbScript = (body) ->
+    scratchDbCount += 1
+    dbPath = path.join ROOT, 'test', 'services',
+      ".logger-tok-#{process.pid}-#{scratchDbCount}.db"
+
+    """
+    process.env.DB_PATH = '#{dbPath}'
     schema = require './lib/db/schema.coffee'
     schema.db.exec \"\"\"
       CREATE TABLE IF NOT EXISTS pii_tokens (
