@@ -11,6 +11,7 @@ path                            = require 'node:path'
 { DatabaseSync }                = require 'node:sqlite'
 { waitForServer }               = require '../helper.coffee'
 { findFreePort, shutdownServer }= require '../server.coffee'
+config                           = require '../../lib/config.coffee'
 
 
 TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
@@ -212,3 +213,35 @@ describe 'Auth hardening (bugs 12/22/38)', ->
 
     assert.equal response.status, 400
     assert.equal (await response.json()).success, false
+
+
+  it 'throttles repeated verify attempts for one address (VERIFY_RATE_LIMIT)', ->
+    # verifyCode does not check the allowlist (only sendVerificationCode
+    # does), so this address never needs to be real. Deliberately unique to
+    # this test rather than TENANT/LANDLORD: the email-scoped throttle bucket
+    # is keyed on (ip, address), and every other case in this file that calls
+    # /auth/verify-code shares this same server's in-process rate-limit
+    # state (lib/rate_limit.coffee — one Map per process) — reusing TENANT or
+    # LANDLORD here would both inherit whatever those cases already spent
+    # against this bucket and leave it exhausted for anything declared after
+    # this one. A fresh address sidesteps both without needing a separate
+    # server instance or a fixed position in the file.
+    target = "verify-throttle-#{Date.now()}@example.com"
+
+    responses = for attempt in [1..config.VERIFY_RATE_LIMIT + 2]
+      await post '/auth/verify-code', email: target, code: '000000'
+
+    statuses = (r.status for r in responses)
+    assert.ok 429 in statuses,
+      "repeated verify attempts should eventually be throttled (got #{statuses.join ', '})"
+
+    throttled = responses.find (r) -> r.status is 429
+    assert.ok throttled.headers.get('retry-after'),
+      'a 429 should tell the caller when to come back'
+
+    # Every attempt before the throttle kicked in must have been answered on
+    # its own merits (no stored code for this address), not silently folded
+    # into the eventual 429.
+    for response, i in responses when response.status isnt 429
+      assert.equal response.status, 400,
+        "attempt #{i + 1} should be an ordinary rejection, not something else (got #{response.status})"

@@ -16,28 +16,29 @@ LIMITS =
     windowMs: config.VERIFY_RATE_WINDOW
 
 
-# An address long enough to matter is an attack on the counter map, not a
-# login attempt. Truncate before it becomes a key.
-MAX_KEY_EMAIL = 128
-
 # RFC 5321's limit. Anything longer is not an address, and letting it through
-# put attacker-sized strings into the rate-limit map, the database and the log.
+# put attacker-sized strings into the rate-limit map, the database and the
+# log — and, before this bound existed, into the throttle key below (a
+# MAX_KEY_EMAIL truncation once guarded that separately; redundant once every
+# caller of throttle() already rejects anything over MAX_EMAIL_LENGTH first).
 MAX_EMAIL_LENGTH = 254
 
-# The address bucket is consulted first, and deliberately: it is the one that
-# bounds how many keys a single caller can create, so checking it second let a
-# spray insert a key per made-up address before being rejected.
+# Why the budget is keyed on (caller, email) rather than email alone, and why
+# the per-address bucket is looser than the per-caller one, lives in
+# config.coffee next to VERIFY_RATE_LIMIT / SEND_CODE_LIMIT — one place for
+# the rationale behind the numbers this function applies.
 #
-# The second key is (address, email), not email alone. An email-only bucket is
-# an unauthenticated lockout — both addresses are published, so anyone could
-# spend the real user's budget from anywhere.
+# The address bucket is still consulted first here, and deliberately: it is
+# the one that bounds how many keys a single caller can create, so checking
+# it second let a spray insert a key per made-up address before being
+# rejected.
 #
 # Behind the ALB the socket address is the balancer's; `trust proxy` is set in
 # middleware.setup, which makes req.ip the X-Forwarded-For client.
 throttle = (req, res, bucket, email) ->
   limits = LIMITS[bucket]
   caller = req.ip
-  scoped = "#{caller}|#{email[0...MAX_KEY_EMAIL]}"
+  scoped = "#{caller}|#{email}"
 
   for [key, limit] in [["#{bucket}:ip:#{caller}", limits.ip], ["#{bucket}:caller:#{scoped}", limits.email]]
     result = rateLimit.hit key, limit, limits.windowMs

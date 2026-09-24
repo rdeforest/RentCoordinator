@@ -111,6 +111,18 @@ setup = (app, getServer) ->
           process.exit 0
       , 100
 
+  # Test-only, same pattern as /v1/shutdown above: every real route catches
+  # its own errors (see the try/catch on each of the ones below), so there is
+  # no ordinary request that reaches the generic error handler installed by
+  # middleware.setupErrorHandler. Bug 21 was about that handler's mounting
+  # order; this route exists so an integration test can actually exercise it
+  # end to end, rather than only at the unit level (test/services/middleware.coffee).
+  app.get '/v1/throw', (req, res) ->
+    unless config.NODE_ENV is 'test'
+      return res.status(403).json error: 'Only allowed in test mode'
+
+    throw new Error 'deliberate test failure'
+
   authRoutes.setup app
 
   app.get '/login.html', (req, res) ->

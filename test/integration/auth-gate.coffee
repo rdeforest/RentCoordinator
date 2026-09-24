@@ -122,3 +122,9 @@ describe 'The auth gate (bug 23)', ->
       'an authenticated tenant is not an admin'
     assert.notEqual (await testConfig.client.get '/api/backup/list').status, 403,
       'and the landlord is'
+
+    # Bug 33: this route hands back raw, previously-tokenized PII, so it must
+    # be behind requireAdmin like every other /admin/* and /api/backup/* route
+    # — not merely behind requireAuth.
+    assert.equal (await tenant.post '/admin/detokenize', data: 'token:0000000000000000').status, 403,
+      'an authenticated tenant must not reach /admin/detokenize'
