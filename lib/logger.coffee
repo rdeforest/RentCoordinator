@@ -22,14 +22,18 @@ MAX_METADATA_DEPTH = 20
 #
 # The budget is per log record. Passing it in is what keeps a thousand short
 # strings from each costing the full per-string cap.
-# Tokenize first, truncate second. Truncating first (the previous order) could
-# cut a matched address in half, leaving a partial string — e.g.
-# 'alice@example.co' out of 'alice@example.com' — that tokenizes as a real but
-# wrong row in pii_tokens (bug 61). The match budget already bounds the cost
-# of tokenizing the untruncated string; truncation here only bounds the
-# record's size on the way out.
+# The address pattern backtracks, so scanning is quadratic in length: tokenize
+# only a window of the cap plus the longest possible address (RFC 5321). An
+# address straddling the cut lies wholly inside that window, so it is replaced
+# before the cut rather than split by it (bug 61), and a 100 kB field costs
+# what a 4 kB one does.
+MAX_ADDRESS_LENGTH = 254
+
 tokenizeString = (value, budget) ->
   return value unless typeof value is 'string'
+
+  overflow = Math.max 0, value.length - MAX_LOGGED_STRING
+  value    = value[0...MAX_LOGGED_STRING + MAX_ADDRESS_LENGTH]
 
   value = if value.includes '@'
     try
@@ -44,8 +48,8 @@ tokenizeString = (value, budget) ->
   else
     value
 
-  if value.length > MAX_LOGGED_STRING
-    value = value[0...MAX_LOGGED_STRING] + "…[#{value.length - MAX_LOGGED_STRING} more chars]"
+  if overflow > 0
+    value = value[0...MAX_LOGGED_STRING] + "…[#{overflow} more chars]"
 
   value
 

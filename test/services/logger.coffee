@@ -139,3 +139,15 @@ describe 'logger tokenizes before truncating (bug 61)', ->
       'the real address must not appear in the log line'
     assert.ok record.error.includes(fullToken),
       'the whole address must have been tokenized as one match, not split by an earlier truncation'
+
+  it 'logs a 100 kB field in bounded time', ->
+    # The address pattern backtracks: tokenizing the whole string before the
+    # cut made this ~8 s, long enough to fail the ALB health check.
+    output = runChild dbScript """
+      started = Date.now()
+      logger.error 'test.tokenizeLarge', new Error('x'), { note: 'a'.repeat(100000) + '@' }
+      console.log 'ELAPSED:' + (Date.now() - started)
+    """
+
+    elapsed = Number (output.split('\n').find (l) -> l.startsWith 'ELAPSED:')?.slice 8
+    assert.ok elapsed < 1000, "logging a 100 kB field took #{elapsed} ms:\n#{output}"
