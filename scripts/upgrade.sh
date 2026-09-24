@@ -24,6 +24,18 @@ for env_file in .env ../.env config.sh ../config.sh; do
   fi
 done
 
+# The app refuses to start without SESSION_SECRET (lib/config.coffee) rather
+# than fall back to a shared default — but start-stop-daemon --background
+# returns 0 whether or not the process it launched stayed up, so a missing
+# secret used to surface only as a silent failed restart in step 6 of
+# docs/deployment.md, with nothing here to say why (bug 53). Same check, same
+# message shape, as the one the instance bootstrap already runs against a
+# fresh .env.
+if [ -z "${env_file:-}" ] || [ ! -f "$env_file" ] || ! grep -q '^SESSION_SECRET=.\+' "$env_file"; then
+  echo "FATAL: SESSION_SECRET missing from .env (or config.sh) — check the rent-coordinator/config secret" >&2
+  exit 1
+fi
+
 # Whether DB_PATH was chosen or defaulted decides what a missing file means.
 if [ -n "${DB_PATH:-}" ]; then
   DB_PATH_SUPPLIED=1
