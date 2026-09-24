@@ -121,11 +121,24 @@ asyncRoute = (name, handler) -> (req, res) ->
   try
     await handler req, res
   catch err
-    logger.error name, err,
-      { body: req.body, query: req.query, params: req.params },
-      req.id
+    # Logging can itself fail — deeply nested or oversized input has done it
+    # (bug 50: a RangeError from unbounded recursion, thrown from inside this
+    # very catch, which turned a request error into an unhandled rejection
+    # and took the process down). The response below must go out regardless.
+    try
+      logger.error name, err,
+        { body: req.body, query: req.query, params: req.params },
+        req.id
+    catch loggingErr
+      console.error "asyncRoute: failed to log '#{name}' error", loggingErr?.message
 
-    statusCode = if err.message?.match /not found/i
+    # A handler that already knows its status (validation errors carry
+    # `err.status`) gets to say so directly; only 4xx is honoured here — a
+    # handler is not in a position to claim 5xx behaves differently from the
+    # message-sniffed default below.
+    statusCode = if err.status >= 400 and err.status < 500
+      err.status
+    else if err.message?.match /not found/i
       404
     else if err.message?.match /already deleted|not deleted/i
       400

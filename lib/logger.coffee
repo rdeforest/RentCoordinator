@@ -7,6 +7,13 @@ tokenService = null  # Lazy load to avoid circular dependency
 # req.body, which body-parser will happily fill with 100 kB.
 MAX_LOGGED_STRING = 4096
 
+# tokenizeMetadata recurses one stack frame per level of nesting. A posted
+# body can nest arrays far deeper than the call stack allows — a ~45,000-deep
+# array crashed the process with a RangeError raised *inside* asyncRoute's own
+# catch, which turned a request error into an unhandled rejection (bug 50).
+# Nothing legitimate nests this deep; beyond it we stop descending and say so.
+MAX_METADATA_DEPTH = 20
+
 
 # The one place a string is checked for PII. Everything that reaches the log —
 # metadata values, error messages, stack frames — goes through here, so a
@@ -15,36 +22,50 @@ MAX_LOGGED_STRING = 4096
 #
 # The budget is per log record. Passing it in is what keeps a thousand short
 # strings from each costing the full per-string cap.
+# Tokenize first, truncate second. Truncating first (the previous order) could
+# cut a matched address in half, leaving a partial string — e.g.
+# 'alice@example.co' out of 'alice@example.com' — that tokenizes as a real but
+# wrong row in pii_tokens (bug 61). The match budget already bounds the cost
+# of tokenizing the untruncated string; truncation here only bounds the
+# record's size on the way out.
 tokenizeString = (value, budget) ->
   return value unless typeof value is 'string'
+
+  value = if value.includes '@'
+    try
+      tokenService ?= require './services/tokenization.coffee'
+      tokenService.tokenizeEmbedded value, budget
+    catch err
+      # Tokenizing writes to SQLite, so logging a database failure can fail
+      # here too. Losing the log entirely is the worse outcome; redact
+      # visibly and say why, rather than letting the logger throw from
+      # inside the error handler.
+      value.replace /\S+@\S+/g, "[redacted: tokenizer failed: #{err.message}]"
+  else
+    value
 
   if value.length > MAX_LOGGED_STRING
     value = value[0...MAX_LOGGED_STRING] + "…[#{value.length - MAX_LOGGED_STRING} more chars]"
 
-  return value unless value.includes '@'
-
-  try
-    tokenService ?= require './services/tokenization.coffee'
-    tokenService.tokenizeEmbedded value, budget
-  catch err
-    # Tokenizing writes to SQLite, so logging a database failure can fail
-    # here too. Losing the log entirely is the worse outcome; redact visibly
-    # and say why, rather than letting the logger throw from inside the
-    # error handler.
-    value.replace /\S+@\S+/g, "[redacted: tokenizer failed: #{err.message}]"
+  value
 
 # Recursively tokenize emails in metadata objects, spending one shared budget.
-tokenizeMetadata = (obj, budget) ->
+# Bounded in depth — see MAX_METADATA_DEPTH — so pathologically nested input
+# is redacted rather than blowing the call stack.
+tokenizeMetadata = (obj, budget, depth = 0) ->
   return obj unless typeof obj is 'object' and obj?
 
+  if depth >= MAX_METADATA_DEPTH
+    return '[redacted: max nesting depth exceeded]'
+
   if Array.isArray obj
-    return obj.map (v) -> tokenizeMetadata v, budget
+    return obj.map (v) -> tokenizeMetadata v, budget, depth + 1
 
   result = {}
   for key, value of obj
     result[key] =
       if      typeof value is 'string' then tokenizeString   value, budget
-      else if typeof value is 'object' then tokenizeMetadata value, budget
+      else if typeof value is 'object' then tokenizeMetadata value, budget, depth + 1
       else                                  value
   result
 

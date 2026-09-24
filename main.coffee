@@ -6,6 +6,7 @@ config          = require './lib/config.coffee'
 middleware      = require './lib/middleware.coffee'
 routing         = require './lib/routing.coffee'
 db              = require './lib/db/schema.coffee'
+logger          = require './lib/logger.coffee'
 
 
 CLIENT_SOURCE = 'static/coffee'
@@ -23,6 +24,17 @@ compileClient = ->
   console.log 'Compiling client-side CoffeeScript...'
   execSync "npx coffee -b -c -M -o static/js #{CLIENT_SOURCE}", stdio: 'inherit'
   console.log '✓ Client-side compilation complete\n'
+
+
+# A rejection that escapes every handler used to take the process down with
+# it (bug 50: a malformed request could throw inside asyncRoute's own catch,
+# turning a 500 into a crash). Logging it is best-effort — a broken logger
+# must not turn this into a second unhandled rejection.
+handleUnhandledRejection = (reason) ->
+  try
+    logger.error 'process.unhandledRejection', (if reason instanceof Error then reason else new Error String reason)
+  catch loggingErr
+    console.error 'unhandledRejection: failed to log', loggingErr?.message
 
 
 startServer = ->
@@ -63,6 +75,11 @@ startServer = ->
       process.exit 0
 
 
-startServer().catch (err) ->
-  console.error 'Failed to start server:', err
-  process.exit 1
+module.exports = { startServer, handleUnhandledRejection }
+
+if require.main is module
+  process.on 'unhandledRejection', handleUnhandledRejection
+
+  startServer().catch (err) ->
+    console.error 'Failed to start server:', err
+    process.exit 1

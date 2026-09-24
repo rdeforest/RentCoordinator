@@ -170,3 +170,81 @@ describe 'Admin gate (bug 33)', ->
 
   it 'still lets the landlord reach the page', ->
     assert.equal (await call 'requireAdminPage', authed 'robert@defore.st').status, 200
+
+
+# Bug 50 — a handler error must always reach the client with a response, even
+# when logging that error is itself what fails, and a validation error that
+# already knows its status must not be flattened to a message-sniffed guess.
+describe 'asyncRoute (bug 50)', ->
+  middleware = require '../../lib/middleware.coffee'
+  logger     = require '../../lib/logger.coffee'
+
+  serve = (handler) ->
+    app = express()
+    app.set 'env', 'test'
+    app.get '/route', middleware.asyncRoute 'test.route', handler
+    app
+
+  call = (handler) ->
+    { server, port } = await listen serve handler
+    try
+      response = await fetch "http://localhost:#{port}/route"
+      body = try await response.json() catch then null
+      { status: response.status, body }
+    finally
+      server.close()
+
+  it 'honours a 4xx err.status set by the handler', ->
+    result = await call (req, res) ->
+      err = new Error 'amount must be positive'
+      err.status = 400
+      throw err
+
+    assert.equal result.status, 400
+    assert.equal result.body.error, 'amount must be positive'
+
+  it 'falls back to message-sniffing when err.status is absent', ->
+    result = await call (req, res) -> throw new Error 'widget not found'
+    assert.equal result.status, 404
+
+  it 'does not let err.status claim a 5xx or an out-of-range value', ->
+    result = await call (req, res) ->
+      err = new Error 'boom'
+      err.status = 599
+      throw err
+
+    assert.equal result.status, 500,
+      'only 4xx is a handler-asserted status; anything else falls back to the default'
+
+  it 'still responds when logging the error itself throws', ->
+    original = logger.error
+    logger.error = -> throw new Error 'logger exploded'
+    try
+      result = await call (req, res) -> throw new Error 'widget not found'
+    finally
+      logger.error = original
+
+    assert.equal result.status, 404,
+      'a broken logger must not swallow the response asyncRoute was about to send'
+
+
+# Bug 50, belt and braces: nothing upstream of asyncRoute is guaranteed to
+# catch every rejection, so the process itself must survive one. Run in a
+# child — testing "does the process die" from inside the process under test
+# would take this suite down with it if the fix regressed.
+describe 'main.coffee survives an unhandled rejection (bug 50)', ->
+  it 'logs the rejection and keeps running rather than exiting', ->
+    script = """
+      main = require './main.coffee'
+      process.on 'unhandledRejection', main.handleUnhandledRejection
+      Promise.reject new Error 'nobody caught this'
+      setTimeout (-> console.log 'SENTINEL-REACHED'), 100
+    """
+
+    result = execFileSync 'coffee', ['-e', script],
+      env:      Object.assign {}, process.env, NODE_ENV: 'test'
+      encoding: 'utf8'
+      stdio:    ['ignore', 'pipe', 'pipe']
+
+    assert.match result, /SENTINEL-REACHED/,
+      'the process must still be running after the rejection'
