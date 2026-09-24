@@ -299,16 +299,8 @@ computeAllPeriods = (events, now = new Date(), opts = {}) ->
   result
 
 
-# What is actually owed, oldest month first. Months still NOT DUE end up
-# excluded too — they can be paid early, but they are not part of "what do I
-# owe" — without a dedicated filter for it: computeMonth only ever sets
-# payment_status to 'NOT DUE' in the same branch where it sets
-# display_amount_due to 0 (the current month before the due date), so a
-# NOT DUE row always has owed = 0, its outstanding clamps to 0 below, and the
-# cents > 0 filter drops it — the same as any other settled month. A separate
-# `payment_status isnt 'NOT DUE'` filter here duplicated that without
-# changing the result, and was removed (audit, 2026-09-24; test coverage in
-# test/services/period.coffee confirms it two ways).
+# What is actually owed, oldest month first. Months still NOT DUE are excluded
+# — they can be paid early, but they are not part of "what do I owe".
 #
 # Pure, and here rather than in period_viewer, because this is the rule that
 # decides what the tenant is billed: /payment/create-intent creates a Stripe
@@ -316,17 +308,11 @@ computeAllPeriods = (events, now = new Date(), opts = {}) ->
 # not be tested without a database, so it had no unit test at all.
 computeOutstanding = (periods) ->
   rows = Object.values(periods)
+    .filter (p) -> p.payment_status isnt 'NOT DUE'
     .map (p) ->
       owed = p.display_amount_due
       paid = p.amount_paid or 0
-      # Not money.minus: owed and paid are already the outputs of
-      # money.dollars (computeMonth rounds both before returning them), so
-      # subtracting two numbers that are each already cent-exact leaves no
-      # meaningful float residue for money.minus to clean up — audited by
-      # brute-force diffing raw subtraction against money.minus across a wide
-      # grid of already-rounded amounts, no mismatch found above 1e-9 — and
-      # the cents > 0 filter below would swallow anything that small anyway.
-      outstanding = if p.corrupt then 0 else Math.max 0, owed - paid
+      outstanding = if p.corrupt then 0 else Math.max 0, money.minus owed, paid
       { year: p.year, month: p.month, owed, paid, outstanding, corrupt: p.corrupt is true }
     .filter (r) ->
       # A corrupt month is reported, not billed and not silently dropped:
