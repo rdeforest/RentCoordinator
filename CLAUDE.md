@@ -119,6 +119,10 @@ points at architecture.md rather than duplicating it.)
 - Test full HTTP request/response cycles with real sessions
 - Auth tests verify session persistence immediately after verification (catches race conditions)
 - Run with: `npm run test:integration`
+- One suite on its own: `NODE_ENV=test npx coffee test/services/period.coffee`.
+  Never `coffee --nodejs --test <file>`: Node's runner treats the `coffee`
+  binary itself as the test and waits for ever. It has hung twice, once for a
+  day.
 
 **Key Testing Insights:**
 - Session race conditions manifest as flakiness, not timing issues
