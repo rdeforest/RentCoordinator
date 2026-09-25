@@ -27,6 +27,10 @@ DEFAULT_CONFIG =
 # a last month it would never reach.
 VALID_MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/
 
+# Actions that belong to a month. Meta events (edited/deleted/undeleted) copy
+# their target's effective_for but are resolved by target_event_id.
+MONTH_ACTIONS = ['work-reported', 'payment-made', 'override', 'adjustment']
+
 monthKey = (year, month) ->
   "#{year}-#{String(month).padStart 2, '0'}"
 
@@ -368,6 +372,7 @@ computeOutstanding = (periods) ->
 module.exports = {
   DEFAULT_CONFIG
   VALID_MONTH_KEY
+  MONTH_ACTIONS
   computeOutstanding
   META_ACTIONS
   monthKey

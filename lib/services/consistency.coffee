@@ -73,10 +73,9 @@ checkCorruptMonths = (deps) ->
     detail:   { amount_due: p.amount_due, amount_paid: p.amount_paid }
 
 
-REQUIRES_EFFECTIVE_FOR = ['work-reported', 'payment-made', 'override', 'adjustment']
 
 checkEffectiveFor = (deps) ->
-  for e in deps.events when e.action in REQUIRES_EFFECTIVE_FOR
+  for e in deps.events when e.action in period.MONTH_ACTIONS
     value = e.effective_for
     continue if value? and period.VALID_MONTH_KEY.test value
 

@@ -23,12 +23,9 @@ tableFingerprint = (table) ->
 currentFingerprint = ->
   FINGERPRINT_TABLES.map(tableFingerprint).join '|'
 
-# created_at isn't one format across these tables: events (lib/models/events
-# .coffee) stores an ISO string ('...T...Z'), work_logs (lib/models/work_log
-# .coffee) stores SQLite's CURRENT_TIMESTAMP shape ('YYYY-MM-DD HH:MM:SS',
-# UTC, no zone suffix). Appending 'Z' to an already-ISO value produced
-# '...ZZ' — an unparseable date, hence NaN — whenever the newest write
-# happened to be a work log (bug 62, F2). Parse each by its own shape.
+# created_at has two shapes: events take the column default, SQLite's
+# CURRENT_TIMESTAMP ('YYYY-MM-DD HH:MM:SS', UTC, no zone); work_logs are
+# written with an ISO string. Parse each by its shape.
 parseCreatedAt = (value) ->
   return NaN unless value?
   if value.includes 'T' then new Date(value).getTime() else new Date(value.replace(' ', 'T') + 'Z').getTime()
@@ -52,20 +49,6 @@ lastDataWriteMs = ->
   Math.max epochs...
 
 
-# An acknowledgment is keyed by finding key, so a finding that changes key
-# (a re-pin, a recalculation) leaves its old ack orphaned — invisible on the
-# issues page (nothing there has that key any more) but still sitting in the
-# table forever. Drop any ack whose key isn't present in any of the runs
-# retained after this write (bug 62, F8).
-pruneStaleAcknowledgments = ->
-  liveKeys = new Set()
-  for run in listRuns()
-    liveKeys.add f.key for f in run.findings
-
-  unack row.finding_key for row in listAcknowledgments() when not liveKeys.has row.finding_key
-  return
-
-
 recordRun = (fingerprint, findings) ->
   db.prepare("""
     INSERT INTO consistency_runs (ran_at, fingerprint, findings) VALUES (?, ?, ?)
@@ -75,8 +58,6 @@ recordRun = (fingerprint, findings) ->
     DELETE FROM consistency_runs
     WHERE id NOT IN (SELECT id FROM consistency_runs ORDER BY id DESC LIMIT ?)
   """).run MAX_RUNS
-
-  pruneStaleAcknowledgments()
 
   latestRun()
 

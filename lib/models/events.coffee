@@ -5,7 +5,7 @@
 { db }                                  = require '../db/schema.coffee'
 { formatSQLParameters, transaction }    = require '../db/utils.coffee'
 money                                   = require '../money.coffee'
-{ VALID_MONTH_KEY }                     = require '../services/period.coffee'
+{ VALID_MONTH_KEY, MONTH_ACTIONS }      = require '../services/period.coffee'
 
 
 # Parse the JSON payload back into an object on the way out.
@@ -87,6 +87,7 @@ validateAmounts = (event) ->
 # Reject it here, at the one place every event enters the ledger, rather than
 # downstream in the fold.
 validateEffectiveFor = (event) ->
+  return unless event.action in MONTH_ACTIONS
   value = event.effective_for
   return if value is undefined or value is null
   return if VALID_MONTH_KEY.test value

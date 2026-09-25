@@ -105,3 +105,22 @@ describe 'recordEvent rejects an effective_for outside a real calendar month (bu
 
   it 'a well-formed YYYY-MM is accepted', ->
     assert.ok eventsModel.recordEvent baseEvent effective_for: '2026-12'
+
+
+describe 'effective_for is validated where an action owns a month', ->
+  it 'refuses a payment filed under month 13', ->
+    assert.throws (-> eventsModel.recordEvent baseEvent effective_for: '2026-13'), (err) -> err.status is 400
+
+  it 'still lets a bad row be deleted through the app', ->
+    # Meta events copy their target's effective_for; refusing them would make
+    # the consistency finding for that row impossible to settle.
+    schema.db.prepare("""
+      INSERT INTO events (id, occurred_at, effective_for, actor, actor_user, action, payload)
+      VALUES ('bad-row', '2026-05-01T00:00:00Z', '2026-13', 'tenant', 'lynz57@hotmail.com', 'payment-made', '{"amount":100}')
+    """).run()
+
+    assert.ok eventsModel.recordEvent baseEvent
+      action:          'deleted'
+      effective_for:   '2026-13'
+      target_event_id: 'bad-row'
+      payload:         {}

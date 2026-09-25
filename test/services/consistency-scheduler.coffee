@@ -20,33 +20,21 @@ test 'shouldRunScheduled runs when there is no previous run', ->
   assert.equal shouldRunScheduled('fp-1', null), true
 
 
-test 'shouldRunScheduled skips when the fingerprint has not changed and nothing external is stale', ->
+test 'shouldRunScheduled skips a quiet day: nothing written, nothing open', ->
   lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'ledger-corrupt-month' } ] }
-  assert.equal shouldRunScheduled('fp-1', lastRun), false
+  assert.equal shouldRunScheduled('fp-1', lastRun, new Set ['k']), false
+  assert.equal shouldRunScheduled('fp-1', { fingerprint: 'fp-1', findings: [] }), false
 
 
 test 'shouldRunScheduled runs when the fingerprint has changed', ->
   assert.equal shouldRunScheduled('fp-2', { fingerprint: 'fp-1', findings: [] }), true
 
 
-# --- bug 62, F3: a stale-fingerprint run still reruns when the last run has
-# a finding about state outside our own data (backup age, Stripe) --------
-
-test 'shouldRunScheduled reruns on an unchanged fingerprint when the last run has a backup-* finding', ->
-  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'backup-stale' } ] }
-  assert.equal shouldRunScheduled('fp-1', lastRun), true
-
-test 'shouldRunScheduled reruns on an unchanged fingerprint when the last run has a stripe-* finding', ->
-  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'stripe-unlinked' } ] }
-  assert.equal shouldRunScheduled('fp-1', lastRun), true
-
-test 'shouldRunScheduled reruns on an unchanged fingerprint when the last run has any *-error finding', ->
-  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'db-integrity-error' } ] }
-  assert.equal shouldRunScheduled('fp-1', lastRun), true
-
-test 'shouldRunScheduled still skips on an unchanged fingerprint when findings are ordinary ledger findings', ->
-  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'manual-payment-after-pin' } ] }
-  assert.equal shouldRunScheduled('fp-1', lastRun), false
+test 'shouldRunScheduled reruns while any finding is open, whatever its kind', ->
+  # A hand repair (UPDATE of a bad payload, a VACUUM) moves no fingerprint.
+  for kind in ['backup-stale', 'stripe-unlinked', 'db-integrity-error', 'ledger-unreadable', 'manual-payment-after-pin']
+    lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind } ] }
+    assert.equal shouldRunScheduled('fp-1', lastRun), true, kind
 
 
 # --- bug 62, F5: runAndStore warns only for new, unacknowledged findings —

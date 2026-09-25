@@ -54,30 +54,20 @@ describe 'recordRun / latestRun', ->
     assert.equal consistencyModel.listRuns(100).length, 30
 
 
-describe 'pruning stale acknowledgments at record time (bug 62, F8)', ->
-  it 'drops an ack whose key no longer appears in any retained run, once it ages out of the window', ->
+describe 'acknowledgments are never deleted by a run', ->
+  it 'keeps the note through a long Stripe outage and matches the finding when it returns', ->
     fingerprint = consistencyModel.currentFingerprint()
+    legacy      = { key: 'stripe-unlinked:pi_legacy', kind: 'stripe-unlinked', severity: 'warning', message: 'm' }
+    outage      = { key: 'stripe-error:connect ECONNREFUSED', kind: 'stripe-error', severity: 'error', message: 'm' }
 
-    consistencyModel.recordRun fingerprint, [ { key: 'f8-stale-key', kind: 'test', severity: 'warning', message: 'm' } ]
-    consistencyModel.ack 'f8-stale-key', 'noted for later', 'robert@defore.st'
-    assert.ok consistencyModel.acknowledgedKeys().has 'f8-stale-key'
+    consistencyModel.recordRun fingerprint, [legacy]
+    consistencyModel.ack legacy.key, 'paid 2026-06-12 before bug 09; recorded by hand', 'robert@defore.st'
 
-    # Push MAX_RUNS more empty runs so the run holding the key falls out of
-    # the retained window on the last recordRun call.
-    consistencyModel.recordRun fingerprint, [] for [1..30]
+    consistencyModel.recordRun fingerprint, [outage] for [1..31]
+    consistencyModel.recordRun fingerprint, [legacy]
 
-    assert.ok not consistencyModel.acknowledgedKeys().has 'f8-stale-key',
-      'the ack should have been pruned once its finding key left every stored run'
-
-  it 'keeps an ack whose key is still present in a retained run', ->
-    fingerprint = consistencyModel.currentFingerprint()
-
-    consistencyModel.recordRun fingerprint, [ { key: 'f8-live-key', kind: 'test', severity: 'warning', message: 'm' } ]
-    consistencyModel.ack 'f8-live-key', 'still relevant', 'robert@defore.st'
-
-    consistencyModel.recordRun fingerprint, [ { key: 'f8-live-key', kind: 'test', severity: 'warning', message: 'm' } ]
-
-    assert.ok consistencyModel.acknowledgedKeys().has 'f8-live-key'
+    assert.equal consistencyModel.getAck(legacy.key)?.note, 'paid 2026-06-12 before bug 09; recorded by hand',
+      'a note Robert wrote must outlive any number of runs that could not see its finding'
 
 
 describe 'acknowledgments', ->

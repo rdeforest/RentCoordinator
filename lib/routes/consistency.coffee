@@ -14,12 +14,22 @@ decorate = (findings) ->
   findings.map (f) -> Object.assign {}, f, acknowledgment: consistencyModel.getAck(f.key) ? null
 
 
+# Acknowledgments whose finding the latest run didn't report: resolved, re-keyed,
+# or hidden by a check that errored. Shown, never deleted.
+unreported = (findings) ->
+  reported = new Set (f.key for f in findings)
+  (a for a in consistencyModel.listAcknowledgments() when not reported.has a.finding_key)
+
+
 setup = (app) ->
   app.get '/admin/consistency', middleware.requireAdmin, asyncRoute 'consistency.get', (req, res) ->
     run = consistencyModel.latestRun()
-    return res.json { ran_at: null, findings: [] } unless run
+    return res.json { ran_at: null, findings: [], unreported_acknowledgments: unreported [] } unless run
 
-    res.json { ran_at: run.ran_at, findings: decorate run.findings }
+    res.json
+      ran_at:                     run.ran_at
+      findings:                   decorate run.findings
+      unreported_acknowledgments: unreported run.findings
 
   app.get '/admin/consistency/summary', middleware.requireAdmin, asyncRoute 'consistency.summary', (req, res) ->
     run = consistencyModel.latestRun()
@@ -31,7 +41,10 @@ setup = (app) ->
 
   app.post '/admin/consistency/run', middleware.requireAdmin, asyncRoute 'consistency.run', (req, res) ->
     findings = await consistencyScheduler.runAndStore()
-    res.json { ran_at: new Date().toISOString(), findings: decorate findings }
+    res.json
+      ran_at:                     new Date().toISOString()
+      findings:                   decorate findings
+      unreported_acknowledgments: unreported findings
 
   app.post '/admin/consistency/ack', middleware.requireAdmin, asyncRoute 'consistency.ack', (req, res) ->
     { key, note } = req.body or {}

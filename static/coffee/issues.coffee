@@ -56,12 +56,31 @@ renderAcknowledgedCard = (finding) ->
   """
 
 
+# An acknowledgment the latest run didn't report: all that's stored is the
+# finding's key and the note.
+renderUnreportedCard = (ack) ->
+  """
+  <div class="finding-card acknowledged" data-key="#{escapeHtml ack.finding_key}">
+    <div class="finding-header">
+      <span class="finding-kind">not in the latest run</span>
+    </div>
+    <p class="finding-message"><code>#{escapeHtml ack.finding_key}</code></p>
+    <p class="finding-ack-note">#{escapeHtml ack.note}</p>
+    <div class="finding-ack-meta">
+      Acknowledged by #{escapeHtml ack.acknowledged_by or 'unknown'} on
+      #{window.SharedUtils.formatDate ack.acknowledged_at}
+    </div>
+    <button class="btn btn-secondary unack-btn">Un-acknowledge</button>
+  </div>
+  """
+
+
 sortFindings = (findings) ->
   findings.slice().sort (a, b) -> (SEVERITY_ORDER[a.severity] ? 9) - (SEVERITY_ORDER[b.severity] ? 9)
 
 
 render = (payload) ->
-  { ran_at, findings } = payload
+  { ran_at, findings, unreported_acknowledgments } = payload
 
   lastRunEl.textContent = if ran_at
     "Last run: #{window.SharedUtils.formatDateTime new Date ran_at}"
@@ -76,8 +95,10 @@ render = (payload) ->
   else
     '<p class="no-findings">No open findings.</p>'
 
-  acknowledgedListEl.innerHTML = if acknowledged.length > 0
-    (renderAcknowledgedCard f for f in acknowledged).join ''
+  cards = (renderAcknowledgedCard f for f in acknowledged)
+    .concat (renderUnreportedCard a for a in unreported_acknowledgments ? [])
+  acknowledgedListEl.innerHTML = if cards.length > 0
+    cards.join ''
   else
     '<p class="no-findings">Nothing acknowledged.</p>'
 

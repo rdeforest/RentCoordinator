@@ -119,12 +119,14 @@ A review of the first cut found eight problems, all fixed:
   `computeAllPeriods` walk forever — its month-increment loop can never land
   exactly on an invalid key, so the exit condition never fires. `recordEvent`
   (`lib/models/events.coffee`) now rejects a malformed `effective_for` at the
-  write boundary (400, sharing `period.coffee`'s `VALID_MONTH_KEY` regex);
+  write boundary (400, sharing `period.coffee`'s `VALID_MONTH_KEY`), for the
+  actions that own a month (`MONTH_ACTIONS`) — meta events that copy a bad
+  row's month stay allowed, so the row can still be deleted in the app;
   `computeAllPeriods` also ignores an invalid one when deciding which months
-  exist, so old or migrated bad rows can't hang it either; and
-  `consistency-scheduler.coffee`'s startup run is deferred (`setImmediate`)
-  and only started after `routing.markAppReady()`, so nothing about it can
-  precede the health check going green.
+  exist, so old or migrated bad rows can't hang it either; and the scheduler
+  starts after `routing.markAppReady()`. Its startup run is synchronous until
+  its first await, so the fold must not hang; ignoring bad keys is what
+  guarantees that.
 - **`lastDataWriteMs`** mis-parsed `work_logs.created_at` (an ISO string)
   by treating it as SQLite's space-separated `CURRENT_TIMESTAMP` shape,
   producing `NaN` whenever the newest write was a work log — silently
@@ -132,12 +134,11 @@ A review of the first cut found eight problems, all fixed:
   shape and compared as epoch ms across tables; a genuinely unparseable
   value surfaces as its own `backup-lastwrite-error` finding instead of
   being swallowed.
-- **Scheduling ("changed") now also reruns** when the last stored run
-  contains any finding about state outside our own data — `backup-*`,
-  `stripe-*`, or anything ending `-error` — even if the fingerprint hasn't
-  moved. Robert's decision that a no-op day skips still stands; this only
-  widens what counts as "changed" so a stale backup or a Stripe mismatch
-  doesn't sit unrefreshed until the next unrelated write.
+- **Scheduling:** the daily run happens when the fingerprint moved **or the
+  last run left any unacknowledged finding** — an open finding may have been
+  fixed by something the fingerprint can't see (a backup landing, Stripe
+  recovering, a hand repair of a row). A quiet day with nothing open still
+  skips, per Robert's decision; acknowledged findings never force a run.
 - **A malformed event payload** used to throw out of `listAllEvents` before
   any check's own try/catch could see it, aborting the whole run. Loading
   the ledger is now its own guarded step; a failure there becomes one
@@ -157,7 +158,11 @@ A review of the first cut found eight problems, all fixed:
   `listSucceededPaymentIntents` (same `getStripe`, same pagination).
 - The daily timer re-arms against `msUntilNext3amUTC()` rather than a flat
   24h from when the previous run finished, so a slow run can't drift
-  tomorrow's fire time later. `recordRun` also prunes any acknowledgment
-  whose key no longer appears in any retained run, so a re-keyed finding
-  (like the amount_due fix above) doesn't leave an invisible ack behind
-  forever.
+  tomorrow's fire time later.
+- **Acknowledgments are never deleted by a run.** A first version pruned acks
+  whose key was missing from the retained runs; a second review showed a
+  Stripe outage (every `stripe-unlinked` collapsing into one `stripe-error`
+  for 30 runs — restarts count) would silently delete Robert's notes. Instead
+  `/issues` shows acknowledgments the latest run didn't report in the
+  Acknowledged section, marked "not in the latest run", with their key and
+  note; only Robert's Un-acknowledge removes one.

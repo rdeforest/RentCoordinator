@@ -92,6 +92,24 @@ describe 'Consistency checks (bug 62)', ->
     assert.equal stillThere.acknowledgment, null
 
 
+  it 'a resolved finding clears, and its note stays visible as unreported', ->
+    await testConfig.client.post '/rent/events',
+      type: 'manual', year: 2026, month: 6, amount: 1400, description: 'pin to be deleted'
+    ran    = await (await testConfig.client.post '/admin/consistency/run').json()
+    target = ran.findings.find (f) -> f.kind is 'manual-amount-due-mismatch' and f.month is '2026-06'
+    assert.ok target
+    await testConfig.client.post '/admin/consistency/ack', { key: target.key, note: 'kept after the fix' }
+
+    events = await (await testConfig.client.get '/rent/events?year=2026&month=6').json()
+    pin    = events.find (e) -> e.type is 'manual' and not e.deleted
+    assert.equal (await testConfig.client.del "/rent/events/#{pin.id}").status, 200
+
+    after = await (await testConfig.client.post '/admin/consistency/run').json()
+    assert.ok not after.findings.some((f) -> f.key is target.key), 'deleting the pin resolves the finding'
+    kept = after.unreported_acknowledgments.find (a) -> a.finding_key is target.key
+    assert.equal kept?.note, 'kept after the fix', 'the note is shown, not deleted'
+
+
   it 'GET /issues serves the page to the landlord', ->
     res = await testConfig.client.get '/issues'
     assert.equal res.status, 200

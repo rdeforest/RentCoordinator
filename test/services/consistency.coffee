@@ -189,6 +189,15 @@ describe 'checkAmountDuePinMismatch', ->
     keyB = consistency.checkAmountDuePinMismatch({ events: [pinB], periods })[0].key
     assert.notEqual keyA, keyB
 
+  it 'key changes when the same pin is edited to a new value', ->
+    # An edit keeps the pin's id, so only the value in the key can tell them apart.
+    pin     = override '2026-05', 'amount_due', 1500, '2026-05-10T00:00:00Z'
+    edit    = evt 'edited', '2026-05', { new_payload: { new_value: 1550 } }, '2026-05-11T00:00:00Z', { target_event_id: pin.id }
+    periods = { '2026-05': { amount_due_override: true, amount_due: 1500, amount_due_calculated: 1600 } }
+    before_ = consistency.checkAmountDuePinMismatch({ events: [pin], periods })[0].key
+    after_  = consistency.checkAmountDuePinMismatch({ events: [pin, edit], periods })[0].key
+    assert.notEqual before_, after_
+
 
 # --- backup -------------------------------------------------------------------
 
