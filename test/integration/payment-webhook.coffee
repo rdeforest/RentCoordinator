@@ -19,7 +19,7 @@ Stripe                          = require 'stripe'
 { findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
 
-TEST_TMP_DIR   = '/tmp/rent-coordinator-tests'
+TEST_TMP_DIR   = require('../server.coffee').TEST_TMP_DIR
 BASE_PORT      = 4300
 WEBHOOK_SECRET = 'whsec_test_secret_for_integration'
 testConfig     = null

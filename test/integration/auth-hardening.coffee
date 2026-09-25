@@ -14,7 +14,7 @@ path                            = require 'node:path'
 config                           = require '../../lib/config.coffee'
 
 
-TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
+TEST_TMP_DIR = require('../server.coffee').TEST_TMP_DIR
 BASE_PORT    = 4300
 TENANT       = 'lynz57@hotmail.com'
 LANDLORD     = 'robert@defore.st'

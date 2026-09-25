@@ -1,10 +1,11 @@
 fs           = require 'fs'
+os           = require 'os'
 path         = require 'path'
 { execSync } = require 'child_process'
 { waitForServer } = require './helper.coffee'
 
 
-TEST_TMP_DIR      = '/tmp/rent-coordinator-tests'
+TEST_TMP_DIR      = process.env.RC_TEST_TMP_DIR ? fs.mkdtempSync path.join os.tmpdir(), 'rent-coordinator-tests-'
 DEFAULT_TEST_PORT = 3999
 DEFAULT_TEST_DB   = path.join TEST_TMP_DIR, 'test-server.db'
 

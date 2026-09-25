@@ -2,6 +2,7 @@
 
 { execSync } = require 'child_process'
 fs           = require 'fs'
+os           = require 'os'
 path         = require 'path'
 
 
@@ -10,7 +11,10 @@ console.log '======================='
 console.log ''
 
 
-TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
+# Unique per run, so two runs at once (parallel agents) can't delete each
+# other's databases. Every suite reads it via test/server.coffee.
+TEST_TMP_DIR = fs.mkdtempSync path.join os.tmpdir(), 'rent-coordinator-tests-'
+process.env.RC_TEST_TMP_DIR = TEST_TMP_DIR
 
 prepareTestDirectory = ->
   try

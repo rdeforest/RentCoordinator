@@ -16,7 +16,7 @@ path                            = require 'path'
 { waitForServer }               = require '../helper.coffee'
 { findFreePort, shutdownServer, authenticatedClient } = require '../server.coffee'
 
-TEST_TMP_DIR = '/tmp/rent-coordinator-tests'
+TEST_TMP_DIR = require('../server.coffee').TEST_TMP_DIR
 BASE_PORT    = 4940
 testConfig   = null
 
