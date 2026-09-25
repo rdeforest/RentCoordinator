@@ -16,6 +16,7 @@ eventsModel = require '../models/events.coffee'
 period      = require '../services/period.coffee'
 schema      = require '../db/schema.coffee'
 backupService = require './backup.coffee'
+consistencyModel = require '../models/consistency.coffee'
 
 
 errorFinding = (kind, err) ->
@@ -193,8 +194,8 @@ checkBackupAge = (deps) ->
   return [] unless deps.s3Enabled
 
   backups   = await deps.listS3Backups()
-  lastWrite = deps.dbLastWriteMs()
-  return [] unless lastWrite > 0    # no database file yet (fresh test DB)
+  lastWrite = deps.lastDataWriteMs()
+  return [] unless lastWrite > 0    # no data yet
 
   newestBackupMs = if backups[0]?.lastModified then new Date(backups[0].lastModified).getTime() else 0
   return [] if newestBackupMs >= lastWrite
@@ -338,7 +339,7 @@ runChecks = (deps = {}) ->
     db:                          schema.db
     s3Enabled:                   backupService.S3_ENABLED
     listS3Backups:               backupService.listS3Backups
-    dbLastWriteMs:               backupService.dbLastWriteMs
+    lastDataWriteMs:             consistencyModel.lastDataWriteMs
     stripeEnabled:                !!config.STRIPE_SECRET_KEY
     listSucceededPaymentIntents: defaultListSucceededPaymentIntents
   }, deps, { events, periods }

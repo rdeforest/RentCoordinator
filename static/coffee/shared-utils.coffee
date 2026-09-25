@@ -88,12 +88,15 @@ window.SharedUtils =
       button.disabled    = false
       button.textContent = button.dataset.originalText if button.dataset.originalText
 
-  # Landlord-only nav badge for open consistency findings (bug 62). A tenant
-  # gets 403 from this endpoint and the badge silently never appears — no
-  # console error, no beacon, since a 403 here is an expected "not admin"
-  # answer, not a bug to report.
+  # Landlord-only nav badge for open consistency findings (bug 62). Asks who
+  # is logged in first, so the tenant's browser never requests the admin
+  # endpoint (a 403 still shows as a console error). The server gates it
+  # regardless; this only avoids asking.
   showConsistencyBadge: ->
     try
+      status = await fetch('/auth/status').then (r) -> r.json()
+      return unless status.admin
+
       response = await fetch '/admin/consistency/summary'
       return unless response.ok
       { open } = await response.json()
@@ -108,8 +111,8 @@ window.SharedUtils =
       badge.textContent = "⚠ #{open}"
       badge.title = "#{open} open consistency finding#{if open is 1 then '' else 's'}"
       nav.appendChild badge
-    catch
-      return
+    catch err
+      window.SharedUtils.reportClientError 'consistency-badge', message: err.message
 
   # Beacon a client-side error to the server (POST /client-errors → logs).
   # Best-effort and capped per page load, so a repeating error can't flood.

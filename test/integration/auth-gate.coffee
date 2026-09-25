@@ -142,6 +142,10 @@ describe 'The auth gate (bug 23)', ->
     assert.notEqual (await testConfig.client.get '/admin/consistency').status, 403,
       'and the landlord can reach it'
 
+    # The nav badge asks this before requesting anything admin-only.
+    assert.equal (await (await tenant.get '/auth/status').json()).admin, false
+    assert.equal (await (await testConfig.client.get '/auth/status').json()).admin, true
+
     # /issues is the page route, gated by requireAdminPage like /admin —
     # a browser navigation redirects a non-admin home rather than a JSON 403
     # (see lib/routes/consistency.coffee), so the tenant simply never lands

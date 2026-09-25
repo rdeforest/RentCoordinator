@@ -181,7 +181,7 @@ describe 'checkBackupAge', ->
     findings = await consistency.checkBackupAge
       s3Enabled:     true
       listS3Backups: -> [ { lastModified: new Date('2026-05-01T00:00:00Z') } ]
-      dbLastWriteMs: -> new Date('2026-05-02T00:00:00Z').getTime()
+      lastDataWriteMs: -> new Date('2026-05-02T00:00:00Z').getTime()
     assert.equal findings.length, 1
     assert.equal findings[0].kind, 'backup-stale'
 
@@ -189,14 +189,14 @@ describe 'checkBackupAge', ->
     findings = await consistency.checkBackupAge
       s3Enabled:     true
       listS3Backups: -> [ { lastModified: new Date('2026-05-03T00:00:00Z') } ]
-      dbLastWriteMs: -> new Date('2026-05-02T00:00:00Z').getTime()
+      lastDataWriteMs: -> new Date('2026-05-02T00:00:00Z').getTime()
     assert.deepEqual findings, []
 
   it 'is silent (skips) when S3 is disabled', ->
     findings = await consistency.checkBackupAge
       s3Enabled:     false
       listS3Backups: -> throw new Error 'must not be called'
-      dbLastWriteMs: -> Date.now()
+      lastDataWriteMs: -> Date.now()
     assert.deepEqual findings, []
 
 

@@ -23,6 +23,18 @@ tableFingerprint = (table) ->
 currentFingerprint = ->
   FINGERPRINT_TABLES.map(tableFingerprint).join '|'
 
+# When real data was last written, from the rows themselves. The file's mtime
+# also moves on logins and on this check's own writes, so it would report a
+# stale backup after every login. created_at is SQLite CURRENT_TIMESTAMP: UTC
+# without a zone suffix. 0 when there is no data yet.
+lastDataWriteMs = ->
+  newest = FINGERPRINT_TABLES
+    .map (table) -> db.prepare("SELECT MAX(created_at) AS t FROM #{table}").get().t
+    .filter (t) -> t?
+    .sort()
+    .pop()
+  if newest then new Date(newest.replace(' ', 'T') + 'Z').getTime() else 0
+
 
 recordRun = (fingerprint, findings) ->
   db.prepare("""
@@ -83,6 +95,7 @@ unack = (key) ->
 module.exports = {
   FINGERPRINT_TABLES
   currentFingerprint
+  lastDataWriteMs
   recordRun
   latestRun
   listRuns

@@ -69,3 +69,26 @@ describe 'acknowledgments', ->
     consistencyModel.unack 'finding-key-2'
     assert.equal consistencyModel.getAck('finding-key-2'), undefined
     assert.ok not consistencyModel.acknowledgedKeys().has 'finding-key-2'
+
+
+describe 'lastDataWriteMs', ->
+  it 'moves on a ledger write and not on a login', ->
+    { db } = schema
+    db.prepare("UPDATE events SET created_at = '2026-01-01 00:00:00'").run()
+    db.prepare("UPDATE work_logs SET created_at = '2026-01-01 00:00:00'").run()
+    settled = consistencyModel.lastDataWriteMs()
+
+    db.prepare("INSERT INTO sessions (sid, sess, expires) VALUES ('s', '{}', ?)").run Date.now() + 60_000
+    assert.equal consistencyModel.lastDataWriteMs(), settled,
+      'a login is not data; counting it reported a stale backup after every login'
+
+    eventsModel.recordEvent
+      occurred_at:   '2026-01-15T00:00:00Z'
+      effective_for: '2026-01'
+      actor:         'tenant'
+      actor_user:    'lynz57@hotmail.com'
+      action:        'payment-made'
+      payload:       { amount: 10, method: 'manual' }
+    assert.ok consistencyModel.lastDataWriteMs() > settled
+    assert.ok Math.abs(consistencyModel.lastDataWriteMs() - Date.now()) < 5 * 60_000,
+      'created_at is UTC; reading it as local time would be off by hours'

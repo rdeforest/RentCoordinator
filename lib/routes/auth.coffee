@@ -127,6 +127,7 @@ setup = (app) ->
       res.json
         authenticated: true
         email:         req.session.email
+        admin:         config.isAdminEmail req.session.email
     else
       res.json
         authenticated: false
