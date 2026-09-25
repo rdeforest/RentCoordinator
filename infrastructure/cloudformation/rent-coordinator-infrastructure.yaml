@@ -224,6 +224,7 @@ Resources:
 
             # Install dependencies
             # cron — needed for the daily backup crontab line further down
+            # daemon — supervises the app so a crash is a restart (bug 63)
             # curl is preferred over wget for downloads (Devuan AMI ships curl, not wget)
             apt-get install -y \
               git \
@@ -231,7 +232,8 @@ Resources:
               jq \
               awscli \
               build-essential \
-              cron
+              cron \
+              daemon
 
             # Create application user
             useradd -r -m -s /bin/bash rent-coordinator || true
@@ -372,24 +374,35 @@ Resources:
             NVM_DIR=/home/rent-coordinator/.nvm
             APP_DIR=/opt/rent-coordinator
             LOGFILE=/var/log/rent-coordinator/application.log
-            PIDFILE=/var/run/rent-coordinator.pid
             USER=rent-coordinator
+            RUNDIR=/var/run/rent-coordinator
+            # daemon restarts the app whenever it exits, so a crash costs a few
+            # seconds instead of an instance replacement and a restore from the
+            # last backup (bug 63). An exit within 10 s of starting counts as a
+            # failed start; after 5 in a row it pauses 10 s, then tries again.
+            DAEMON="daemon --name=rent-coordinator --user=$USER --pidfiles=$RUNDIR"
             . /lib/lsb/init-functions
             do_start() {
-              start-stop-daemon --start --quiet --pidfile $PIDFILE \
-                --chuid $USER --background --make-pidfile \
-                --exec /bin/bash -- -c \
-                "cd $APP_DIR && set -a && . $APP_DIR/.env && set +a && . $NVM_DIR/nvm.sh && nvm use >/dev/null && exec node ./node_modules/.bin/coffee main.coffee >> $LOGFILE 2>&1"
+              install -d -o $USER -g $USER $RUNDIR
+              $DAEMON --respawn --acceptable=10 --attempts=5 --delay=10 --chdir=$APP_DIR -- /bin/bash -c \
+                "set -a && . $APP_DIR/.env && set +a && . $NVM_DIR/nvm.sh && nvm use >/dev/null && exec node ./node_modules/.bin/coffee main.coffee >> $LOGFILE 2>&1"
             }
             do_stop() {
-              start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE
-              rm -f $PIDFILE
+              $DAEMON --running || return 0
+              CLIENT=$(cat $RUNDIR/rent-coordinator.clientpid)
+              $DAEMON --stop
+              for i in $(seq 1 30); do
+                kill -0 $CLIENT 2>/dev/null || return 0
+                sleep 1
+              done
+              echo "rent-coordinator (pid $CLIENT) did not exit within 30 s" >&2
+              return 1
             }
             case "$1" in
               start)   do_start ;;
               stop)    do_stop ;;
-              restart) do_stop; sleep 1; do_start ;;
-              status)  status_of_proc -p $PIDFILE node rent-coordinator && exit 0 || exit $? ;;
+              restart) do_stop && do_start ;;
+              status)  if $DAEMON --running; then echo "rent-coordinator is running."; else echo "rent-coordinator is not running."; exit 3; fi ;;
               *)       echo "Usage: $0 {start|stop|restart|status}" >&2; exit 3 ;;
             esac
             INITEOF

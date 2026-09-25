@@ -12,7 +12,7 @@
 # Usage: source this file, then set PIDFILE / PORT (both have defaults) and
 # call service_is_running.
 
-PIDFILE="${PIDFILE:-/var/run/rent-coordinator.pid}"
+PIDFILE="${PIDFILE:-/var/run/rent-coordinator/rent-coordinator.pid}"
 PORT="${PORT:-8080}"
 
 service_is_running() {
