@@ -34,16 +34,10 @@ class extending `express-session`'s `Store` that implements the required
 integer). `lib/middleware.coffee` now passes `store: new
 sessionStore.SQLiteSessionStore()` to `express-session`, no new dependency.
 
-**Table definition — single source of truth:** `lib/db/schema.coffee`'s
-`SCHEMA` (`CREATE TABLE IF NOT EXISTS sessions ...`). `db.exec SCHEMA` runs
-unconditionally on every boot, before migrations, so this is what actually
-creates the table — for a fresh database and for one already running the old
-code. `migrations/2026-09-24_100000_add_sessions_table.coffee` mirrors the
-`add_events_table` migration's shape (same idempotent
-`CREATE TABLE IF NOT EXISTS` pattern) for consistency with how this repo
-records schema changes and for a database migrated by hand outside the
-`schema.initialize` path, but by the time it would run in the normal boot
-sequence, `SCHEMA` has already created the table on that same boot.
+**Table definition:** only in `lib/db/schema.coffee`'s `SCHEMA`
+(`CREATE TABLE IF NOT EXISTS sessions ...`). `db.exec SCHEMA` runs on every
+boot, before migrations, so it creates the table on fresh and existing
+databases alike; a migration repeating it would never run first.
 
 **Expiry:** `expiryOf` reads `sess.cookie.expires` (the cookie's own
 computed expiry) and falls back to `Date.now() + config.SESSION_MAX_AGE` for
