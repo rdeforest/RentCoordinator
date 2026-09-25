@@ -22,6 +22,8 @@ compileClient = ->
     return
 
   console.log 'Compiling client-side CoffeeScript...'
+  # Output for a deleted source would otherwise be served for ever.
+  fs.rmSync 'static/js', recursive: true, force: true
   execSync "npx coffee -b -c -M -o static/js #{CLIENT_SOURCE}", stdio: 'inherit'
   console.log '✓ Client-side compilation complete\n'
 
