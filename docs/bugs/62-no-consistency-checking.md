@@ -109,3 +109,55 @@ Implemented as designed, with a few choices made along the way:
   console error or a beacon.
 - Added `logger.info` (`lib/logger.coffee`) — the run-summary log line asked
   for in the design had no matching log level before this.
+
+### Adversarial review fixes (2026-09-25)
+
+A review of the first cut found eight problems, all fixed:
+
+- **Boot loop:** an out-of-range `effective_for` (`'2026-13'`, reachable by
+  any logged-in user through `POST /rent/payment` or `/rent/events`) made
+  `computeAllPeriods` walk forever — its month-increment loop can never land
+  exactly on an invalid key, so the exit condition never fires. `recordEvent`
+  (`lib/models/events.coffee`) now rejects a malformed `effective_for` at the
+  write boundary (400, sharing `period.coffee`'s `VALID_MONTH_KEY` regex);
+  `computeAllPeriods` also ignores an invalid one when deciding which months
+  exist, so old or migrated bad rows can't hang it either; and
+  `consistency-scheduler.coffee`'s startup run is deferred (`setImmediate`)
+  and only started after `routing.markAppReady()`, so nothing about it can
+  precede the health check going green.
+- **`lastDataWriteMs`** mis-parsed `work_logs.created_at` (an ISO string)
+  by treating it as SQLite's space-separated `CURRENT_TIMESTAMP` shape,
+  producing `NaN` whenever the newest write was a work log — silently
+  skipped by `checkBackupAge`'s truthiness check. Now parsed per its actual
+  shape and compared as epoch ms across tables; a genuinely unparseable
+  value surfaces as its own `backup-lastwrite-error` finding instead of
+  being swallowed.
+- **Scheduling ("changed") now also reruns** when the last stored run
+  contains any finding about state outside our own data — `backup-*`,
+  `stripe-*`, or anything ending `-error` — even if the fingerprint hasn't
+  moved. Robert's decision that a no-op day skips still stands; this only
+  widens what counts as "changed" so a stale backup or a Stripe mismatch
+  doesn't sit unrefreshed until the next unrelated write.
+- **A malformed event payload** used to throw out of `listAllEvents` before
+  any check's own try/catch could see it, aborting the whole run. Loading
+  the ledger is now its own guarded step; a failure there becomes one
+  `ledger-unreadable` finding, and checks that don't need the ledger
+  (db integrity, foreign keys, backup age — marked in `CHECKS` via
+  `needsLedger`) still run.
+- **`manual-amount-due-mismatch`'s key** used to encode `amount_due` and
+  `amount_due_calculated`, both of which shift whenever an earlier month's
+  carry-over changes — re-opening a finding Robert had already acknowledged
+  even though the pin itself hadn't changed. It's now keyed on the month
+  plus the pin event's id and its own `new_value`, so **an acknowledgment of
+  an amount_due pin survives recalculation** and only a re-pin changes the
+  key. The comparison (pinned vs. calculated) is unchanged; both values move
+  to `detail` only.
+- The Stripe client and its API-version literal, previously duplicated in
+  `consistency.coffee`, now come from `payment.coffee`'s
+  `listSucceededPaymentIntents` (same `getStripe`, same pagination).
+- The daily timer re-arms against `msUntilNext3amUTC()` rather than a flat
+  24h from when the previous run finished, so a slow run can't drift
+  tomorrow's fire time later. `recordRun` also prunes any acknowledgment
+  whose key no longer appears in any retained run, so a re-keyed finding
+  (like the amount_due fix above) doesn't leave an invisible ack behind
+  forever.
