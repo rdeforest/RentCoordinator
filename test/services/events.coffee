@@ -81,3 +81,27 @@ describe 'recordEvent stores only whole cents (bug 35)', ->
     assert.ok eventsModel.recordEvent baseEvent payload: { amount: 1433.33, method: 'manual' }
     assert.ok eventsModel.recordEvent baseEvent action: 'work-reported', payload: { hours: 200 / 60 }
     assert.ok eventsModel.recordEvent baseEvent action: 'config-changed', effective_for: null, payload: { field: 'apply_override', new_value: true }
+
+
+describe 'recordEvent rejects an effective_for outside a real calendar month (bug 62, F1)', ->
+  it "a month of '13' throws with err.status = 400 rather than reaching the fold", ->
+    event = baseEvent effective_for: '2026-13'
+
+    threw = null
+    try
+      eventsModel.recordEvent event
+    catch err
+      threw = err
+
+    assert.ok threw, 'recordEvent must reject this — computeAllPeriods would otherwise walk forever looking for it'
+    assert.equal threw.status, 400
+
+  it 'a malformed (non YYYY-MM) string is rejected', ->
+    assert.throws (-> eventsModel.recordEvent baseEvent effective_for: 'not-a-month'),
+      (err) -> err.status is 400
+
+  it 'null is accepted (global events like config-changed carry no effective_for)', ->
+    assert.ok eventsModel.recordEvent baseEvent action: 'config-changed', effective_for: null, payload: { field: 'apply_override', new_value: false }
+
+  it 'a well-formed YYYY-MM is accepted', ->
+    assert.ok eventsModel.recordEvent baseEvent effective_for: '2026-12'

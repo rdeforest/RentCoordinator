@@ -5,6 +5,7 @@
 { db }                                  = require '../db/schema.coffee'
 { formatSQLParameters, transaction }    = require '../db/utils.coffee'
 money                                   = require '../money.coffee'
+{ VALID_MONTH_KEY }                     = require '../services/period.coffee'
 
 
 # Parse the JSON payload back into an object on the way out.
@@ -80,8 +81,22 @@ validateAmounts = (event) ->
   return
 
 
+# An effective_for that isn't a real calendar month made the period fold
+# walk forever looking for a last month it would never reach — any logged-in
+# user could trigger it via POST /rent/payment or /rent/events (bug 62, F1).
+# Reject it here, at the one place every event enters the ledger, rather than
+# downstream in the fold.
+validateEffectiveFor = (event) ->
+  value = event.effective_for
+  return if value is undefined or value is null
+  return if VALID_MONTH_KEY.test value
+
+  throw badRequest "effective_for must be a valid YYYY-MM month, got #{describeValue value}"
+
+
 recordEvent = (event) ->
   validateAmounts event
+  validateEffectiveFor event
 
   params = formatSQLParameters
     id:              event.id              ? uuidv7()

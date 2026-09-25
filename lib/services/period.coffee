@@ -19,6 +19,14 @@ DEFAULT_CONFIG =
   apply_override:         false
 
 
+# The only shape an effective_for may take: a real calendar month. Shared by
+# lib/models/events.coffee (rejects a bad one at the write boundary) and
+# lib/services/consistency.coffee (reports one that got in some other way —
+# a pre-validation row, a migration). See bug 62 finding F1: an out-of-range
+# month like '2026-13' made computeAllPeriods below walk forever looking for
+# a last month it would never reach.
+VALID_MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/
+
 monthKey = (year, month) ->
   "#{year}-#{String(month).padStart 2, '0'}"
 
@@ -271,8 +279,13 @@ computeAllPeriods = (events, now = new Date(), opts = {}) ->
   for e in resolved when e.action is 'period-suppressed' and e.effective_for
     suppressed.add e.effective_for
 
+  # An invalid effective_for (bad data that predates validation, or a
+  # migration) must not decide the fold's month range — an out-of-range key
+  # like '2026-13' would make the walk below never reach it (bug 62, F1).
+  # The consistency check reports these separately; the fold just ignores
+  # them when deciding which months exist.
   monthKeys = new Set()
-  for e in resolved when e.effective_for
+  for e in resolved when e.effective_for and VALID_MONTH_KEY.test e.effective_for
     monthKeys.add e.effective_for
 
   return {} if monthKeys.size is 0
@@ -354,6 +367,7 @@ computeOutstanding = (periods) ->
 
 module.exports = {
   DEFAULT_CONFIG
+  VALID_MONTH_KEY
   computeOutstanding
   META_ACTIONS
   monthKey

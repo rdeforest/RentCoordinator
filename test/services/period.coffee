@@ -764,3 +764,30 @@ test "a temporary amount does not reach into past months", ->
   assert.equal periods['2026-05'].display_amount_due, 1600,
     'past months show what was actually owed; the mask is current-month only'
   assert.equal periods['2026-06'].display_amount_due, 700
+
+
+# --- bug 62, F1: an out-of-range effective_for must not hang the fold --------
+#
+# recordEvent rejects a bad effective_for at the write boundary now, but the
+# fold has to defend itself too — a row from before that validation existed
+# (or a migration) reaches computeAllPeriods regardless. Before this fix, an
+# event's effective_for like '2026-13' became the walk's "last" month, and
+# since the month-increment loop can never land exactly on an invalid key,
+# the `break if year is last.year and month is last.month` condition never
+# fired — an infinite loop, run synchronously (no I/O for a timeout to catch
+# mid-loop). Verified by reverting the VALID_MONTH_KEY filter in
+# computeAllPeriods and confirming `NODE_ENV=test npx coffee
+# test/services/period.coffee` hangs rather than these two tests failing.
+
+test "an event with an out-of-range effective_for ('2026-13') does not hang the fold", ->
+  bad    = evt 'payment-made', '2026-13', { amount: 100 }
+  good   = work '2026-04', 8
+  result = computeAllPeriods [good, bad], NOW
+  assert.ok result['2026-04']?, 'the real month still computes'
+  assert.equal result['2026-13'], undefined, 'the invalid month key never becomes a period'
+
+test "an event with a malformed (non YYYY-MM) effective_for does not hang the fold", ->
+  bad    = evt 'payment-made', 'not-a-month', { amount: 100 }
+  good   = work '2026-04', 8
+  result = computeAllPeriods [good, bad], NOW
+  assert.ok result['2026-04']?
