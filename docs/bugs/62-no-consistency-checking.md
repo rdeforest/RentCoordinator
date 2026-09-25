@@ -1,7 +1,7 @@
 # Bug 62 — Nothing checks the database for consistency except migrations
 
 **Reported:** 2026-09-24 by the pre-deploy review of the 2026-09 sweep
-**Status:** open (design agreed, not started)
+**Status:** in progress (design agreed 2026-09-25)
 
 ## Symptom
 
@@ -42,3 +42,19 @@ something looks off.
 
 Migrations keep their own narrow checks (scoped to the tables they touch, as
 bug 54 left them); the new check does not replace those.
+
+## Decisions (Robert, 2026-09-25)
+
+- **When:** at startup, and once a day at 03:00 UTC (after the 02:00 nightly
+  backup) only if the data has changed since the last run. Activity is a few
+  entries a week; hourly checks would be noise. "Changed" is a fingerprint of
+  the tables that hold real data (events, work logs, sessions excluded), not
+  the file mtime.
+- **Backup check:** the newest S3 backup is older than the newest write — a
+  change no backup contains. (An old backup is fine when nothing changed.)
+- **Stripe cross-check:** included, on the same schedule, read-only.
+- **Existing pins and pre-bug-09 Stripe payments:** flagged like anything
+  else; Robert acknowledges each by hand, with a note, to build a memory of
+  the system. No bulk or pre-seeded acknowledgments.
+- **Where:** its own landlord-only page for now; it joins the UI overhaul
+  discussion later.
