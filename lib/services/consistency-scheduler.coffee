@@ -23,11 +23,13 @@ EXTERNAL_FINDING_KIND = /^(backup-|stripe-)|-error$/
 # Pure: given the current fingerprint and the last stored run (or null), is a
 # scheduled run worth doing? Exported so the decision is testable without a
 # timer or a database.
-shouldRunScheduled = (fingerprint, lastRun) ->
+# An acknowledged external finding (a pre-bug-09 Stripe payment that will
+# never be linked) is settled; only open ones are worth a rerun.
+shouldRunScheduled = (fingerprint, lastRun, ackedKeys = new Set()) ->
   return true unless lastRun?
   return true if lastRun.fingerprint isnt fingerprint
 
-  (lastRun.findings ? []).some (f) -> EXTERNAL_FINDING_KIND.test f.kind
+  (lastRun.findings ? []).some (f) -> EXTERNAL_FINDING_KIND.test(f.kind) and not ackedKeys.has f.key
 
 
 # Milliseconds until the next 03:00 UTC, strictly in the future. Exported for
@@ -75,7 +77,7 @@ runAndStore = ->
 runIfNeeded = ->
   fingerprint = consistencyModel.currentFingerprint()
   lastRun     = consistencyModel.latestRun()
-  return unless shouldRunScheduled fingerprint, lastRun
+  return unless shouldRunScheduled fingerprint, lastRun, consistencyModel.acknowledgedKeys()
 
   await runAndStore()
 

@@ -99,3 +99,10 @@ test 'msUntilNext3amUTC targets today when called before 03:00', ->
   next = new Date now.getTime() + ms
   assert.equal next.getUTCDate(), 15
   assert.equal next.getUTCHours(), 3
+
+
+test 'shouldRunScheduled ignores external findings Robert has acknowledged', ->
+  lastRun = { fingerprint: 'fp-1', findings: [{ key: 'stripe-unlinked:pi_1', kind: 'stripe-unlinked' }] }
+  assert.equal shouldRunScheduled('fp-1', lastRun), true, 'open: rerun to see whether it cleared'
+  assert.equal shouldRunScheduled('fp-1', lastRun, new Set ['stripe-unlinked:pi_1']), false,
+    'acknowledged: a settled finding must not call Stripe every day'
