@@ -99,6 +99,27 @@ Payment history is the `payment` rows in the rent page's events table, which
 reads the same `events` ledger. The separate `/payments` page read the legacy
 `rent_events` table and was deleted (bug 27).
 
+### Consistency checks (bug 62)
+
+```
+main.coffee (startup, after listen)          setTimeout (unref'd, daily 03:00 UTC)
+  → consistency-scheduler.startAndStore()      → consistency-scheduler.runIfNeeded()
+      → services/consistency.coffee::runChecks()    (only if models/consistency
+          (db integrity/FK, ledger shape,             ::currentFingerprint() changed)
+           manual-vs-automatic pins, backup age,
+           Stripe vs. ledger — each check is a
+           small deps → findings function)
+      → models/consistency.coffee::recordRun()
+      → logger.warn per new unacknowledged finding
+Browser (issues.html) → GET/POST /admin/consistency*  (routes/consistency.coffee, requireAdmin)
+                       → GET /issues                  (requireAdminPage, like /admin)
+```
+
+Never blocks anything — a check that throws becomes one `error` finding for
+itself, not an aborted run. Findings and acknowledgments live in
+`consistency_runs` / `finding_acknowledgments` (schema.coffee, no separate
+migration). See docs/bugs/62-no-consistency-checking.md for the full design.
+
 ## The data model in plain language
 
 | Table | Purpose | Key relationships |
@@ -118,6 +139,8 @@ reads the same `events` ledger. The separate `/payments` page read the legacy
 | `audit_logs` | Append-only record of CRUD actions on entities | not FK-linked (entity IDs are loose references) |
 | `auth_sessions` | Email verification codes | — |
 | `pii_tokens` | Tokenization mapping for logger | — |
+| `consistency_runs` | Last ~30 runs of the consistency checks (bug 62) | — |
+| `finding_acknowledgments` | Landlord's ack + note per finding key (bug 62) | — |
 
 ### Computed vs authoritative columns
 
