@@ -88,6 +88,29 @@ window.SharedUtils =
       button.disabled    = false
       button.textContent = button.dataset.originalText if button.dataset.originalText
 
+  # Landlord-only nav badge for open consistency findings (bug 62). A tenant
+  # gets 403 from this endpoint and the badge silently never appears — no
+  # console error, no beacon, since a 403 here is an expected "not admin"
+  # answer, not a bug to report.
+  showConsistencyBadge: ->
+    try
+      response = await fetch '/admin/consistency/summary'
+      return unless response.ok
+      { open } = await response.json()
+      return unless open > 0
+
+      nav = document.querySelector 'nav'
+      return unless nav
+
+      badge = document.createElement 'a'
+      badge.href = '/issues'
+      badge.className = 'consistency-badge'
+      badge.textContent = "⚠ #{open}"
+      badge.title = "#{open} open consistency finding#{if open is 1 then '' else 's'}"
+      nav.appendChild badge
+    catch
+      return
+
   # Beacon a client-side error to the server (POST /client-errors → logs).
   # Best-effort and capped per page load, so a repeating error can't flood.
   reportClientError: (kind, detail = {}) ->
@@ -118,3 +141,13 @@ window.addEventListener 'unhandledrejection', (e) ->
   window.SharedUtils.reportClientError 'unhandledrejection',
     message: String(e.reason?.message or e.reason)
     stack:   e.reason?.stack
+
+
+# The pages that carry the landlord's consistency badge (index, work, rent —
+# per docs/bugs/62-no-consistency-checking.md). Central list here rather than
+# a call added to each page's own script, so there is one place that says
+# which pages show it.
+PAGES_WITH_CONSISTENCY_BADGE = ['/', '/work', '/rent']
+
+document.addEventListener 'DOMContentLoaded', ->
+  window.SharedUtils.showConsistencyBadge() if window.location.pathname in PAGES_WITH_CONSISTENCY_BADGE

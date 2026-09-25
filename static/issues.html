@@ -1,0 +1,44 @@
+<!-- static/issues.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consistency Issues - Tenant Coordinator</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/issues.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Consistency Issues</h1>
+            <p>Findings from the consistency checks. Nothing here blocks the app; it's a place to notice and record.</p>
+            <nav style="margin-top: 20px;">
+                <a href="/" class="btn btn-secondary">Back to Timer</a>
+                <a href="/rent" class="btn btn-secondary">Rent Dashboard</a>
+            </nav>
+        </header>
+
+        <main>
+            <section class="issues-toolbar">
+                <button id="run-checks-btn" class="btn btn-primary">Run checks now</button>
+                <span id="last-run">Last run: loading…</span>
+            </section>
+
+            <section id="issues-open">
+                <h2>Open findings</h2>
+                <div id="open-list" class="findings-list">Loading…</div>
+            </section>
+
+            <section id="issues-acknowledged">
+                <h2>Acknowledged</h2>
+                <div id="acknowledged-list" class="findings-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/js/auth.js"></script>
+    <script src="/js/shared-utils.js"></script>
+    <script src="/js/issues.js"></script>
+</body>
+</html>
