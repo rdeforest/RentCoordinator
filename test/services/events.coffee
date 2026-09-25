@@ -63,3 +63,21 @@ describe 'recordEvent rejects malformed amounts with a 400, not a 500 (bug 57)',
   it "a well-formed event still records normally", ->
     event = eventsModel.recordEvent baseEvent()
     assert.ok event.id
+
+
+describe 'recordEvent stores only whole cents (bug 35)', ->
+  rejects = (event) ->
+    assert.throws (-> eventsModel.recordEvent event), (err) ->
+      err.status is 400 and /whole number of cents/.test err.message
+
+  it 'refuses a fraction of a cent on a payment, an adjustment, an override and an edit', ->
+    rejects baseEvent payload: { amount: 10.005, method: 'manual' }
+    rejects baseEvent action: 'adjustment', payload: { target: { field: 'amount_due' }, delta: 0.001 }
+    rejects baseEvent action: 'override', payload: { target_kind: 'period-field', target: { field: 'amount_due' }, new_value: 950.125 }
+    rejects baseEvent action: 'edited', target_event_id: 'x', payload: { new_payload: { amount: 1.999 } }
+    rejects baseEvent action: 'config-changed', effective_for: null, payload: { field: 'temporary_rent_amount', new_value: 950.5001 }
+
+  it 'accepts real amounts, and hours that are not money', ->
+    assert.ok eventsModel.recordEvent baseEvent payload: { amount: 1433.33, method: 'manual' }
+    assert.ok eventsModel.recordEvent baseEvent action: 'work-reported', payload: { hours: 200 / 60 }
+    assert.ok eventsModel.recordEvent baseEvent action: 'config-changed', effective_for: null, payload: { field: 'apply_override', new_value: true }

@@ -1,13 +1,39 @@
 # Bug 35 — Money handled as floating-point dollars throughout
 
 **Reported:** 2026-08-15 by codebase audit
-**Status:** partly resolved 2026-09-23
+**Status:** resolved 2026-09-25
 
 ## Resolution
 
-**Partly.** The reachable failure is fixed: a month could owe $1,433.3333333333333 (200 minutes at $50/hour is a credit of $166.666…), which no payment method can settle, so paying $1,433.33 left it `PARTIAL` for ever over a third of a cent. Every currency value now leaves `computeMonth` rounded to the cent via `lib/money.coffee`, and the places that subtract money to decide what is owed compare cents. Hours stay unrounded — they are not money and carry-over needs their precision.
+**2026-09-23 (partial):** every currency value left `computeMonth` rounded to
+the cent, which fixed the reachable failure — a month owing
+$1,433.3333333333333 that no payment could settle.
 
-Not done: the full integer-cents representation this file proposes. Event payloads still carry dollars, and changing that means migrating historical events. Worth doing as its own change; the specific `remaining -= chunk` overage loop cited above no longer exists (the allocation is frozen into the intent metadata at create time).
+**2026-09-25:** the arithmetic now runs in integer cents.
+
+- **Storage and the API stay in dollars.** Every stored amount in production
+  was already a whole number of cents (13 payments, 18 overrides, none
+  fractional), so dollars hold them exactly; no historical event was
+  rewritten. `recordEvent` now refuses any money field that is not whole cents
+  (payment `amount`, adjustment `delta`, override `new_value`, their edits, and
+  money-valued `config-changed` fields), so that stays true. Hours are exempt.
+- **`computeMonth`** converts its inputs to cents once, computes in integers,
+  and converts back on return. Each credit is rounded exactly once, where
+  hours become money; hours stay exact. The shortfall is carried between
+  months in whole cents, and carry-over subtracts the exact retroactive hours
+  rather than credit ÷ rate after rounding.
+- **`computeOutstanding`** and the `/rent/summary` totals sum cents.
+- `money.minus` is gone; `money.centsOf` converts ledger values without
+  defaulting a missing one to 0, so a corrupt event still marks its month
+  corrupt.
+
+Verified by folding the production database (2026-09-25) with the old and new
+code: every displayed amount, status and the outstanding total are identical.
+The only difference is `cumulative_shortfall` in three months, which now lands
+on whole cents (104.16666666666679 → 104.17); no route or page displays it.
+
+Not changed: the browser subtracts for display only (the server re-checks any
+payment amount in cents), and the legacy `rent_periods` code is untouched.
 
 ## Symptom
 

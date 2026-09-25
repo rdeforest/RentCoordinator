@@ -120,50 +120,57 @@ resolveConfig = (events, asOf) ->
 
 
 # Compute one month's view. Caller supplies carryOver hours from the previous
-# month and shortfall accumulated from prior months. Returns the full period
-# object the UI consumes.
+# month and the shortfall (dollars) accumulated from prior months. Returns the
+# full period object the UI consumes.
+#
+# Money is computed in integer cents (the `_c` names) and returned as dollars.
+# Each credit is rounded once, where hours become money; hours themselves stay
+# exact, since carry-over needs their precision.
 computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   ymKey       = monthKey year, month
   endOfMonth  = new Date Date.UTC(year, month, 0, 23, 59, 59)
   config      = resolveConfig allEvents, endOfMonth
   monthEvents = allEvents.filter (e) -> e.effective_for is ymKey
 
+  rate_c        = money.centsOf config.hourly_credit
+  base_rent_c   = money.centsOf config.base_rent
+  shortfall_c   = money.centsOf shortfall
+  creditFor     = (hours) -> Math.round hours * rate_c
+
   # actor is provenance, not a filter on which payments count: the landlord
   # records payments too (POST /rent/events defaults actor to 'landlord'),
   # and a payment made by either party is still money received (bug 51).
   # Work credit stays tenant-only — only the tenant's hours earn rent credit.
   hours_worked  = 0
-  paymentEvents = []
+  amount_paid_c = 0
   for e in monthEvents
     switch e.action
-      when 'work-reported' then hours_worked += e.payload.hours if e.actor is 'tenant'
-      when 'payment-made'  then paymentEvents.push e
-
-  amount_paid = paymentEvents.reduce ((sum, e) -> sum + e.payload.amount), 0
+      when 'work-reported' then hours_worked  += e.payload.hours if e.actor is 'tenant'
+      when 'payment-made'  then amount_paid_c += money.centsOf e.payload.amount
 
   total_available    = hours_worked + carryOver
   base_hours_applied = Math.min total_available, config.max_monthly_hours
-  base_discount      = base_hours_applied * config.hourly_credit
+  base_discount_c    = creditFor base_hours_applied
 
-  retroactive_credit = 0
-  if shortfall > 0 and total_available > config.max_monthly_hours
-    extra_hours        = total_available - config.max_monthly_hours
-    max_retro_hours    = Math.min extra_hours, shortfall / config.hourly_credit
-    retroactive_credit = max_retro_hours * config.hourly_credit
+  retro_hours = 0
+  if shortfall_c > 0 and total_available > config.max_monthly_hours
+    retro_hours = Math.min total_available - config.max_monthly_hours, shortfall_c / rate_c
+  retroactive_credit_c = creditFor retro_hours
 
-  total_discount = base_discount + retroactive_credit
-  hours_used     = base_hours_applied + (retroactive_credit / config.hourly_credit)
+  total_discount_c = base_discount_c + retroactive_credit_c
+  hours_used       = base_hours_applied + retro_hours
 
   # Adjustments move the amount owed; they do not replace it. A $100 late fee
   # on a $1,600 month leaves $1,700 owing, and the month is still calculated
   # rather than pinned. Overrides below are the only thing that pins a value.
   amountDueAdjustments = (e for e in monthEvents when e.action is 'adjustment' and e.payload.target?.field is 'amount_due')
-  adjustment_total = amountDueAdjustments.reduce ((sum, e) -> sum + e.payload.delta), 0
+  deltaTotal_c         = (events) -> events.reduce ((sum, e) -> sum + money.centsOf e.payload.delta), 0
+  adjustment_total_c   = deltaTotal_c amountDueAdjustments
 
-  amount_due_calculated = config.base_rent - total_discount + adjustment_total
-  amount_due            = amount_due_calculated
-  amount_due_override   = false
-  amount_paid_override  = false
+  amount_due_calculated_c = base_rent_c - total_discount_c + adjustment_total_c
+  amount_due_c            = amount_due_calculated_c
+  amount_due_override     = false
+  amount_paid_override    = false
 
   # The latest pin by occurred_at wins, for both fields. An amount_due pin
   # takes adjustments recorded after it on top (bug 56). An amount_paid pin is
@@ -172,26 +179,25 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   # August). Disagreements are for review (bug 62), not silent arithmetic.
   latestDueOverride = latestFieldOverride monthEvents, 'amount_due'
   if latestDueOverride
-    laterAdjustmentTotal = amountDueAdjustments
-      .filter  (e) -> e.occurred_at > latestDueOverride.occurred_at
-      .reduce  ((sum, e) -> sum + e.payload.delta), 0
-
-    amount_due          = latestDueOverride.payload.new_value + laterAdjustmentTotal
+    later = (e for e in amountDueAdjustments when e.occurred_at > latestDueOverride.occurred_at)
+    amount_due_c        = money.centsOf(latestDueOverride.payload.new_value) + deltaTotal_c later
     amount_due_override = true
 
   latestPaidOverride = latestFieldOverride monthEvents, 'amount_paid'
   if latestPaidOverride
-    amount_paid          = latestPaidOverride.payload.new_value
+    amount_paid_c        = money.centsOf latestPaidOverride.payload.new_value
     amount_paid_override = true
 
-  cumulative_shortfall = shortfall - retroactive_credit
+  cumulative_shortfall_c = shortfall_c - retroactive_credit_c
   if base_hours_applied < config.max_monthly_hours
-    cumulative_shortfall += (config.max_monthly_hours - base_hours_applied) * config.hourly_credit
+    cumulative_shortfall_c += creditFor config.max_monthly_hours - base_hours_applied
 
-  agreed_payment = if config.apply_override and config.temporary_rent_amount?
-    config.temporary_rent_amount
-  else
-    config.agreed_monthly_payment
+  agreed_payment_c = money.centsOf(
+    if config.apply_override and config.temporary_rent_amount?
+      config.temporary_rent_amount
+    else
+      config.agreed_monthly_payment
+  )
 
   is_current = year is now.getFullYear() and month is (now.getMonth() + 1)
   is_future  = year > now.getFullYear() or (year is now.getFullYear() and month > (now.getMonth() + 1))
@@ -201,31 +207,23 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   # and only after the due date — so the dashboard doesn't broadcast
   # "$1600 overdue!" the moment the new month rolls over. For historical
   # months, honesty wins.
-  display_amount_due =
-    if      amount_due_override then amount_due
-    else if is_future           then amount_due
-    else if is_current          then (if now.getDate() < config.rent_due_day then 0 else agreed_payment)
-    else                             amount_due
+  display_amount_due_c =
+    if      amount_due_override then amount_due_c
+    else if is_future           then amount_due_c
+    else if is_current          then (if now.getDate() < config.rent_due_day then 0 else agreed_payment_c)
+    else                             amount_due_c
 
   payment_status =
-    if      is_current and now.getDate() < config.rent_due_day    then 'NOT DUE'
-    else if money.cents(amount_paid) >= money.cents(display_amount_due) then 'PAID'
-    else if money.cents(amount_paid) > 0                          then 'PARTIAL'
-    else                                                               'UNPAID'
+    if      is_current and now.getDate() < config.rent_due_day then 'NOT DUE'
+    else if amount_paid_c >= display_amount_due_c                  then 'PAID'
+    else if amount_paid_c > 0                                      then 'PARTIAL'
+    else                                                                'UNPAID'
 
-  # Every value the dashboard shows as money leaves this function rounded to
-  # the cent. An hourly credit on fractional hours produces amounts like
-  # $1,433.3333333333333, which no payment method can settle exactly — the
-  # month would read PARTIAL for ever over a third of a cent (bug 35).
-  #
-  # Hours and cumulative_shortfall stay unrounded. Neither is displayed; both
-  # are carried into the next month's arithmetic, and rounding a running
-  # balance before feeding it forward makes it drift against the exact figure.
   # A value that is not a number cannot be reasoned about, and every route has
   # to say so the same way. Marking the month here means /rent/period,
   # /rent/summary and /rent/outstanding agree, instead of one throwing while
   # another serves null.
-  corrupt = not (Number.isFinite(amount_due) and Number.isFinite(amount_paid))
+  corrupt = not (Number.isFinite(amount_due_c) and Number.isFinite(amount_paid_c))
 
   {
     year, month
@@ -234,21 +232,21 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
     hours_from_previous:      carryOver
     hours_to_next:            total_available - hours_used
     hours_applied:            base_hours_applied
-    discount_applied:         money.dollars base_discount
-    retroactive_credit:       money.dollars retroactive_credit
-    total_discount:           money.dollars total_discount
-    base_rent:                money.dollars config.base_rent
-    agreed_payment:           money.dollars agreed_payment
-    effective_agreed_payment: money.dollars agreed_payment
-    amount_due:               money.dollars amount_due
-    amount_due_calculated:    money.dollars amount_due_calculated
-    adjustment_total:         money.dollars adjustment_total
+    discount_applied:         money.fromCents base_discount_c
+    retroactive_credit:       money.fromCents retroactive_credit_c
+    total_discount:           money.fromCents total_discount_c
+    base_rent:                money.fromCents base_rent_c
+    agreed_payment:           money.fromCents agreed_payment_c
+    effective_agreed_payment: money.fromCents agreed_payment_c
+    amount_due:               money.fromCents amount_due_c
+    amount_due_calculated:    money.fromCents amount_due_calculated_c
+    adjustment_total:         money.fromCents adjustment_total_c
     amount_due_override
-    amount_paid:              money.dollars amount_paid
+    amount_paid:              money.fromCents amount_paid_c
     amount_paid_override
-    display_amount_due:       money.dollars display_amount_due
+    display_amount_due:       money.fromCents display_amount_due_c
     payment_status
-    cumulative_shortfall
+    cumulative_shortfall:     money.fromCents cumulative_shortfall_c
   }
 
 
@@ -329,26 +327,26 @@ computeOutstanding = (periods) ->
   rows = Object.values(periods)
     .filter (p) -> p.payment_status isnt 'NOT DUE'
     .map (p) ->
-      owed = p.display_amount_due
-      paid = p.amount_paid or 0
-      outstanding = if p.corrupt then 0 else Math.max 0, money.minus owed, paid
-      { year: p.year, month: p.month, owed, paid, outstanding, corrupt: p.corrupt is true }
-    .filter (r) ->
-      # A corrupt month is reported, not billed and not silently dropped:
-      # `NaN > 0` is false, so filtering on the number alone would have made it
-      # vanish from both the list and the total — "you are paid up".
-      return true if r.corrupt
-
-      # A month settled to the cent is settled; comparing raw floats left
-      # fully-paid months outstanding by fractions of a cent (bug 35).
-      money.cents(r.outstanding) > 0
+      owed_c        = money.centsOf p.display_amount_due
+      paid_c        = money.centsOf p.amount_paid ? 0
+      outstanding_c = if p.corrupt then 0 else Math.max 0, owed_c - paid_c
+      year:        p.year
+      month:       p.month
+      owed:        p.display_amount_due
+      paid:        p.amount_paid ? 0
+      outstanding: money.fromCents outstanding_c
+      corrupt:     p.corrupt is true
+    # A corrupt month is reported, not billed and not silently dropped:
+    # `NaN > 0` is false, so filtering on the number alone would have made it
+    # vanish from both the list and the total — "you are paid up".
+    .filter (r) -> r.corrupt or r.outstanding > 0
     .sort (a, b) -> (a.year - b.year) or (a.month - b.month)
 
   # A corrupt month contributes nothing to the total — billing a figure nobody
   # can compute would be worse than showing it as unresolved — but it stays in
   # the list, flagged, so the page can say so.
-  total:  money.dollars rows.reduce ((s, r) -> s + r.outstanding), 0
-  months: rows
+  total:   money.fromCents rows.reduce ((s, r) -> s + money.centsOf r.outstanding), 0
+  months:  rows
   corrupt: (r for r in rows when r.corrupt)
 
 

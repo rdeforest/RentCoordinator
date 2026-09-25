@@ -4,6 +4,7 @@
 { v7: uuidv7 }                         = require 'uuid'
 { db }                                  = require '../db/schema.coffee'
 { formatSQLParameters, transaction }    = require '../db/utils.coffee'
+money                                   = require '../money.coffee'
 
 
 # Parse the JSON payload back into an object on the way out.
@@ -30,6 +31,12 @@ NUMERIC_FIELDS =
 # user-supplied text, and it was the one path the check could not see.
 EDITABLE_FIELDS = ['amount', 'delta', 'new_value']
 
+# Hours are the one numeric field that is not money.
+NOT_MONEY = ['hours']
+
+# config-changed payloads name their field; these hold dollars.
+MONEY_CONFIG_FIELDS = ['temporary_rent_amount', 'base_rent', 'hourly_credit', 'agreed_monthly_payment']
+
 
 describeValue = (value) ->
   return 'NaN' if typeof value is 'number' and Number.isNaN value
@@ -45,11 +52,18 @@ badRequest = (message) ->
   err.status = 400
   err
 
+# The fold computes in integer cents from these (lib/money.coffee), so a
+# stored amount has to be one: $10.005 has no exact meaning.
+checkWholeCents = (action, key, value) ->
+  unless money.isWholeCents value
+    throw badRequest "#{action} payload.#{key} must be a whole number of cents, got #{describeValue value}"
+
 checkFields = (action, payload, fields) ->
   for key in fields when payload?[key]?
     value = payload[key]
     unless typeof value is 'number' and Number.isFinite value
       throw badRequest "#{action} payload.#{key} must be a finite number, got #{describeValue value}"
+    checkWholeCents action, key, value unless key in NOT_MONEY
 
   return
 
@@ -59,6 +73,9 @@ validateAmounts = (event) ->
 
   if event.action is 'edited'
     checkFields 'edited', event.payload?.new_payload, EDITABLE_FIELDS
+
+  if event.action is 'config-changed' and event.payload?.field in MONEY_CONFIG_FIELDS and event.payload.new_value?
+    checkWholeCents 'config-changed', 'new_value', event.payload.new_value
 
   return
 

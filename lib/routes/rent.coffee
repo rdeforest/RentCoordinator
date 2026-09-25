@@ -16,6 +16,9 @@ config = require '../config.coffee'
 { AGREED_MONTHLY_PAYMENT, RENT_DUE_DAY, BASE_RENT, HOURLY_CREDIT, MAX_MONTHLY_HOURS } = config
 
 
+sumOf = (rows, key) -> money.fromCents rows.reduce ((s, r) -> s + money.cents r[key]), 0
+
+
 # Map the new period view onto the response shape the front-end already
 # consumes. Keeps the wire contract stable while the model changes underneath.
 toWireShape = (p) ->
@@ -299,9 +302,9 @@ setup = (app) ->
     # rather than approximately.
     res.json
       total_periods:       rows.length
-      total_amount_due:    money.dollars rows.reduce ((s, p) -> s + p.display_amount_due), 0
-      total_amount_paid:   money.dollars rows.reduce ((s, p) -> s + p.amount_paid),        0
-      total_discount:      money.dollars rows.reduce ((s, p) -> s + p.discount_applied),   0
+      total_amount_due:    sumOf rows, 'display_amount_due'
+      total_amount_paid:   sumOf rows, 'amount_paid'
+      total_discount:      sumOf rows, 'discount_applied'
       outstanding_balance: periodViewer.computeOutstanding(now).total
       periods:             rows.sort (a, b) -> (a.year - b.year) or (a.month - b.month)
 

@@ -8,10 +8,7 @@ the proposed fix in `docs/fixes/`.
 
 | # | Title | Severity | Notes |
 |---|---|---|---|
-| 35 | [Money as floating-point dollars](35-money-floating-point.md) | Medium | Half done: amounts round to the cent. The integer-cents conversion is next. |
 | 62 | [Nothing checks the database for consistency except migrations](62-no-consistency-checking.md) | Medium | Scheduled report-only check, plus a landlord-only warning icon linking to the findings. |
-| 66 | [Loose ends in the override rules after bug 56](66-amount-paid-override-and-edits.md) | Medium | August confirmed paid once: delete its pin, then change the rule. |
-| 65 | [Login sessions live in memory](65-sessions-in-memory.md) | Low | Every restart logs both users out. |
 
 ### The remaining structural debt
 
@@ -64,7 +61,7 @@ without changing that line turns every instance unhealthy at the ALB.
 | 32 | `resumeSession` lacks validation | 2026-09-23 | Ownership and state checked. |
 | 33 | `admin/detokenize` not admin-gated | 2026-09-23 | `requireAdmin` on all admin routes and the page. |
 | 34 | Backup restore not atomic | 2026-09-23 | Timestamped safety copy; rename into place. |
-| 35 | Money as floating-point dollars | 2026-09-23 (partly) | Amounts round to the cent so a month can be paid exactly; the full integer-cents representation is still open. |
+| 35 | Money as floating-point dollars | 2026-09-25 | Integer cents inside the fold; dollars stored and served; `recordEvent` refuses fractions of a cent. |
 | 36 | Logger doesn't tokenize error text | 2026-09-23 | Addresses inside messages and stacks are tokenized; the trace survives. |
 | 37 | Wide-open CORS, no `sameSite` | 2026-09-23 | cors not mounted unless configured; `sameSite: 'lax'`. |
 | 38 | Verification codes never purged | 2026-09-23 | Deleted on use, superseded on reissue, swept on expiry. |
@@ -95,6 +92,8 @@ without changing that line turns every instance unhealthy at the ALB.
 | 60 | Refused login address stored as PII | 2026-09-24 | Warn, without the address or a stack. |
 | 61 | Logger truncates before tokenizing | 2026-09-24 | Tokenize first. |
 | 63 | A crash is not restarted | 2026-09-25 | `daemon --respawn` in the init script; interface unchanged. |
+| 65 | Login sessions live in memory | 2026-09-25 | SQLite-backed express-session store; logins survive restarts. |
+| 66 | Loose ends in the override rules after bug 56 | 2026-09-25 | Pins chosen by `occurred_at`; `amount_paid` pins absolute; August's redundant pin deleted by migration. |
 | 64 | Nightly backup cron never ran | 2026-09-24 | Log redirect into root-owned `/var/log`. Live crontab fixed; Launch Template via `deploy.sh deploy`. |
 | 45 | `backup-*.sh` mangle `.env` secrets | 2026-09-23 | Source the file instead of `xargs`. |
 | 46 | Migration loop swallows failures | 2026-09-23 | `set -euo pipefail`, delegating to `upgrade.sh`. |
