@@ -13,6 +13,7 @@ process.env.NODE_ENV = 'test'
 assert                          = require 'node:assert/strict'
 schema                          = require '../../lib/db/schema.coffee'
 eventsModel                     = require '../../lib/models/events.coffee'
+workLogModel                    = require '../../lib/models/work_log.coffee'
 consistencyModel                = require '../../lib/models/consistency.coffee'
 
 before -> await schema.initialize()
@@ -47,10 +48,36 @@ describe 'recordRun / latestRun', ->
     assert.equal run.fingerprint, fingerprint
     assert.deepEqual run.findings, findings
 
-  it 'keeps only the most recent 30 runs', ->
+  it 'keeps exactly the most recent 30 runs after 35 have been recorded', ->
     fingerprint = consistencyModel.currentFingerprint()
     consistencyModel.recordRun fingerprint, [] for [1..35]
-    assert.ok consistencyModel.listRuns(100).length <= 30
+    assert.equal consistencyModel.listRuns(100).length, 30
+
+
+describe 'pruning stale acknowledgments at record time (bug 62, F8)', ->
+  it 'drops an ack whose key no longer appears in any retained run, once it ages out of the window', ->
+    fingerprint = consistencyModel.currentFingerprint()
+
+    consistencyModel.recordRun fingerprint, [ { key: 'f8-stale-key', kind: 'test', severity: 'warning', message: 'm' } ]
+    consistencyModel.ack 'f8-stale-key', 'noted for later', 'robert@defore.st'
+    assert.ok consistencyModel.acknowledgedKeys().has 'f8-stale-key'
+
+    # Push MAX_RUNS more empty runs so the run holding the key falls out of
+    # the retained window on the last recordRun call.
+    consistencyModel.recordRun fingerprint, [] for [1..30]
+
+    assert.ok not consistencyModel.acknowledgedKeys().has 'f8-stale-key',
+      'the ack should have been pruned once its finding key left every stored run'
+
+  it 'keeps an ack whose key is still present in a retained run', ->
+    fingerprint = consistencyModel.currentFingerprint()
+
+    consistencyModel.recordRun fingerprint, [ { key: 'f8-live-key', kind: 'test', severity: 'warning', message: 'm' } ]
+    consistencyModel.ack 'f8-live-key', 'still relevant', 'robert@defore.st'
+
+    consistencyModel.recordRun fingerprint, [ { key: 'f8-live-key', kind: 'test', severity: 'warning', message: 'm' } ]
+
+    assert.ok consistencyModel.acknowledgedKeys().has 'f8-live-key'
 
 
 describe 'acknowledgments', ->
@@ -69,6 +96,22 @@ describe 'acknowledgments', ->
     consistencyModel.unack 'finding-key-2'
     assert.equal consistencyModel.getAck('finding-key-2'), undefined
     assert.ok not consistencyModel.acknowledgedKeys().has 'finding-key-2'
+
+
+describe 'lastDataWriteMs (bug 62, F2)', ->
+  it 'is finite and recent through the real work_log insert path (created_at is an ISO string there, not SQLite CURRENT_TIMESTAMP)', ->
+    before_ = Date.now()
+    workLogModel.createWorkLog
+      worker:      'lyndzie'
+      start_time:  new Date().toISOString()
+      end_time:    new Date().toISOString()
+      duration:    60
+      description: 'F2 coverage'
+
+    result = consistencyModel.lastDataWriteMs()
+    assert.ok Number.isFinite(result), "expected a finite epoch ms, got #{result}"
+    assert.ok result >= before_ - 1000 and result <= Date.now() + 1000,
+      'expected the timestamp to be roughly now, not NaN from a mis-parsed ISO string'
 
 
 describe 'lastDataWriteMs', ->

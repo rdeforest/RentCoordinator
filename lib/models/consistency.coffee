@@ -23,17 +23,47 @@ tableFingerprint = (table) ->
 currentFingerprint = ->
   FINGERPRINT_TABLES.map(tableFingerprint).join '|'
 
+# created_at isn't one format across these tables: events (lib/models/events
+# .coffee) stores an ISO string ('...T...Z'), work_logs (lib/models/work_log
+# .coffee) stores SQLite's CURRENT_TIMESTAMP shape ('YYYY-MM-DD HH:MM:SS',
+# UTC, no zone suffix). Appending 'Z' to an already-ISO value produced
+# '...ZZ' — an unparseable date, hence NaN — whenever the newest write
+# happened to be a work log (bug 62, F2). Parse each by its own shape.
+parseCreatedAt = (value) ->
+  return NaN unless value?
+  if value.includes 'T' then new Date(value).getTime() else new Date(value.replace(' ', 'T') + 'Z').getTime()
+
 # When real data was last written, from the rows themselves. The file's mtime
 # also moves on logins and on this check's own writes, so it would report a
-# stale backup after every login. created_at is SQLite CURRENT_TIMESTAMP: UTC
-# without a zone suffix. 0 when there is no data yet.
+# stale backup after every login. Compared as epoch ms across tables, not as
+# strings — a MAX() per table is still per-table, and the two created_at
+# shapes above don't sort against each other correctly as text. 0 when there
+# is no data yet at all; NaN (via Math.max) when a value exists but couldn't
+# be parsed, which checkBackupAge treats as its own error rather than silently
+# skipping the check (bug 62, F2).
 lastDataWriteMs = ->
-  newest = FINGERPRINT_TABLES
+  values = FINGERPRINT_TABLES
     .map (table) -> db.prepare("SELECT MAX(created_at) AS t FROM #{table}").get().t
     .filter (t) -> t?
-    .sort()
-    .pop()
-  if newest then new Date(newest.replace(' ', 'T') + 'Z').getTime() else 0
+
+  return 0 if values.length is 0
+
+  epochs = values.map parseCreatedAt
+  Math.max epochs...
+
+
+# An acknowledgment is keyed by finding key, so a finding that changes key
+# (a re-pin, a recalculation) leaves its old ack orphaned — invisible on the
+# issues page (nothing there has that key any more) but still sitting in the
+# table forever. Drop any ack whose key isn't present in any of the runs
+# retained after this write (bug 62, F8).
+pruneStaleAcknowledgments = ->
+  liveKeys = new Set()
+  for run in listRuns()
+    liveKeys.add f.key for f in run.findings
+
+  unack row.finding_key for row in listAcknowledgments() when not liveKeys.has row.finding_key
+  return
 
 
 recordRun = (fingerprint, findings) ->
@@ -45,6 +75,8 @@ recordRun = (fingerprint, findings) ->
     DELETE FROM consistency_runs
     WHERE id NOT IN (SELECT id FROM consistency_runs ORDER BY id DESC LIMIT ?)
   """).run MAX_RUNS
+
+  pruneStaleAcknowledgments()
 
   latestRun()
 
