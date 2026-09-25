@@ -33,11 +33,14 @@ try
   unless target
     console.log '  target override event not found — nothing to delete'
   else
-    alreadyDeleted = db.prepare("""
-      SELECT COUNT(*) AS n FROM events WHERE action = 'deleted' AND target_event_id = ?
-    """).get(TARGET_EVENT_ID).n
+    # Delete and undelete both target the original; whichever came last wins.
+    latest = db.prepare("""
+      SELECT action FROM events
+      WHERE target_event_id = ? AND action IN ('deleted', 'undeleted')
+      ORDER BY occurred_at DESC, id DESC LIMIT 1
+    """).get TARGET_EVENT_ID
 
-    if alreadyDeleted > 0
+    if latest?.action is 'deleted'
       console.log '  already deleted — no-op'
     else
       db.prepare("""

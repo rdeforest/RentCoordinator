@@ -59,16 +59,10 @@ describe 'SQLiteSessionStore', ->
     got = await call store.get.bind(store), 'sid-expired'
     assert.equal got, null, 'an expired row must read back as absent'
 
-  it 'touch extends a session past its original expiry', ->
-    sess = makeSession 1000
-    await call store.set.bind(store), 'sid-touch', sess
-
-    extended = makeSession 60_000
-    await call store.touch.bind(store), 'sid-touch', extended
-
-    row = db.prepare('SELECT expires FROM sessions WHERE sid = ?').get 'sid-touch'
-    assert.ok row.expires > Date.now() + 30_000,
-      'touch should have pushed expires out to the extended cookie'
+  it 'has no touch, so reading a session never writes the database', ->
+    # express-session calls touch on every request when it exists; a write per
+    # page view keeps the idle backup from ever firing.
+    assert.equal store.touch, undefined
 
   it 'destroy removes the row', ->
     sess = makeSession 60_000
@@ -103,3 +97,22 @@ describe 'sweepExpired', ->
       'a live row must survive the sweep'
     assert.equal db.prepare('SELECT sid FROM sessions WHERE sid = ?').get(expired.sid), undefined,
       'an expired row must not survive the sweep'
+
+
+describe 'restoring a backup that predates the sessions table', ->
+  it 'leaves the store working', ->
+    { DatabaseSync } = require 'node:sqlite'
+    backup           = require '../../lib/services/backup.coffee'
+
+    oldBackup = path.join path.dirname(DB_PATH), 'pre-sessions.db'
+    db.exec "VACUUM INTO '#{oldBackup}'"
+    old = new DatabaseSync oldBackup
+    old.exec 'DROP TABLE sessions'
+    old.close()
+
+    backup.restoreFromFile oldBackup
+
+    store = new SQLiteSessionStore()
+    await call store.set.bind(store), 'sid-after-restore', makeSession 60_000
+    got = await call store.get.bind(store), 'sid-after-restore'
+    assert.ok got, 'a login right after restoring an older backup must still work'

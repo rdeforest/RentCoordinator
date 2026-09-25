@@ -794,9 +794,12 @@ openEditPeriodModal = (year, month) ->
     document.getElementById('edit-period-month').value = month
     document.getElementById('edit-period-title').textContent = "Period: #{formatMonthYear year, month}"
 
-    document.getElementById('edit-manual-adjustments').value = period.manual_adjustments or 0
-    document.getElementById('edit-amount-due').value = period.amount_due or ''
-    document.getElementById('edit-amount-paid').value = period.amount_paid or ''
+    for [id, value] in [['edit-manual-adjustments', period.manual_adjustments or 0]
+                        ['edit-amount-due',         period.amount_due or '']
+                        ['edit-amount-paid',        period.amount_paid or '']]
+      field = document.getElementById id
+      field.value            = value
+      field.dataset.original = String value
 
     editPeriodModal.style.display = 'block'
 
@@ -812,19 +815,15 @@ editPeriodForm.addEventListener 'submit', (e) ->
   year = parseInt document.getElementById('edit-period-year').value
   month = parseInt document.getElementById('edit-period-month').value
 
+  # Only fields the landlord changed: every submitted field becomes a pin, and
+  # resubmitting the prefilled values pinned both amounts on every save.
   updates = {}
-
-  manualAdj = document.getElementById('edit-manual-adjustments').value
-  if manualAdj isnt ''
-    updates.manual_adjustments = parseFloat manualAdj
-
-  amountDue = document.getElementById('edit-amount-due').value
-  if amountDue isnt ''
-    updates.amount_due = parseFloat amountDue
-
-  amountPaid = document.getElementById('edit-amount-paid').value
-  if amountPaid isnt ''
-    updates.amount_paid = parseFloat amountPaid
+  for [id, key] in [['edit-manual-adjustments', 'manual_adjustments']
+                    ['edit-amount-due',         'amount_due']
+                    ['edit-amount-paid',        'amount_paid']]
+    field = document.getElementById id
+    if field.value isnt '' and field.value isnt field.dataset.original
+      updates[key] = parseFloat field.value
 
   try
     response = await fetch "/rent/period/#{year}/#{month}",

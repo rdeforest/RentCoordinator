@@ -269,10 +269,15 @@ SCHEMA = """
 """
 
 
+# CREATE ... IF NOT EXISTS only: brings an older database's tables up to date
+# without touching the ones it has.
+ensureTables = -> db.exec SCHEMA
+
+
 initialize = ->
   console.log "Initializing SQLite database at #{config.DB_PATH}"
 
-  db.exec SCHEMA
+  ensureTables()
 
   # Migrations run here, not only in the instance bootstrap. CREATE TABLE IF
   # NOT EXISTS above never alters an existing table, so a database that
@@ -296,4 +301,4 @@ initialize = ->
   console.log "Database initialized successfully"
 
 
-module.exports = { db, reopen, initialize }
+module.exports = { db, reopen, ensureTables, initialize }

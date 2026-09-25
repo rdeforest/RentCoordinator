@@ -94,29 +94,6 @@ extractEntries = (html) ->
   entries
 
 # ============================================================
-# Rent period recalculation (mirrors POST /work-logs logic)
-# ============================================================
-
-recalcRentPeriods = (db, entries) ->
-  months = new Set()
-  for e in entries when e.worker is 'lyndzie'
-    for ts in [e.startTime, e.endTime]
-      d = new Date ts
-      months.add "#{d.getFullYear()}-#{d.getMonth() + 1}"
-
-  return if months.size is 0
-
-  console.log "\nRecalculating rent periods for #{months.size} month(s)..."
-
-  # Load rent service dynamically (needs db to be initialized first)
-  rentService = require '../lib/services/rent.coffee'
-
-  for monthKey from months
-    [year, month] = monthKey.split('-').map (n) -> parseInt n
-    console.log "  Recalculating #{year}-#{String(month).padStart 2, '0'}..."
-    await rentService.createOrUpdateRentPeriod year, month
-
-# ============================================================
 # Main
 # ============================================================
 
@@ -176,9 +153,6 @@ main = ->
 
   console.log ''
   console.log "Summary: #{added.length} added, #{skipped} skipped, #{failed} failed"
-
-  unless dryRun or added.length is 0
-    await recalcRentPeriods db, added
 
   db.close()
 

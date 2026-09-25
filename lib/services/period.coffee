@@ -165,12 +165,11 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   amount_due_override   = false
   amount_paid_override  = false
 
-  # An override pins the amount at its time — not for ever. Whatever comes
-  # after the latest pin (an adjustment on amount_due, a payment on
-  # amount_paid) applies on top of it; anything from before the pin is
-  # superseded, exactly as if it had never happened (bug 56 for adjustments,
-  # bug 66 for payments — both were previously either discarded wholesale or
-  # picked by array position instead of by occurred_at).
+  # The latest pin by occurred_at wins, for both fields. An amount_due pin
+  # takes adjustments recorded after it on top (bug 56). An amount_paid pin is
+  # absolute: it is the landlord's statement of what was received, and a
+  # payment settling after it is usually the one it describes (bug 66's
+  # August). Disagreements are for review (bug 62), not silent arithmetic.
   latestDueOverride = latestFieldOverride monthEvents, 'amount_due'
   if latestDueOverride
     laterAdjustmentTotal = amountDueAdjustments
@@ -182,12 +181,8 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
 
   latestPaidOverride = latestFieldOverride monthEvents, 'amount_paid'
   if latestPaidOverride
-    laterPaymentTotal = paymentEvents
-      .filter  (e) -> e.occurred_at > latestPaidOverride.occurred_at
-      .reduce  ((sum, e) -> sum + e.payload.amount), 0
-
-    amount_paid           = latestPaidOverride.payload.new_value + laterPaymentTotal
-    amount_paid_override  = true
+    amount_paid          = latestPaidOverride.payload.new_value
+    amount_paid_override = true
 
   cumulative_shortfall = shortfall - retroactive_credit
   if base_hours_applied < config.max_monthly_hours

@@ -5,8 +5,10 @@
 # never open a second connection).
 #
 # express-session/README.md ("Session Store Implementation") lists get, set
-# and destroy as required and touch as recommended (used to reset a rolling
-# expiry without a full re-set) — those four are implemented below.
+# and destroy as required. touch is deliberately absent: express-session calls
+# it on every request, and with rolling off it would only rewrite a row the
+# cookie's own expiry already bounds - a database write per page view, which
+# keeps the idle backup from ever seeing the database idle.
 
 { Store } = require 'express-session'
 { db }    = require '../db/schema.coffee'
@@ -65,13 +67,6 @@ class SQLiteSessionStore extends Store
   destroy: (sid, callback) ->
     try
       db.prepare('DELETE FROM sessions WHERE sid = ?').run sid
-      callback null
-    catch err
-      callback err
-
-  touch: (sid, sess, callback) ->
-    try
-      db.prepare('UPDATE sessions SET expires = ? WHERE sid = ?').run expiryOf(sess), sid
       callback null
     catch err
       callback err

@@ -443,15 +443,15 @@ test "a payment at the same occurred_at as the amount_paid override is supersede
     'a payment at the same instant as the amount_paid override is treated as not-after it, so it is superseded rather than added on top (500, not 600)'
 
 
-test "a payment recorded after an amount_paid override applies on top of the pin (bug 66)", ->
+test "an amount_paid override stands against a payment recorded after it (bug 66)", ->
   events  = [
     override('2026-01', 'amount_paid', 500, '2026-01-10T00:00:00Z')
     payment('2026-01', 100, '2026-01-20T00:00:00Z')
   ]
   periods = computeAllPeriods events, NOW
 
-  assert.equal periods['2026-01'].amount_paid, 600,
-    'the later payment applies on top of the pin: 500 + 100'
+  assert.equal periods['2026-01'].amount_paid, 500,
+    'a later payment is usually the one the pin describes (an ACH settling); adding it double-counts'
   assert.equal periods['2026-01'].amount_paid_override, true
 
 

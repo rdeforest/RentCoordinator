@@ -279,26 +279,21 @@ in the fold.
 If a month has no override, nothing changes: `amount_due` is the full
 calculated figure, adjustments and all.
 
-## `amount_paid` follows the same rule (2026-09-24, bug 66)
+## `amount_paid` pins are absolute (2026-09-24, bug 66)
 
-`amount_paid` pins work exactly like `amount_due` pins: the latest
-`override` targeting `amount_paid` for the month, by `occurred_at`, is the
-base; `payment-made` events with `occurred_at` after it apply on top;
-earlier payments are superseded. Both fields pick their "latest" override
-through the same helper (`latestFieldOverride` in
-`lib/services/period.coffee`) rather than two separately-maintained rules —
-before this, `amount_due` picked by `occurred_at` and `amount_paid` picked
-by array/insertion position, so which override won could depend on where in
-the fold each one happened to look.
+Both fields pick their pin the same way: the latest `override` for the month
+by `occurred_at` (`latestFieldOverride` in `lib/services/period.coffee`).
+Before bug 66, `amount_paid` picked by array position.
 
-An event at the *same* `occurred_at` as the override counts as not-after
-it, so it is superseded rather than added on top — this applies to both the
-`amount_due`/adjustment tie and the `amount_paid`/payment tie.
-
-Before this fix, an `amount_paid` override discarded every payment
-regardless of timing: a payment recorded after the pin was summed and then
-overwritten, so paying a month the landlord had pinned as partly paid left
-the dashboard showing the stale pinned figure.
+They differ in what comes after the pin. An `amount_due` pin takes later
+adjustments on top (bug 56). An `amount_paid` pin is absolute: it is the
+landlord's statement of what was received, and a payment recorded after it
+is usually the very payment it describes — a Stripe ACH settles days after
+it starts, so a pin made in between and the settlement event would otherwise
+count the same money twice (August 2026 did exactly this). Where a later
+payment genuinely disagrees with a pin, that is for the landlord to review
+(bug 62), not for the fold to resolve by arithmetic. Record real money with a
+`payment-made` event, not a pin.
 
 ## Editing a superseded adjustment (2026-09-24, bug 66)
 

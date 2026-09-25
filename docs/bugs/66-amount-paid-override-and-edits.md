@@ -13,16 +13,13 @@
    Idempotent: no-op if the event is absent (fresh DBs, tests) or already
    deleted (re-runs). Tested in `test/services/migrations.coffee`.
 
-2. **`amount_paid` pins now follow the `amount_due` rule.**
-   `lib/services/period.coffee::computeMonth` picks the latest override for
-   both fields the same way — `latestFieldOverride`, by `occurred_at`, not
-   array position — via a shared `latestByOccurredAt` helper. A
-   `payment-made` event with `occurred_at` after the latest `amount_paid`
-   pin now applies on top of it, exactly as an `adjustment` after an
-   `amount_due` pin does (bug 56); a payment at or before the pin is
-   superseded. Equal `occurred_at` counts as *not* after, so a same-instant
-   payment is superseded rather than added on top — same tie rule as
-   adjustments.
+2. **`amount_paid` pins pick the latest by `occurred_at` and are absolute.**
+   Both fields now choose their pin through one helper
+   (`latestFieldOverride`), by `occurred_at` rather than array position. The
+   first version of this fix also added later payments on top of an
+   `amount_paid` pin; review showed that double-counts the common case (an
+   ACH settling after the pin that describes it, as August did), so a pin
+   stands and disagreements go to the landlord for review (bug 62).
 
    Verified against production-shaped data: April, May and June 2026 (pins
    of 1200 with no later payments) still show 1200 paid; August, after the
@@ -41,7 +38,7 @@
      both `amount_due` and `amount_paid`);
    - an adjustment/payment at the same `occurred_at` as the override is
      superseded, not applied on top (for both fields);
-   - a payment after an `amount_paid` override applies on top of it.
+   - an `amount_paid` override stands against a payment recorded after it.
 
    Each was verified to fail against the reverted behavior it guards (see
    commit history for this bug).

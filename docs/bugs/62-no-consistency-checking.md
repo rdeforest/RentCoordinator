@@ -22,6 +22,11 @@ stop it.
 A scheduled check that reports and never blocks:
 
 - SQLite `PRAGMA integrity_check` and `PRAGMA foreign_key_check`.
+- Manual vs automatic disagreements: a `payment-made` recorded after an
+  `amount_paid` pin on the same month, a pinned amount that differs from what
+  the events compute, a payment filed under a different month than its Stripe
+  description. Each finding gets a way to annotate its origin or to resolve
+  it (Robert, 2026-09-24).
 - Backup age: the newest S3 backup is older than ~26 hours (bug 64 went
   unnoticed for three weeks).
 - Ledger invariants: every `payment-made` names a real month; no delete of a

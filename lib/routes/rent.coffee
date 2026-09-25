@@ -390,7 +390,7 @@ setup = (app) ->
     # changes that, because the edit keeps the adjustment's original
     # occurred_at. Previously this returned 200 and silently did nothing
     # (bug 66); refuse instead and say why.
-    if existing.action is 'adjustment' and existing.payload.target?.field is 'amount_due'
+    if existing.action is 'adjustment' and existing.payload.target?.field is 'amount_due' and req.body.amount?
       monthEvents    = period.resolveEditsAndDeletes(eventsModel.listAllEvents())
         .filter (e) -> e.effective_for is existing.effective_for
       latestOverride = period.latestFieldOverride monthEvents, 'amount_due'

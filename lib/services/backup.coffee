@@ -43,6 +43,9 @@ swapInDatabase = (incoming, dbPath) ->
 
   renameSync incoming, dbPath
   schema.reopen()
+  # A backup older than the running code lacks its newer tables (sessions).
+  # Columns a newer migration adds still need a restart, which migrates.
+  schema.ensureTables()
   backupPath
 
 
