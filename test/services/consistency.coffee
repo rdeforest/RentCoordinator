@@ -149,28 +149,44 @@ describe 'checkAmountPaidPinMismatch', ->
 
 describe 'checkAmountDuePinMismatch', ->
   it 'flags an amount_due override (it pins a different figure than the calc, by design)', ->
-    periods =
-      '2026-05': { amount_due_override: true, amount_due: 1500, amount_due_calculated: 1600 }
-    findings = consistency.checkAmountDuePinMismatch { periods }
+    pin = override '2026-05', 'amount_due', 1500, '2026-05-10T00:00:00Z'
+    periods = { '2026-05': { amount_due_override: true, amount_due: 1500, amount_due_calculated: 1600 } }
+    findings = consistency.checkAmountDuePinMismatch { events: [pin], periods }
     assert.equal findings.length, 1
-    assert.equal findings[0].detail.pinned, 1500
-    assert.equal findings[0].detail.calculated, 1600
+    assert.equal findings[0].detail.amount_due, 1500
+    assert.equal findings[0].detail.amount_due_calculated, 1600
+    assert.ok findings[0].message.includes('pinned at'), 'message states what the pin says, not the calculated figure'
 
   it 'is silent when there is no override', ->
     periods = { '2026-05': { amount_due_override: false, amount_due: 1600, amount_due_calculated: 1600 } }
-    assert.deepEqual consistency.checkAmountDuePinMismatch({ periods }), []
+    assert.deepEqual consistency.checkAmountDuePinMismatch({ events: [], periods }), []
+
+  it 'is silent when the pin agrees with the calculated figure', ->
+    pin = override '2026-05', 'amount_due', 1600, '2026-05-10T00:00:00Z'
+    periods = { '2026-05': { amount_due_override: true, amount_due: 1600, amount_due_calculated: 1600 } }
+    assert.deepEqual consistency.checkAmountDuePinMismatch({ events: [pin], periods }), []
 
   it 'key stays the same across two runs of identical data (stability)', ->
+    pin = override '2026-05', 'amount_due', 1500, '2026-05-10T00:00:00Z'
     periods = { '2026-05': { amount_due_override: true, amount_due: 1500, amount_due_calculated: 1600 } }
-    keyA = consistency.checkAmountDuePinMismatch({ periods })[0].key
-    keyB = consistency.checkAmountDuePinMismatch({ periods })[0].key
+    keyA = consistency.checkAmountDuePinMismatch({ events: [pin], periods })[0].key
+    keyB = consistency.checkAmountDuePinMismatch({ events: [pin], periods })[0].key
     assert.equal keyA, keyB
 
-  it 'key changes when the calculated amount changes', ->
+  it 'key stays the same when only the calculated amount changes (bug 62, F6 — carry-over recalculation must not re-open an acknowledged finding for a pin that did not change)', ->
+    pin = override '2026-05', 'amount_due', 1500, '2026-05-10T00:00:00Z'
     periodsA = { '2026-05': { amount_due_override: true, amount_due: 1500, amount_due_calculated: 1600 } }
     periodsB = { '2026-05': { amount_due_override: true, amount_due: 1500, amount_due_calculated: 1650 } }
-    keyA = consistency.checkAmountDuePinMismatch({ periods: periodsA })[0].key
-    keyB = consistency.checkAmountDuePinMismatch({ periods: periodsB })[0].key
+    keyA = consistency.checkAmountDuePinMismatch({ events: [pin], periods: periodsA })[0].key
+    keyB = consistency.checkAmountDuePinMismatch({ events: [pin], periods: periodsB })[0].key
+    assert.equal keyA, keyB
+
+  it 'key changes when the pin itself is re-pinned to a different value', ->
+    pinA = override '2026-05', 'amount_due', 1500, '2026-05-10T00:00:00Z'
+    pinB = override '2026-05', 'amount_due', 1550, '2026-05-10T00:00:00Z'
+    periods = { '2026-05': { amount_due_override: true, amount_due: 1500, amount_due_calculated: 1600 } }
+    keyA = consistency.checkAmountDuePinMismatch({ events: [pinA], periods })[0].key
+    keyB = consistency.checkAmountDuePinMismatch({ events: [pinB], periods })[0].key
     assert.notEqual keyA, keyB
 
 
@@ -198,6 +214,34 @@ describe 'checkBackupAge', ->
       listS3Backups: -> throw new Error 'must not be called'
       lastDataWriteMs: -> Date.now()
     assert.deepEqual findings, []
+
+  # bug 62, F5: exact-boundary coverage — the comparison is >=, so an equal
+  # timestamp must not flag, and one millisecond older must.
+  it 'is silent when the newest backup exactly equals the newest write, to the millisecond', ->
+    ts = new Date('2026-05-02T00:00:00.500Z').getTime()
+    findings = await consistency.checkBackupAge
+      s3Enabled:       true
+      listS3Backups:   -> [ { lastModified: new Date(ts) } ]
+      lastDataWriteMs: -> ts
+    assert.deepEqual findings, []
+
+  it 'flags when the newest backup is exactly one millisecond older than the newest write', ->
+    ts = new Date('2026-05-02T00:00:00.500Z').getTime()
+    findings = await consistency.checkBackupAge
+      s3Enabled:       true
+      listS3Backups:   -> [ { lastModified: new Date(ts - 1) } ]
+      lastDataWriteMs: -> ts
+    assert.equal findings.length, 1
+    assert.equal findings[0].kind, 'backup-stale'
+
+  it 'reports an error finding (not a skip) when lastDataWriteMs is unparseable (bug 62, F2 surfaced here)', ->
+    findings = await consistency.checkBackupAge
+      s3Enabled:       true
+      listS3Backups:   -> [ { lastModified: new Date('2026-05-01T00:00:00Z') } ]
+      lastDataWriteMs: -> NaN
+    assert.equal findings.length, 1
+    assert.equal findings[0].severity, 'error'
+    assert.equal findings[0].kind, 'backup-lastwrite-error'
 
 
 # --- stripe (stubbed client, never touches the network) -----------------------
@@ -238,6 +282,18 @@ describe 'checkStripePayments', ->
     assert.equal findings.length, 1
     assert.equal findings[0].kind, 'stripe-mismatch'
 
+  it 'flags when the linked event is the right month but the wrong amount (bug 62, F5)', ->
+    intent = { id: 'pi_5', amount: 160000, description: 'Rent payment for 2026-05', created: 1, metadata: {} }
+    linked = payment '2026-05', 1500, '2026-05-15T00:00:00Z', payload: { amount: 1500, stripe_payment_intent_id: 'pi_5' }
+    findings = await consistency.checkStripePayments
+      stripeEnabled: true
+      events: [linked]
+      listSucceededPaymentIntents: -> [intent]
+    assert.equal findings.length, 1
+    assert.equal findings[0].kind, 'stripe-mismatch'
+    assert.equal findings[0].detail.allocated_amount, 1600
+    assert.equal findings[0].detail.ledger_amount,    1500
+
 
 # --- orchestration: a check that throws becomes one error finding, others still run --
 
@@ -257,6 +313,37 @@ describe 'runChecks', ->
     # produced its own error finding rather than the whole run aborting
     fkErrors = (f for f in findings when f.kind is 'db-foreign-key-error')
     assert.equal fkErrors.length, 1
+
+  # bug 62, F4: a malformed event payload used to throw out of listAllEvents
+  # (JSON.parse inside events.coffee's hydrate) before any individual check's
+  # try/catch could see it, aborting the whole run — nothing stored, a stale
+  # issues page. Bypass recordEvent (which validates on the way in) to plant
+  # a bad row directly, the way a pre-validation row or a hand migration
+  # could have left one.
+  it 'a malformed event payload becomes one ledger-unreadable finding, and non-ledger checks still run', ->
+    schema.db.prepare("""
+      INSERT INTO events (id, occurred_at, effective_for, actor, actor_user, action, payload)
+      VALUES ('bad-payload-1', '2026-05-01T00:00:00Z', '2026-05', 'tenant', 'lynz57@hotmail.com', 'payment-made', 'not json')
+    """).run()
+
+    try
+      findings = await consistency.runChecks { s3Enabled: false, stripeEnabled: false }
+
+      unreadable = (f for f in findings when f.kind is 'ledger-unreadable')
+      assert.equal unreadable.length, 1
+      assert.equal unreadable[0].severity, 'error'
+
+      # db-integrity doesn't need the ledger at all — it still ran and, on a
+      # database that's otherwise healthy, reported nothing wrong.
+      dbFindings = (f for f in findings when f.kind is 'db-integrity')
+      assert.deepEqual dbFindings, []
+
+      # a ledger-dependent check must not have run at all (no partial/garbage
+      # result from an empty events array standing in for the real ledger)
+      ledgerCorrupt = (f for f in findings when f.kind is 'ledger-corrupt-month')
+      assert.deepEqual ledgerCorrupt, []
+    finally
+      schema.db.prepare("DELETE FROM events WHERE id = 'bad-payload-1'").run()
 
 
 # --- checkAllocationFor helper (used by the stripe check) ----------------------

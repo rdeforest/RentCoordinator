@@ -35,6 +35,28 @@ createPaymentIntent = (amount, description, metadata = {}) ->
     amount:       amount
 
 
+# Every succeeded PaymentIntent, oldest API version and pagination handled
+# once here rather than duplicated wherever something needs to cross-check
+# them (lib/services/consistency.coffee's Stripe check, bug 62's F7).
+listSucceededPaymentIntents = ->
+  return [] unless config.STRIPE_SECRET_KEY
+
+  stripeClient  = getStripe()
+  results       = []
+  startingAfter = undefined
+
+  loop
+    page = await stripeClient.paymentIntents.list
+      limit:          100
+      starting_after: startingAfter
+
+    results.push (pi for pi in page.data when pi.status is 'succeeded')...
+    break unless page.has_more
+    startingAfter = page.data[page.data.length - 1].id
+
+  results
+
+
 getPaymentStatus = (paymentIntentId) ->
   stripeClient  = getStripe()
   paymentIntent = await stripeClient.paymentIntents.retrieve paymentIntentId
@@ -159,6 +181,7 @@ getOrCreateCustomer = (email, name) ->
 module.exports = {
   createPaymentIntent
   getPaymentStatus
+  listSucceededPaymentIntents
   confirmPayment
   recordPaymentFromIntent
   constructWebhookEvent
