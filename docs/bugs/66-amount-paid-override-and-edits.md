@@ -1,7 +1,7 @@
 # Bug 66 — Loose ends in the override rules after bug 56
 
 **Reported:** 2026-09-24 by the post-fix review of the 2026-09 sweep
-**Status:** open (August 2026 needs a decision before any code change)
+**Status:** open (August confirmed paid once; delete its pin, then change the rule)
 
 Bug 56 made adjustments recorded after an `amount_due` override apply on top
 of it. The same review found the neighbouring cases still inconsistent.
@@ -26,6 +26,17 @@ month**. Production, 2026-09-24:
 August shows $1,200 paid today; under the new rule it would show $2,400. If
 August was paid once, the pin was a stopgap during the 09-03 recovery and the
 data fix is to delete the pin, which should happen before the rule changes.
+**Confirmed 2026-09-24:** Stripe shows one $1,200 payment for August,
+initiated 08-30; the `payment-made` dated 09-04 is its ACH settlement arriving
+by webhook. The August pin is redundant. Order of work: record a `deleted`
+event for the August `amount_paid` override (display unchanged: 1200 either
+way), then apply later payments on top of `amount_paid` pins. April-June pins
+have no later payments and are unaffected.
+
+July, for the record: its $1,200 `payment-made` was entered manually on
+07-01 with method `other` and no Stripe intent, and Stripe has no July
+transaction. Robert is confirming with Lyndzie how it was paid.
+
 The pin also picks by array position where the `amount_due` pin picks by
 `occurred_at`; the fix should give both one rule.
 
