@@ -29,6 +29,8 @@ PROTECTED = [
   '/timer/status?worker=robert'
   '/admin/logs'
   '/api/backup/list'
+  '/admin/consistency'
+  '/admin/consistency/summary'
 ]
 
 OPEN = ['/health', '/health/ready', '/login.html']
@@ -127,3 +129,25 @@ describe 'The auth gate (bug 23)', ->
     # — not merely behind requireAuth.
     assert.equal (await tenant.post '/admin/detokenize', data: 'token:0000000000000000').status, 403,
       'an authenticated tenant must not reach /admin/detokenize'
+
+    # Bug 62: every /admin/consistency route is requireAdmin, same as the
+    # rest of /admin/*. A tenant is a real, authenticated user — just not
+    # this one.
+    assert.equal (await tenant.get '/admin/consistency').status, 403
+    assert.equal (await tenant.get '/admin/consistency/summary').status, 403
+    assert.equal (await tenant.post '/admin/consistency/run').status, 403
+    assert.equal (await tenant.post '/admin/consistency/ack', key: 'x', note: 'x').status, 403
+    assert.equal (await tenant.del '/admin/consistency/ack/x').status, 403
+
+    assert.notEqual (await testConfig.client.get '/admin/consistency').status, 403,
+      'and the landlord can reach it'
+
+    # /issues is the page route, gated by requireAdminPage like /admin —
+    # a browser navigation redirects a non-admin home rather than a JSON 403
+    # (see lib/routes/consistency.coffee), so the tenant simply never lands
+    # on it; the API routes above are what actually withhold the data.
+    issuesForTenant = await fetch "#{testConfig.baseUrl}/issues",
+      headers:  { Cookie: tenant.cookie }
+      redirect: 'manual'
+    assert.equal issuesForTenant.status, 302
+    assert.equal issuesForTenant.headers.get('location'), '/'
