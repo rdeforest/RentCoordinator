@@ -14,9 +14,11 @@
 # too, which turned a corrupt amount into $0.00 and reported the month PAID.
 cents = (dollars) -> Math.round (dollars ? 0) * 100
 
-# For values read out of the ledger. No default: a missing amount stays NaN,
-# so the month it belongs to is reported corrupt rather than as $0.
-centsOf = (dollars) -> Math.round dollars * 100
+# For values read out of the ledger. Anything but a number is NaN, so a
+# missing or null amount marks its month corrupt rather than counting as $0.
+# (JSON has no NaN: one written to the ledger comes back as null.)
+centsOf = (dollars) ->
+  if typeof dollars is 'number' then Math.round dollars * 100 else NaN
 
 fromCents = (c) -> c / 100
 
@@ -25,7 +27,10 @@ dollars = (amount) -> fromCents cents amount
 
 same = (a, b) -> cents(a) is cents(b)
 
+# Sum of dollar amounts, added in cents.
+total = (amounts) -> fromCents amounts.reduce ((sum, a) -> sum + cents a), 0
+
 isWholeCents = (dollars) ->
   Number.isFinite(dollars) and Math.abs(dollars * 100 - Math.round(dollars * 100)) < 1e-6
 
-module.exports = { cents, centsOf, fromCents, dollars, same, isWholeCents }
+module.exports = { cents, centsOf, fromCents, dollars, same, total, isWholeCents }

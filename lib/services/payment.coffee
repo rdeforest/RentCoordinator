@@ -75,7 +75,7 @@ recordPaymentFromIntent = (paymentIntent) ->
     return
       success:         true
       alreadyRecorded: true
-      amount:          existing.reduce ((s, e) -> s + e.payload.amount), 0
+      amount:          money.total (e.payload.amount for e in existing)
 
   allocation = parseAllocation paymentIntent
   occurredAt = new Date().toISOString()
@@ -98,7 +98,7 @@ recordPaymentFromIntent = (paymentIntent) ->
   return
     success:         true
     alreadyRecorded: false
-    amount:          allocation.reduce ((s, a) -> s + a.amount), 0
+    amount:          money.total (a.amount for a in allocation)
     allocated:       allocation
     paidAt:          new Date()
 

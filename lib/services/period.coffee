@@ -188,9 +188,11 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
     amount_paid_c        = money.centsOf latestPaidOverride.payload.new_value
     amount_paid_override = true
 
+  # From the rounded discount, not a second rounding of the unworked hours:
+  # credit plus shortfall is exactly a full month's credit.
   cumulative_shortfall_c = shortfall_c - retroactive_credit_c
   if base_hours_applied < config.max_monthly_hours
-    cumulative_shortfall_c += creditFor config.max_monthly_hours - base_hours_applied
+    cumulative_shortfall_c += creditFor(config.max_monthly_hours) - base_discount_c
 
   agreed_payment_c = money.centsOf(
     if config.apply_override and config.temporary_rent_amount?
@@ -345,7 +347,7 @@ computeOutstanding = (periods) ->
   # A corrupt month contributes nothing to the total — billing a figure nobody
   # can compute would be worse than showing it as unresolved — but it stays in
   # the list, flagged, so the page can say so.
-  total:   money.fromCents rows.reduce ((s, r) -> s + money.centsOf r.outstanding), 0
+  total:   money.total (r.outstanding for r in rows)
   months:  rows
   corrupt: (r for r in rows when r.corrupt)
 

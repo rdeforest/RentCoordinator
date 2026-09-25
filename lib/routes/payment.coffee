@@ -47,11 +47,13 @@ setup = (app) ->
         period = periodViewer.getPeriod parseInt(year), parseInt(month)
         return res.status(404).json error: 'Rent period not found' unless period
 
-        expected = period.display_amount_due - (period.amount_paid or 0)
+        paid_c   = money.cents period.amount_paid
+        expected = money.fromCents money.cents(period.display_amount_due) - paid_c
         # Before the 15th, display is 0 — but tenant may still want to pay
         # the agreed amount early.
-        if expected <= 0 and period.amount_paid < period.effective_agreed_payment
-          expected = period.effective_agreed_payment - period.amount_paid
+        agreed_c = money.cents period.effective_agreed_payment
+        if expected <= 0 and paid_c < agreed_c
+          expected = money.fromCents agreed_c - paid_c
 
         unless money.same amount, expected
           return res.status(400).json

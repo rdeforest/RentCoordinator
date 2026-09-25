@@ -30,7 +30,9 @@ describe 'Cent arithmetic', ->
       'a payment with no amount has to surface as corrupt, not as $0'
 
   it 'round-trips whole cents exactly', ->
-    for c in [0, 1, 99, 143333, 95000, -2500]
+    # 29 and 57 are among the cents whose (c / 100) * 100 lands just below c,
+    # so truncating instead of rounding would lose a cent on them.
+    for c in [0, 1, 29, 57, 99, 143333, 95000, -2500]
       assert.equal money.centsOf(money.fromCents c), c
 
   it 'knows whole cents from fractions of one', ->
@@ -103,3 +105,31 @@ describe 'A month can always be paid exactly (bug 35)', ->
       'NaN must stay NaN; `or 0` turned it into $0.00 and the month read PAID'
     assert.equal money.cents(null),      0
     assert.equal money.cents(undefined), 0
+
+
+describe 'The fold in cents', ->
+  override = (ym, field, new_value) ->
+    { id: "o-#{ym}-#{field}", occurred_at: "#{ym}-25T00:00:00Z", effective_for: ym, actor: 'landlord', actor_user: 'robert@defore.st', action: 'override', payload: { target_kind: 'period-field', target: { field }, new_value } }
+
+  it 'marks a month corrupt when a stored amount is missing or null', ->
+    for bad in [undefined, null]
+      assert.equal computeAllPeriods([payment '2026-01', bad], NOW)['2026-01'].corrupt, true,
+        "a payment of #{bad} must not count as $0"
+      assert.equal computeAllPeriods([override '2026-01', 'amount_due', bad], NOW)['2026-01'].corrupt, true,
+        "an override to #{bad} must not pin the month at $0"
+
+  it 'credit plus shortfall is exactly a full month of credit', ->
+    for hours in [0.5001, 1 / 60, 1 / 7, 200 / 60, 7.9999]
+      p = computeAllPeriods([work '2026-01', hours], NOW)['2026-01']
+      assert.equal money.cents(p.discount_applied) + money.cents(p.cumulative_shortfall), 8 * 5000,
+        "#{hours} hours: rounding the two halves separately can make a cent"
+
+  it 'recovers a shortfall from hours that are not thirds, to the cent', ->
+    periods = computeAllPeriods [work('2026-01', 1 / 7), work('2026-02', 30)], NOW
+    jan     = periods['2026-01']
+    feb     = periods['2026-02']
+
+    assert.equal jan.discount_applied, 7.14,     '1/7 hour at $50 is $7.142857…'
+    assert.equal jan.cumulative_shortfall, 392.86
+    assert.equal feb.retroactive_credit, 392.86, 'recovered in full'
+    assert.equal feb.cumulative_shortfall, 0
