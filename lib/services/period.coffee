@@ -31,6 +31,29 @@ parseMonthKey = (key) ->
 META_ACTIONS = ['edited', 'deleted', 'undeleted']
 
 
+# `override` events targeting a given period-field (amount_due or
+# amount_paid) on this month, unfiltered by time.
+overridesForField = (monthEvents, field) ->
+  (e for e in monthEvents when e.action is 'override' and \
+    e.payload.target_kind is 'period-field' and e.payload.target?.field is field)
+
+
+# The pin that wins: latest by occurred_at, not array/insertion position.
+# amount_due and amount_paid used to pick this two different ways — the
+# result depended on where in the fold each one happened to look (bug 66).
+latestByOccurredAt = (events) ->
+  return null if events.length is 0
+  events.reduce (a, b) -> if b.occurred_at >= a.occurred_at then b else a
+
+
+# The `amount_due` (or `amount_paid`) override currently in force for this
+# month, or null if the field has never been pinned. Exported so callers
+# outside the fold (the adjustment-edit guard in lib/routes/rent.coffee) can
+# ask the same question the fold answers for itself.
+latestFieldOverride = (monthEvents, field) ->
+  latestByOccurredAt overridesForField monthEvents, field
+
+
 # Which event ids are currently deleted. A delete and a later undelete both
 # target the *original* event, so the answer is whichever came last — a
 # delete/undelete/delete sequence resolves to deleted. Ordering is by
@@ -109,12 +132,14 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   # records payments too (POST /rent/events defaults actor to 'landlord'),
   # and a payment made by either party is still money received (bug 51).
   # Work credit stays tenant-only — only the tenant's hours earn rent credit.
-  hours_worked = 0
-  amount_paid  = 0
+  hours_worked  = 0
+  paymentEvents = []
   for e in monthEvents
     switch e.action
       when 'work-reported' then hours_worked += e.payload.hours if e.actor is 'tenant'
-      when 'payment-made'  then amount_paid  += e.payload.amount
+      when 'payment-made'  then paymentEvents.push e
+
+  amount_paid = paymentEvents.reduce ((sum, e) -> sum + e.payload.amount), 0
 
   total_available    = hours_worked + carryOver
   base_hours_applied = Math.min total_available, config.max_monthly_hours
@@ -140,30 +165,29 @@ computeMonth = (year, month, allEvents, carryOver, shortfall, now) ->
   amount_due_override   = false
   amount_paid_override  = false
 
-  amountDueOverrides = (e for e in monthEvents when e.action is 'override' and \
-    e.payload.target_kind is 'period-field' and e.payload.target?.field is 'amount_due')
-
-  # An override pins the amount at its time — not for ever. An adjustment
-  # emitted after the latest override (a late fee added after the landlord
-  # already pinned the month) applies on top of the pin; an adjustment from
-  # before it is superseded, exactly as if the pin had never happened (bug
-  # 56 — previously every adjustment was silently discarded once any override
-  # existed on the month, accepted by the UI and then ignored by the calc).
-  if amountDueOverrides.length > 0
-    latestOverride = amountDueOverrides.reduce (a, b) ->
-      if b.occurred_at >= a.occurred_at then b else a
-
+  # An override pins the amount at its time — not for ever. Whatever comes
+  # after the latest pin (an adjustment on amount_due, a payment on
+  # amount_paid) applies on top of it; anything from before the pin is
+  # superseded, exactly as if it had never happened (bug 56 for adjustments,
+  # bug 66 for payments — both were previously either discarded wholesale or
+  # picked by array position instead of by occurred_at).
+  latestDueOverride = latestFieldOverride monthEvents, 'amount_due'
+  if latestDueOverride
     laterAdjustmentTotal = amountDueAdjustments
-      .filter  (e) -> e.occurred_at > latestOverride.occurred_at
+      .filter  (e) -> e.occurred_at > latestDueOverride.occurred_at
       .reduce  ((sum, e) -> sum + e.payload.delta), 0
 
-    amount_due          = latestOverride.payload.new_value + laterAdjustmentTotal
+    amount_due          = latestDueOverride.payload.new_value + laterAdjustmentTotal
     amount_due_override = true
 
-  for e in monthEvents when e.action is 'override' and e.payload.target_kind is 'period-field'
-    if e.payload.target?.field is 'amount_paid'
-      amount_paid          = e.payload.new_value
-      amount_paid_override = true
+  latestPaidOverride = latestFieldOverride monthEvents, 'amount_paid'
+  if latestPaidOverride
+    laterPaymentTotal = paymentEvents
+      .filter  (e) -> e.occurred_at > latestPaidOverride.occurred_at
+      .reduce  ((sum, e) -> sum + e.payload.amount), 0
+
+    amount_paid           = latestPaidOverride.payload.new_value + laterPaymentTotal
+    amount_paid_override  = true
 
   cumulative_shortfall = shortfall - retroactive_credit
   if base_hours_applied < config.max_monthly_hours
@@ -343,6 +367,7 @@ module.exports = {
   applyEdits
   resolveEditsAndDeletes
   resolveConfig
+  latestFieldOverride
   computeMonth
   computeAllPeriods
 }

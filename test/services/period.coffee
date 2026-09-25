@@ -391,6 +391,70 @@ test "an adjustment made after an override applies on top of the pin (bug 56)", 
   assert.equal periods['2026-01'].amount_due_override, true
 
 
+test "the later amount_due override wins by occurred_at, not array position (bug 66)", ->
+  # The smaller-valued override is later in time but first in the array — if
+  # the fold picked "last event seen" instead of "latest occurred_at" this
+  # would come out 800, not 500.
+  events  = [
+    work('2026-01', 0)
+    override('2026-01', 'amount_due', 500, '2026-01-20T00:00:00Z')
+    override('2026-01', 'amount_due', 800, '2026-01-10T00:00:00Z')
+  ]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_due, 500,
+    'the override at 01-20 is the latest by occurred_at and must win over the earlier 01-10 one'
+
+
+test "an adjustment at the same occurred_at as the override is superseded by it, not after it (bug 66)", ->
+  # Equal is not "after" — an adjustment recorded at the exact instant of the
+  # pin does not get to apply on top of it.
+  events  = [
+    work('2026-01', 0)
+    adjustment('2026-01', 100, '2026-01-20T00:00:00Z')
+    override('2026-01', 'amount_due', 500, '2026-01-20T00:00:00Z')
+  ]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_due, 500,
+    'an adjustment at the same instant as the override is treated as not-after it, so it is superseded rather than added on top (500, not 600)'
+
+
+test "the later amount_paid override wins by occurred_at, not array position (bug 66)", ->
+  events  = [
+    payment('2026-01', 100)
+    override('2026-01', 'amount_paid', 500, '2026-01-20T00:00:00Z')
+    override('2026-01', 'amount_paid', 800, '2026-01-10T00:00:00Z')
+  ]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_paid, 500,
+    'the amount_paid override at 01-20 is the latest by occurred_at and must win over the earlier 01-10 one'
+
+
+test "a payment at the same occurred_at as the amount_paid override is superseded by it, not after it (bug 66)", ->
+  events  = [
+    payment('2026-01', 100, '2026-01-20T00:00:00Z')
+    override('2026-01', 'amount_paid', 500, '2026-01-20T00:00:00Z')
+  ]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_paid, 500,
+    'a payment at the same instant as the amount_paid override is treated as not-after it, so it is superseded rather than added on top (500, not 600)'
+
+
+test "a payment recorded after an amount_paid override applies on top of the pin (bug 66)", ->
+  events  = [
+    override('2026-01', 'amount_paid', 500, '2026-01-10T00:00:00Z')
+    payment('2026-01', 100, '2026-01-20T00:00:00Z')
+  ]
+  periods = computeAllPeriods events, NOW
+
+  assert.equal periods['2026-01'].amount_paid, 600,
+    'the later payment applies on top of the pin: 500 + 100'
+  assert.equal periods['2026-01'].amount_paid_override, true
+
+
 # --- delete / undelete (bug 16) ----------------------------------------------
 
 test "undelete restores an event to the fold (bug 16)", ->
