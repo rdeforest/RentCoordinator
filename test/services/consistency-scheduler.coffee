@@ -13,19 +13,60 @@ process.env.NODE_ENV = 'test'
 { test } = require 'node:test'
 assert   = require 'node:assert/strict'
 
-{ shouldRunScheduled, msUntilNext3amUTC } = require '../../lib/services/consistency-scheduler.coffee'
+{ shouldRunScheduled, msUntilNext3amUTC, newlyUnacknowledgedFindings } = require '../../lib/services/consistency-scheduler.coffee'
 
 
 test 'shouldRunScheduled runs when there is no previous run', ->
   assert.equal shouldRunScheduled('fp-1', null), true
 
 
-test 'shouldRunScheduled skips when the fingerprint has not changed', ->
-  assert.equal shouldRunScheduled('fp-1', { fingerprint: 'fp-1' }), false
+test 'shouldRunScheduled skips when the fingerprint has not changed and nothing external is stale', ->
+  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'ledger-corrupt-month' } ] }
+  assert.equal shouldRunScheduled('fp-1', lastRun), false
 
 
 test 'shouldRunScheduled runs when the fingerprint has changed', ->
-  assert.equal shouldRunScheduled('fp-2', { fingerprint: 'fp-1' }), true
+  assert.equal shouldRunScheduled('fp-2', { fingerprint: 'fp-1', findings: [] }), true
+
+
+# --- bug 62, F3: a stale-fingerprint run still reruns when the last run has
+# a finding about state outside our own data (backup age, Stripe) --------
+
+test 'shouldRunScheduled reruns on an unchanged fingerprint when the last run has a backup-* finding', ->
+  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'backup-stale' } ] }
+  assert.equal shouldRunScheduled('fp-1', lastRun), true
+
+test 'shouldRunScheduled reruns on an unchanged fingerprint when the last run has a stripe-* finding', ->
+  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'stripe-unlinked' } ] }
+  assert.equal shouldRunScheduled('fp-1', lastRun), true
+
+test 'shouldRunScheduled reruns on an unchanged fingerprint when the last run has any *-error finding', ->
+  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'db-integrity-error' } ] }
+  assert.equal shouldRunScheduled('fp-1', lastRun), true
+
+test 'shouldRunScheduled still skips on an unchanged fingerprint when findings are ordinary ledger findings', ->
+  lastRun = { fingerprint: 'fp-1', findings: [ { key: 'k', kind: 'manual-payment-after-pin' } ] }
+  assert.equal shouldRunScheduled('fp-1', lastRun), false
+
+
+# --- bug 62, F5: runAndStore warns only for new, unacknowledged findings —
+# exposed as a pure function so the decision is testable without stubbing
+# consistency.runChecks or the logger. -------------------------------------
+
+test 'newlyUnacknowledgedFindings excludes a finding present in the previous run', ->
+  findings = [ { key: 'a' }, { key: 'b' } ]
+  result = newlyUnacknowledgedFindings findings, new Set(['a']), new Set()
+  assert.deepEqual (f.key for f in result), ['b']
+
+test 'newlyUnacknowledgedFindings excludes an acknowledged finding even if it is new', ->
+  findings = [ { key: 'a' }, { key: 'b' } ]
+  result = newlyUnacknowledgedFindings findings, new Set(), new Set(['b'])
+  assert.deepEqual (f.key for f in result), ['a']
+
+test 'newlyUnacknowledgedFindings warns on a finding that is both new and unacknowledged', ->
+  findings = [ { key: 'a' }, { key: 'b' }, { key: 'c' } ]
+  result = newlyUnacknowledgedFindings findings, new Set(['a']), new Set(['b'])
+  assert.deepEqual (f.key for f in result), ['c']
 
 
 test 'msUntilNext3amUTC is 0 < ms <= 24h, and lands on 03:00 UTC', ->

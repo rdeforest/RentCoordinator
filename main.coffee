@@ -66,12 +66,16 @@ startServer = ->
     backupService = require './lib/services/backup.coffee'
     backupService.startIdleBackup()
 
-    consistencyScheduler = require './lib/services/consistency-scheduler.coffee'
-    consistencyScheduler.start()
-
     # Mark application as fully ready (for health checks)
     routing.markAppReady()
     console.log 'Application ready - health checks will pass'
+
+    # After readiness, not before: the consistency scheduler's own startup
+    # run is deferred internally (see consistency-scheduler.coffee), but
+    # starting it here too means nothing about it can ever precede the
+    # health check flipping green (bug 62, F1).
+    consistencyScheduler = require './lib/services/consistency-scheduler.coffee'
+    consistencyScheduler.start()
 
   for signal in ['SIGINT', 'SIGTERM']
     process.on signal, ->

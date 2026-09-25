@@ -11,12 +11,23 @@ consistencyModel = require '../models/consistency.coffee'
 
 DAY_MS = 24 * 60 * 60 * 1000
 
+# Findings whose kind matches this describe state outside our own data —
+# backup age, Stripe's ledger — that can change (or stay wrong) without the
+# fingerprint moving at all. Leaving them gated on the fingerprint let a
+# backup-stale or stripe-* finding sit unrefreshed on the issues page until
+# the next unrelated data write (bug 62, F3; Robert's decision stands that a
+# no-op day still skips, so this only widens what counts as "changed").
+EXTERNAL_FINDING_KIND = /^(backup-|stripe-)|-error$/
+
 
 # Pure: given the current fingerprint and the last stored run (or null), is a
 # scheduled run worth doing? Exported so the decision is testable without a
 # timer or a database.
 shouldRunScheduled = (fingerprint, lastRun) ->
-  not lastRun? or lastRun.fingerprint isnt fingerprint
+  return true unless lastRun?
+  return true if lastRun.fingerprint isnt fingerprint
+
+  (lastRun.findings ? []).some (f) -> EXTERNAL_FINDING_KIND.test f.kind
 
 
 # Milliseconds until the next 03:00 UTC, strictly in the future. Exported for
@@ -25,6 +36,14 @@ msUntilNext3amUTC = (now = new Date()) ->
   next = new Date Date.UTC now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 3, 0, 0, 0
   next = new Date next.getTime() + DAY_MS if next <= now
   next.getTime() - now.getTime()
+
+
+# Pure: which findings are worth a log warning — present now, absent from the
+# previous run's keys, and not already acknowledged. Exported so the decision
+# is testable without stubbing consistency.runChecks or the logger (bug 62,
+# F5).
+newlyUnacknowledgedFindings = (findings, previousKeys, ackedKeys) ->
+  (f for f in findings when not previousKeys.has(f.key) and not ackedKeys.has(f.key))
 
 
 # Run the checks, store the result, and warn on anything newly surfaced
@@ -40,7 +59,7 @@ runAndStore = ->
   consistencyModel.recordRun fingerprint, findings
 
   acked = consistencyModel.acknowledgedKeys()
-  newUnacknowledged = (f for f in findings when not previousKeys.has(f.key) and not acked.has(f.key))
+  newUnacknowledged = newlyUnacknowledgedFindings findings, previousKeys, acked
 
   for f in newUnacknowledged
     logger.warn 'consistency.finding', f.message,
@@ -61,6 +80,9 @@ runIfNeeded = ->
   await runAndStore()
 
 
+# Re-arms against msUntilNext3amUTC(), not a flat DAY_MS from when the run
+# finished — a run that takes any real time (or a slow Stripe page) would
+# otherwise push tomorrow's fire time later every day (bug 62, F8).
 scheduleDailyCheck = ->
   fire = ->
     try
@@ -68,7 +90,7 @@ scheduleDailyCheck = ->
     catch err
       logger.error 'consistency.scheduledRun', err
 
-    timer = setTimeout fire, DAY_MS
+    timer = setTimeout fire, msUntilNext3amUTC()
     timer.unref()
 
   timer = setTimeout fire, msUntilNext3amUTC()
@@ -76,9 +98,14 @@ scheduleDailyCheck = ->
 
 
 # Fire the startup run (unconditional — see docs/bugs/62) without delaying
-# the caller, and arm the daily schedule.
+# the caller, and arm the daily schedule. Deferred to the next tick: even the
+# synchronous prefix of runAndStore (loading and folding the ledger) must not
+# run inline during the app.listen callback, or a hang there — malformed data
+# aside from the effective_for range validated at write time now blocks
+# forever — would keep the health check from ever going green (bug 62, F1).
 start = ->
-  runAndStore().catch (err) -> logger.error 'consistency.startupRun', err
+  setImmediate ->
+    runAndStore().catch (err) -> logger.error 'consistency.startupRun', err
   scheduleDailyCheck()
 
 
@@ -89,4 +116,5 @@ module.exports = {
   scheduleDailyCheck
   shouldRunScheduled
   msUntilNext3amUTC
+  newlyUnacknowledgedFindings
 }
