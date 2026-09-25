@@ -12,7 +12,9 @@ Balancer. Key facts that shape the procedure below:
 
 - **Devuan AMI → sysvinit, not systemd.** The service is
   `/etc/init.d/rent-coordinator` (`start|stop|restart|status`). There is no
-  `systemctl`.
+  `systemctl`. The app runs under `daemon --respawn`, so if the process dies
+  it is restarted within seconds (bug 63); `stop` stops supervision too.
+  Pidfiles live in `/var/run/rent-coordinator/`.
 - App lives at `/opt/rent-coordinator` (git clone of `main`, pulled on boot),
   runs as user `rent-coordinator` on **port 8080**. DB at
   `/var/lib/rent-coordinator/tenant-coordinator.db`. Env at
@@ -77,7 +79,7 @@ sudo /etc/init.d/rent-coordinator stop
 sudo -u rent-coordinator ./scripts/upgrade.sh
 
 # 7. Start the service back up:
-sudo /etc/init.d/rent-coordinator start        # cycles cleanly since the pidfile fix
+sudo /etc/init.d/rent-coordinator start
 
 # 8. Verify, then resume:
 curl -s http://localhost:8080/health           # on the box; or the ALB /health
