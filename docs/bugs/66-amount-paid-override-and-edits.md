@@ -1,7 +1,69 @@
 # Bug 66 — Loose ends in the override rules after bug 56
 
 **Reported:** 2026-09-24 by the post-fix review of the 2026-09 sweep
-**Status:** open (August confirmed paid once; delete its pin, then change the rule)
+**Status:** resolved 2026-09-24
+
+## Resolution
+
+1. **Redundant August pin removed.** Migration
+   `migrations/2026-09-24_100000_delete_redundant_august_amount_paid_override.coffee`
+   records a `deleted` event targeting the specific `amount_paid` override
+   (id `01a06834-16fc-73ff-a366-e2c1ae188cde`) that pinned 2026-08 at 1200 —
+   the same shape `DELETE /rent/events/:id` writes, not a row mutation.
+   Idempotent: no-op if the event is absent (fresh DBs, tests) or already
+   deleted (re-runs). Tested in `test/services/migrations.coffee`.
+
+2. **`amount_paid` pins now follow the `amount_due` rule.**
+   `lib/services/period.coffee::computeMonth` picks the latest override for
+   both fields the same way — `latestFieldOverride`, by `occurred_at`, not
+   array position — via a shared `latestByOccurredAt` helper. A
+   `payment-made` event with `occurred_at` after the latest `amount_paid`
+   pin now applies on top of it, exactly as an `adjustment` after an
+   `amount_due` pin does (bug 56); a payment at or before the pin is
+   superseded. Equal `occurred_at` counts as *not* after, so a same-instant
+   payment is superseded rather than added on top — same tie rule as
+   adjustments.
+
+   Verified against production-shaped data: April, May and June 2026 (pins
+   of 1200 with no later payments) still show 1200 paid; August, after the
+   migration removes its pin, shows 1200 paid from the `payment-made` event
+   alone.
+
+3. **Editing a superseded adjustment now refuses.** `PUT /rent/events/:id`
+   400s when the target is an `adjustment` on `amount_due` whose
+   `occurred_at` is not after the month's latest `amount_due` override,
+   with a message naming the override and pointing at adding a new
+   adjustment instead. Uses the `err.status = 400` convention `asyncRoute`
+   already handles.
+
+4. **Tests added** in `test/services/period.coffee` pinning:
+   - the later override wins by `occurred_at`, not array position (for
+     both `amount_due` and `amount_paid`);
+   - an adjustment/payment at the same `occurred_at` as the override is
+     superseded, not applied on top (for both fields);
+   - a payment after an `amount_paid` override applies on top of it.
+
+   Each was verified to fail against the reverted behavior it guards (see
+   commit history for this bug).
+
+5. **Smaller items:**
+   - `PUT /rent/period`'s per-field override writes are now wrapped in
+     `transaction`, matching `PUT /rent/configuration`.
+   - `static/coffee/payment.coffee`'s "X through Y" label for
+     `/rent/outstanding` now excludes corrupt months (bug 59) from the
+     range, not just from the total.
+   - `PUT`/`DELETE /work-logs/:id` no longer call
+     `rentService.createOrUpdateRentPeriod` — the legacy `rent_periods`
+     write bug 55 already removed from the timer. `recalculateAllRent` and
+     `createOrUpdateRentPeriod` are deleted from
+     `lib/services/rent.coffee` as now-unused; `calculateRent` and
+     `getRentSummary` stay, since `scripts/recalculate-rent-periods.coffee`
+     still calls them against the legacy tables.
+   - `MIN_DURATION_MINUTES` moved from `lib/routes/work.coffee` to
+     `lib/config.coffee`, next to `MIN_WORK_LOG_DURATION`, with a line
+     saying why manual entries and timer sessions have different minimums.
+
+---
 
 Bug 56 made adjustments recorded after an `amount_due` override apply on top
 of it. The same review found the neighbouring cases still inconsistent.

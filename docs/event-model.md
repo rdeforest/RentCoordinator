@@ -279,6 +279,37 @@ in the fold.
 If a month has no override, nothing changes: `amount_due` is the full
 calculated figure, adjustments and all.
 
+## `amount_paid` follows the same rule (2026-09-24, bug 66)
+
+`amount_paid` pins work exactly like `amount_due` pins: the latest
+`override` targeting `amount_paid` for the month, by `occurred_at`, is the
+base; `payment-made` events with `occurred_at` after it apply on top;
+earlier payments are superseded. Both fields pick their "latest" override
+through the same helper (`latestFieldOverride` in
+`lib/services/period.coffee`) rather than two separately-maintained rules —
+before this, `amount_due` picked by `occurred_at` and `amount_paid` picked
+by array/insertion position, so which override won could depend on where in
+the fold each one happened to look.
+
+An event at the *same* `occurred_at` as the override counts as not-after
+it, so it is superseded rather than added on top — this applies to both the
+`amount_due`/adjustment tie and the `amount_paid`/payment tie.
+
+Before this fix, an `amount_paid` override discarded every payment
+regardless of timing: a payment recorded after the pin was summed and then
+overwritten, so paying a month the landlord had pinned as partly paid left
+the dashboard showing the stale pinned figure.
+
+## Editing a superseded adjustment (2026-09-24, bug 66)
+
+An edit (`PUT /rent/events/:id`) keeps the target event's original
+`occurred_at`. If the target is an `adjustment` on `amount_due` and that
+`occurred_at` is not after the month's latest `amount_due` override, the
+adjustment is already superseded and no edit to it — however the amount
+changes — moves the calculated total. The route refuses these edits (400)
+rather than accepting one that silently does nothing, naming the override
+and suggesting a new adjustment instead.
+
 ## Recurring charges, after the scheduler was removed (2026-09-23)
 
 The recurring-events subsystem is gone (bug 26). It wrote to the legacy
