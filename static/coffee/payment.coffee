@@ -69,7 +69,9 @@ loadOutstanding = ->
       document.getElementById('pay-button').disabled = true
       return false
 
-    months = data.months
+    # A corrupt month contributes nothing to total_outstanding (bug 59), so
+    # it has no business bounding the range that label describes either.
+    months = (m for m in data.months when not m.corrupt)
     label  = if months.length is 1
       m = months[0]
       "#{new Date(m.year, m.month - 1).toLocaleString 'default', month: 'long'} #{m.year}"

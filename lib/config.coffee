@@ -12,6 +12,11 @@ TIMER_POLL_INTERVAL   = 1000
 SESSION_TIMEOUT       = 8 * 60 * 60 * 1000
 MIN_WORK_LOG_DURATION = if NODE_ENV is 'test' then 1 else 60
 
+# A manual entry is typed once and submitted; a timer session's minimum
+# guards against a start/stop double-click producing a 0-minute log, which
+# doesn't apply to something the tenant typed a duration for by hand.
+MIN_DURATION_MINUTES = 1
+
 # Auto-backup once the DB has changed but gone quiet (no writes) for this
 # long — catches data between the nightly cron backups.
 BACKUP_IDLE_MS       = 60 * 60 * 1000    # 1h of write-inactivity
@@ -134,6 +139,7 @@ module.exports = {
   TIMER_POLL_INTERVAL
   SESSION_TIMEOUT
   MIN_WORK_LOG_DURATION
+  MIN_DURATION_MINUTES
   BACKUP_IDLE_MS
   BACKUP_IDLE_CHECK_MS
   WORKERS

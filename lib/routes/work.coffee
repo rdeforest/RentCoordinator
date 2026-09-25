@@ -1,9 +1,6 @@
 workLogModel = require '../models/work_log.coffee'
-rentService  = require '../services/rent.coffee'
-config       = require '../config.coffee'
+{ MIN_DURATION_MINUTES } = require '../config.coffee'
 
-
-MIN_DURATION_MINUTES = 1
 
 # One rule for "is this a legitimate work duration", shared by create and
 # edit. PUT used to accept 0 or '' — `Number ''` is 0, and `0?` is true, so
@@ -81,17 +78,6 @@ setup = (app) ->
 
       updated = await workLogModel.updateWorkLog id, updates
 
-      if config.isTenant(existing.worker) or config.isTenant(updated.worker)
-        months = new Set()
-
-        for timestamp in [existing.start_time, updated.start_time]
-          date = new Date timestamp
-          months.add "#{date.getFullYear()}-#{date.getMonth() + 1}"
-
-        for monthKey from months
-          [year, month] = monthKey.split('-').map (n) -> parseInt n
-          await rentService.createOrUpdateRentPeriod year, month
-
       res.json updated
     catch err
       res.status(500).json error: err.message
@@ -105,12 +91,6 @@ setup = (app) ->
         return res.status(404).json error: 'Work log not found'
 
       await workLogModel.deleteWorkLog id
-
-      if config.isTenant existing.worker
-        date  = new Date existing.start_time
-        year  = date.getFullYear()
-        month = date.getMonth() + 1
-        await rentService.createOrUpdateRentPeriod year, month
 
       res.json success: true, deleted: id
     catch err
