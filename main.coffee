@@ -66,6 +66,9 @@ startServer = ->
     backupService = require './lib/services/backup.coffee'
     backupService.startIdleBackup()
 
+    consistencyScheduler = require './lib/services/consistency-scheduler.coffee'
+    consistencyScheduler.start()
+
     # Mark application as fully ready (for health checks)
     routing.markAppReady()
     console.log 'Application ready - health checks will pass'

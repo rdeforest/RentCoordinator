@@ -7,6 +7,7 @@ paymentRoutes         = require './routes/payment.coffee'
 backupRoutes          = require './routes/backup.coffee'
 adminRoutes           = require './routes/admin.coffee'
 observabilityRoutes   = require './routes/observability.coffee'
+consistencyRoutes     = require './routes/consistency.coffee'
 middleware            = require './middleware.coffee'
 { db }                = require './db/schema.coffee'
 pkg                   = require '../package.json'
@@ -233,6 +234,7 @@ setup = (app, getServer) ->
   backupRoutes         .setup app
   adminRoutes          .setup app
   observabilityRoutes  .setup app
+  consistencyRoutes    .setup app
 
 
 module.exports = { setup, markAppReady }
