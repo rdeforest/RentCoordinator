@@ -423,3 +423,65 @@ describe 'pruneSnapshots (bug 52)', ->
     assert.equal fs.readdirSync(dir).filter((n) -> n.startsWith 'a.db.pre-migration-').length, 3
     assert.equal fs.readdirSync(dir).filter((n) -> n.startsWith 'b.db.pre-migration-').length, 4,
       'b.db\'s own snapshots were never pruned'
+
+
+# --- bug 66: delete the redundant August amount_paid override ----------------
+#
+# Production carries one specific override event pinning 2026-08's
+# amount_paid at 1200. The real payment is a separate payment-made event;
+# the pin is redundant. This migration records a `deleted` event targeting
+# it — the same shape DELETE /rent/events/:id writes — rather than mutating
+# or removing the row.
+
+describe 'delete_redundant_august_amount_paid_override migration (bug 66)', ->
+  MIGRATION = path.join ROOT, 'migrations',
+    '2026-09-24_100000_delete_redundant_august_amount_paid_override.coffee'
+  TARGET_ID = '01a06834-16fc-73ff-a366-e2c1ae188cde'
+
+  seedTargetEvent = (dbPath) ->
+    withDb dbPath, (db) ->
+      db.prepare("""
+        INSERT INTO events (id, occurred_at, effective_for, actor, actor_user, action, payload)
+        VALUES (?, ?, '2026-08', 'landlord', 'robert@defore.st', 'override', ?)
+      """).run TARGET_ID, '2026-09-03T16:57:00Z',
+        JSON.stringify(target_kind: 'period-field', target: { year: 2026, month: 8, field: 'amount_paid' }, new_value: 1200)
+
+  deletedEventsFor = (dbPath, targetId) ->
+    withDb dbPath, (db) ->
+      db.prepare("""
+        SELECT * FROM events WHERE action = 'deleted' AND target_event_id = ?
+      """).all targetId
+
+  it 'records a deleted event targeting the redundant override', ->
+    dbPath = path.join tmpDir, 'bug66-delete.db'
+    bootDatabase dbPath
+    seedTargetEvent dbPath
+
+    result = inChild dbPath, "require('#{MIGRATION}')"
+    assert.ok result.survived, "migration failed:\n#{result.output}"
+
+    rows = deletedEventsFor dbPath, TARGET_ID
+    assert.equal rows.length, 1
+    assert.equal rows[0].actor, 'landlord'
+    payload = JSON.parse rows[0].payload
+    assert.match payload.reason, /redundant/i
+
+  it 'is a no-op when the target event does not exist (fresh DBs, tests)', ->
+    dbPath = path.join tmpDir, 'bug66-fresh.db'
+    bootDatabase dbPath
+
+    result = inChild dbPath, "require('#{MIGRATION}')"
+    assert.ok result.survived, "migration failed:\n#{result.output}"
+
+    assert.equal deletedEventsFor(dbPath, TARGET_ID).length, 0
+
+  it 'is a no-op when the event is already deleted (re-runs)', ->
+    dbPath = path.join tmpDir, 'bug66-rerun.db'
+    bootDatabase dbPath
+    seedTargetEvent dbPath
+
+    inChild dbPath, "require('#{MIGRATION}')"
+    inChild dbPath, "require('#{MIGRATION}')"
+
+    rows = deletedEventsFor dbPath, TARGET_ID
+    assert.equal rows.length, 1, 're-running must not record a second deleted event'
