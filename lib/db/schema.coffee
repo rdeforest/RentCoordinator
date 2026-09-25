@@ -266,6 +266,25 @@ SCHEMA = """
   );
 
   CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires);
+
+  -- Bug 62: consistency checks that report and never block. One row per
+  -- scheduled/manual run; findings is the JSON array the checks produced.
+  -- Pruned to the last ~30 rows by lib/models/consistency.coffee.
+  CREATE TABLE IF NOT EXISTS consistency_runs (
+    id          INTEGER PRIMARY KEY,
+    ran_at      TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    findings    TEXT NOT NULL
+  );
+
+  -- A finding's key is stable across runs (it encodes the values involved),
+  -- so acknowledging it here survives it reappearing in the next run.
+  CREATE TABLE IF NOT EXISTS finding_acknowledgments (
+    finding_key     TEXT PRIMARY KEY,
+    note            TEXT NOT NULL,
+    acknowledged_by TEXT,
+    acknowledged_at TEXT NOT NULL
+  );
 """
 
 

@@ -109,6 +109,21 @@ warn = (operation, message, metadata = {}, requestId = null) ->
 
   console.error JSON.stringify log
 
+# Log an informational record (run summaries, not errors or warnings).
+info = (operation, message, metadata = {}, requestId = null) ->
+  budget = newBudget()
+
+  log =
+    timestamp: new Date().toISOString()
+    level:     'info'
+    operation: operation
+    message:   tokenizeString message, budget
+
+  log.requestId = requestId if requestId
+  log.metadata  = tokenizeMetadata metadata, budget
+
+  console.error JSON.stringify log
+
 # Log a client-reported error (from the browser beacon). Same JSON shape as
 # server errors but tagged source:'client' so it's easy to grep/filter.
 clientError = (info = {}, requestId = null) ->
@@ -123,4 +138,4 @@ clientError = (info = {}, requestId = null) ->
 
   console.error JSON.stringify log
 
-module.exports = { error, warn, clientError }
+module.exports = { error, warn, info, clientError }
