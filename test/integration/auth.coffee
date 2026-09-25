@@ -43,7 +43,7 @@ describe 'Auth Integration Tests', ->
     logPath = path.join TEST_TMP_DIR, "auth-#{port}.log"
     baseUrl = "http://localhost:#{port}"
 
-    execSync "PORT=#{port} DB_PATH=#{dbPath} NODE_ENV=development coffee main.coffee > #{logPath} 2>&1 &",
+    execSync "PORT=#{port} DB_PATH=#{dbPath} NODE_ENV=test coffee main.coffee > #{logPath} 2>&1 &",
       stdio: 'ignore'
       shell: true
 

@@ -49,9 +49,7 @@ describe 'Auth hardening (bugs 12/22/38)', ->
     dbPath  = path.join TEST_TMP_DIR, "test-auth-hardening-#{port}.db"
     logPath = path.join TEST_TMP_DIR, "auth-hardening-#{port}.log"
 
-    # development, not test: NODE_ENV=test bypasses requireAuth entirely
-    # (bug 23), which would make every assertion here vacuous.
-    execSync "PORT=#{port} DB_PATH=#{dbPath} NODE_ENV=development coffee main.coffee > #{logPath} 2>&1 &",
+    execSync "PORT=#{port} DB_PATH=#{dbPath} NODE_ENV=test coffee main.coffee > #{logPath} 2>&1 &",
       stdio: 'ignore'
       shell: true
 

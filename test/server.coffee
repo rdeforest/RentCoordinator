@@ -34,13 +34,13 @@ findFreePort = (startPort = DEFAULT_TEST_PORT) ->
     port++
   throw new Error "No free ports found in range #{startPort}-#{startPort + 100}"
 
+# A refused shutdown used to be swallowed, so a suite that started its server
+# outside test mode leaked it on every run.
 shutdownServer = (baseUrl) ->
-  try
-    response = await fetch "#{baseUrl}/v1/shutdown", method: 'POST'
-    await new Promise (resolve) -> setTimeout resolve, 200
-    true
-  catch err
-    false
+  response = await fetch "#{baseUrl}/v1/shutdown", method: 'POST'
+  unless response.ok
+    throw new Error "#{baseUrl} refused to shut down (#{response.status}); the server is still running"
+  await new Promise (resolve) -> setTimeout resolve, 200
 
 
 startTestServer = (options = {}) ->
