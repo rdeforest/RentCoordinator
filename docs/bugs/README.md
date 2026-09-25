@@ -6,9 +6,7 @@ the proposed fix in `docs/fixes/`.
 
 ## Active
 
-| # | Title | Severity | Notes |
-|---|---|---|---|
-| 62 | [Nothing checks the database for consistency except migrations](62-no-consistency-checking.md) | Medium | Scheduled report-only check, plus a landlord-only warning icon linking to the findings. |
+None.
 
 ### The remaining structural debt
 
@@ -91,6 +89,7 @@ without changing that line turns every instance unhealthy at the ALB.
 | 59 | "Pay everything" pays corrupt months | 2026-09-24 | Allocation excludes them. |
 | 60 | Refused login address stored as PII | 2026-09-24 | Warn, without the address or a stack. |
 | 61 | Logger truncates before tokenizing | 2026-09-24 | Tokenize first. |
+| 62 | Nothing checked the database for consistency | 2026-09-25 | Report-only checks at startup and daily-if-changed; landlord-only `/issues` page and nav badge; notes never deleted. |
 | 63 | A crash is not restarted | 2026-09-25 | `daemon --respawn` in the init script; interface unchanged. |
 | 65 | Login sessions live in memory | 2026-09-25 | SQLite-backed express-session store; logins survive restarts. |
 | 66 | Loose ends in the override rules after bug 56 | 2026-09-25 | Pins chosen by `occurred_at`; `amount_paid` pins absolute; August's redundant pin deleted by migration. |
