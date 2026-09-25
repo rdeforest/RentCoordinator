@@ -210,17 +210,20 @@ setup = (app) ->
     now = new Date().toISOString()
     ymKey = period.monthKey year, month
 
-    for field in ALLOWED_OVERRIDE_FIELDS when updates[field]?
-      eventsModel.recordEvent
-        occurred_at:   now
-        effective_for: ymKey
-        actor:         actor
-        actor_user:    actor_user
-        action:        'override'
-        payload:
-          target_kind: 'period-field'
-          target:      { year, month, field }
-          new_value:   parseFloat updates[field]
+    # Both fields or neither: written separately, a rejection of the second
+    # left the first committed behind a 400 — same fix as PUT /rent/configuration.
+    transaction ->
+      for field in ALLOWED_OVERRIDE_FIELDS when updates[field]?
+        eventsModel.recordEvent
+          occurred_at:   now
+          effective_for: ymKey
+          actor:         actor
+          actor_user:    actor_user
+          action:        'override'
+          payload:
+            target_kind: 'period-field'
+            target:      { year, month, field }
+            new_value:   parseFloat updates[field]
 
     res.json toWireShape periodViewer.getPeriod year, month
 
@@ -381,6 +384,24 @@ setup = (app) ->
     existing = eventsModel.getEvent req.params.id
     unless existing
       return res.status(404).json error: 'Event not found'
+
+    # An adjustment recorded before the month's latest amount_due override is
+    # already superseded by the pin — the fold ignores it, and no edit to it
+    # changes that, because the edit keeps the adjustment's original
+    # occurred_at. Previously this returned 200 and silently did nothing
+    # (bug 66); refuse instead and say why.
+    if existing.action is 'adjustment' and existing.payload.target?.field is 'amount_due'
+      monthEvents    = period.resolveEditsAndDeletes(eventsModel.listAllEvents())
+        .filter (e) -> e.effective_for is existing.effective_for
+      latestOverride = period.latestFieldOverride monthEvents, 'amount_due'
+
+      if latestOverride and not (existing.occurred_at > latestOverride.occurred_at)
+        err = new Error "This adjustment (#{existing.occurred_at}) is superseded by
+                         the amount_due override pinned on
+                         #{latestOverride.occurred_at}; add a new adjustment instead
+                         of editing this one."
+        err.status = 400
+        throw err
 
     { actor, actor_user } = actorFromRequest req, 'landlord'
 
