@@ -188,7 +188,10 @@ See `docs/event-model.md` for the full event model.
 
 **Current Implementation:**
 - Email-based verification code authentication (6-digit codes, 10-minute expiration)
-- Session management with 90-day cookie expiration
+- Session management with 90-day cookie expiration, backed by a SQLite
+  session store (`lib/services/session-store.coffee`) so a restart or deploy
+  no longer logs everyone out (bug 65 — the default `MemoryStore` used to
+  die with the process)
 - Whitelist-based access control (robert@defore.st, lynz57@hotmail.com)
 - All routes protected except `/login.html`, `/auth/*`, and `/health`
 - Browser requests redirect to login page, API requests return 401 JSON
@@ -206,6 +209,10 @@ See `docs/event-model.md` for the full event model.
 - Without explicit save, race condition exists between session persistence and response
 - Manifests as: user verifies code successfully but gets logged out on redirect
 - Tests in test/integration/auth.coffee verify session persistence without timing hacks
+- Sessions live in the `sessions` table (SQLite), not in process memory;
+  expired rows are swept hourly. test/integration/session-persistence.coffee
+  verifies a session survives a server restart — the thing MemoryStore could
+  not do (bug 65)
 
 **Future OAuth Migration Plan:**
 

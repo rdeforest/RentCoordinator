@@ -253,6 +253,19 @@ SCHEMA = """
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- Bug 65: express-session's default MemoryStore dies with the process and
+  -- never evicts. expires is a millisecond epoch (session.cookie.expires, or
+  -- now + SESSION_MAX_AGE for a session with no persistent cookie), so the
+  -- sweep in lib/services/session-store.coffee can compare it against
+  -- Date.now() without parsing a string on every pass.
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid TEXT PRIMARY KEY,
+    sess TEXT NOT NULL,
+    expires INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires);
 """
 
 

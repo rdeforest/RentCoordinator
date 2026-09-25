@@ -1,9 +1,10 @@
-express   = require 'express'
-cors      = require 'cors'
-session   = require 'express-session'
-crypto    = require 'crypto'
-config    = require './config.coffee'
-logger    = require './logger.coffee'
+express      = require 'express'
+cors         = require 'cors'
+session      = require 'express-session'
+crypto       = require 'crypto'
+config       = require './config.coffee'
+logger       = require './logger.coffee'
+sessionStore = require './services/session-store.coffee'
 
 
 setup = (app) ->
@@ -23,7 +24,13 @@ setup = (app) ->
     verify: (req, res, buf) -> req.rawBody = buf
   app.use express.urlencoded extended: true
 
+  # Bug 65: a store-less session lives in MemoryStore, which dies with the
+  # process and never evicts. sessions table is guaranteed to exist by here —
+  # db.initialize() (schema + migrations) runs before middleware.setup.
+  sessionStore.startSweep()
+
   app.use session
+    store:             new sessionStore.SQLiteSessionStore()
     secret:            config.SESSION_SECRET
     resave:            false
     saveUninitialized: false
