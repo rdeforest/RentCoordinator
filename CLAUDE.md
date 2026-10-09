@@ -218,34 +218,13 @@ See `docs/event-model.md` for the full event model.
   verifies a session survives a server restart — the thing MemoryStore could
   not do (bug 65)
 
-**Future OAuth Migration Plan:**
-
-*Phase 1: Current (Stable)*
-- Email verification working well with 90-day sessions
-- Minimal login frequency due to long session duration
-- Adequate security for 2-user application
-
-*Phase 2: Authelia (3-6 months, Learning Project)*
-- Set up lightweight self-hosted OAuth provider
-- Low operational complexity (<30MB footprint, 1-2 hrs/month maintenance)
-- Good learning experience with OAuth/OIDC
-- Can run on existing infrastructure ($0 cost)
-- Resources: Single instance with Redis for sessions
-- Target: Educational value + control over auth
-
-*Phase 3: Keycloak (6+ months, Teaching Platform)*
-- Upgrade to enterprise-grade OAuth provider
-- Better for teaching friends about IAM
-- Full OAuth 2.0 / OpenID Connect compliance
-- Industry-standard skills transferable to enterprise
-- Resources: Single instance + PostgreSQL (~$30/month or use existing infra)
-- Target: Educational platform for helping friends learn tech
+**OAuth:** deferred (2026-10-09). The plan and Robert's decisions for it,
+and the parked self-hosted Authelia/Keycloak plan, are in
+[docs/someday-maybe.md](docs/someday-maybe.md).
 
 **Design Constraints:**
 - 90% uptime acceptable (not high-availability requirements)
 - 2 users only (no scale requirements)
-- Educational value prioritized over operational efficiency
-- Self-hosted to support migration away from Google services
 
 ### Key Configuration
 - Workers defined in `config.WORKERS` array
@@ -353,3 +332,18 @@ dashboard reads, and the legacy `rent_periods` / `rent_events` tables that
 the recurring-events and payment-history paths still write — with nothing
 reconciling them. Picking one model and routing all writes through it is the
 durable fix (see docs/bugs 26 and 27).
+
+## ClodForest (inter-project messaging)
+
+This project is registered with ClodForest as **`rent-coordinator`** (parent: `meta-project`).
+
+At the start of a session, call the ClodForest MCP tool `checkin` with
+`project: "rent-coordinator"` (or `path:` set to your working directory) and follow the
+protocol it returns.
+
+If the MCP server is unreachable, the same data is a plain directory tree in
+the local checkout at `~/git/github/rdeforest/ClodForestState`
+(`messages/`, `receipts/rent-coordinator/`, `projects/`). Read it directly; write there
+only if the server is down, and say so in the commit message.
+
+Use the slug as currently registered. A naming model (official name, repo names, aliases) is coming to ClodForest; once it lands, the stanza will keep working under any renames.
