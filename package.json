@@ -36,5 +36,5 @@
     "node": ">=24.0.0"
   },
   "author": "Robert de Forest <robert@defore.st>",
-  "license": "MIT"
+  "license": "ISC"
 }
