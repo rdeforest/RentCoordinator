@@ -21,7 +21,8 @@ database that is not there is how the documented upgrade came to do nothing at a
 
 - **Application startup** — `lib/db/schema.coffee::initialize` applies anything pending before the
   server serves a request. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so without
-  this an in-place upgrade (`git pull` + restart) would run new code against an old schema.
+  this an in-place upgrade ([docs/deployment.md](../docs/deployment.md)) would run new code
+  against an old schema.
 - **`./scripts/upgrade.sh`** — the manual/deploy entry point. Previously this file was empty while
   this document claimed it ran migrations (bug 47).
 - **Instance bootstrap** — the CloudFormation UserData calls `scripts/upgrade.sh` under `set -e`,

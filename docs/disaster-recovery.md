@@ -82,7 +82,19 @@ RentCoordinator runs on AWS infrastructure managed by CloudFormation:
 
 **Recovery time:** 5-10 minutes (fully automated)
 
-**Manual intervention:** None required
+**Manual intervention:** None, unless the replacement hits the Devuan AMI's
+intermittent cloud-init bug: sysv-rc sometimes never runs cloud-init's
+network stage, so UserData never runs (no `/var/log/user-data.log`, no app).
+On that instance only, never on one that has bootstrapped before:
+
+```bash
+sudo /usr/bin/cloud-init init
+sudo rm -f /var/lib/cloud/instances/*/sem/config_scripts_user
+sudo /usr/bin/cloud-init modules --mode final
+```
+
+(Used twice in the 2026-06-10 incident. The AMI fix is on Devuan-AMI `main`,
+commit `f6a60ff`, not yet built.)
 
 **What you'll see:**
 ```bash

@@ -52,8 +52,8 @@ abandoned Deno stack and was deleted rather than left to fail partway through
 (bug 43); local development is `npm install` + `npm start`, and production is
 the CloudFormation path below.
 
-Deploying to production is a procedure, not a one-liner (AWS ASG, in-place
-`git pull` + restart, init-system and ASG-suspend specifics) — see
+Deploying to production is a procedure, not a one-liner (AWS ASG, the in-place
+upgrade, init-system and ASG-suspend specifics) — see
 [docs/deployment.md](docs/deployment.md). SSH user is `admin` on the current
 Devuan AMI.
 
@@ -273,7 +273,8 @@ No separate build step needed — compilation happens automatically on startup.
 
 ## Development Notes
 
-- **Node.js Version**: Uses nvm with Node 24 LTS (`.nvmrc` file in repo root)
+- **Node.js Version**: `.nvmrc` pins the Node version; see "Patching" in
+  [docs/deployment.md](docs/deployment.md#patching).
 - **Client-side**: CoffeeScript compiled to JavaScript on server startup
 - **Server-side**: CoffeeScript runs directly via coffee command
 - **Database**: Uses SQLite via Node.js built-in `node:sqlite` module (Node 22+)

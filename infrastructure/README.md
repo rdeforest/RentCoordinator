@@ -328,7 +328,7 @@ curl http://<instance-ip>:3000/health
 2. **IAM Roles**: Least-privilege access for EC2 instances
 3. **Security Groups**: Restricted to necessary ports only
 4. **SSH Keys**: Use EC2 key pairs, rotate regularly
-5. **Updates**: Instances automatically get latest code from GitHub
+5. **Updates**: See [Patching](../docs/deployment.md#patching)
 6. **HTTPS**: Terminate SSL at ALB level
 
 ## Migration from Manual Deployment (vault2 → rent01)

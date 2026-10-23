@@ -74,7 +74,7 @@ Parameters:
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: ami-0a5eab7419cee78d7  # Devuan daedalus amd64 (custom, 2026-03-14)
+      AMI: ami-0a5eab7419cee78d7  # Devuan excalibur amd64 (custom, 2026-03-14)
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
@@ -195,6 +195,12 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              DeleteOnTermination: true
         KeyName: !Ref KeyName
         IamInstanceProfile:
           Arn: !GetAtt RentCoordinatorInstanceProfile.Arn
@@ -219,12 +225,26 @@ Resources:
             exec 2>&1
             echo "Starting RentCoordinator bootstrap at $(date)"
 
-            # Refresh package index (no full upgrade — instance is ephemeral)
+            # The Devuan AMI ships with only "excalibur main", so without these
+            # lines no security fix ever reaches the instance. Belongs in the
+            # AMI (devuan-ami project); here until it is.
+            . /etc/os-release
+            for suite in "$VERSION_CODENAME-updates" "$VERSION_CODENAME-security"; do
+              grep -rqsE "^deb[[:space:]].*[[:space:]]$suite[[:space:]]" /etc/apt/sources.list /etc/apt/sources.list.d/ ||
+                echo "deb http://deb.devuan.org/merged $suite main" >> /etc/apt/sources.list
+            done
+
+            # Refresh package index. No full upgrade here: unattended-upgrades
+            # (installed below) applies security updates at the end of this
+            # script, after the app is up, and daily from cron after that.
             apt-get update
 
             # Install dependencies
             # cron — needed for the daily backup crontab line further down
             # daemon — supervises the app so a crash is a restart (bug 63)
+            # unattended-upgrades — Devuan's package enables itself and allows
+            #   a=*-security by default; runs from /etc/cron.daily/apt-compat.
+            #   It never reboots, so kernel updates wait for a manual reboot.
             # curl is preferred over wget for downloads (Devuan AMI ships curl, not wget)
             apt-get install -y \
               git \
@@ -233,24 +253,28 @@ Resources:
               awscli \
               build-essential \
               cron \
-              daemon
+              daemon \
+              unattended-upgrades \
+              cloud-guest-utils
+
+            # A reboot fails ELB health, and the ASG replaces the box from the last S3 backup.
+            echo 'Unattended-Upgrade::Automatic-Reboot "false";' > /etc/apt/apt.conf.d/51rent-coordinator
+
+            # The AMI's root partition stays at its 8 GB image size on a larger
+            # volume until an AMI is built from Devuan-AMI 7edeb51, which adds
+            # cloud-guest-utils (growpart) so cloud-init can grow it at boot.
+            # Until then, grow it here. growpart exits 1 when there is nothing
+            # to grow.
+            root=$(findmnt -no SOURCE /)
+            disk=/dev/$(lsblk -no PKNAME "$root")
+            part=$(cat "/sys/class/block/$(basename "$root")/partition")
+            growpart "$disk" "$part" || [ $? -eq 1 ]
+            resize2fs "$root"
 
             # Create application user
             useradd -r -m -s /bin/bash rent-coordinator || true
 
-            # Install nvm and Node.js 24 LTS as rent-coordinator user
             sudo -u rent-coordinator bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash'
-
-            # Source nvm and install Node 24
-            sudo -u rent-coordinator bash -c '
-              export NVM_DIR="/home/rent-coordinator/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              nvm install 24
-              nvm use 24
-              nvm alias default 24
-              node --version
-              npm --version
-            '
 
             # Create application directory
             mkdir -p /opt/rent-coordinator
@@ -261,13 +285,7 @@ Resources:
             sudo -u rent-coordinator git clone ${GitHubRepo} .
             sudo -u rent-coordinator git checkout ${GitBranch}
 
-            # Install Node.js dependencies
-            sudo -u rent-coordinator bash -c '
-              export NVM_DIR="/home/rent-coordinator/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              nvm use
-              npm ci --only=production
-            '
+            sudo -u rent-coordinator -H ./scripts/install-runtime.sh
 
             # No separate build step — client-side CoffeeScript is compiled on first npm start
 
@@ -439,6 +457,10 @@ Resources:
               cd /opt/rent-coordinator
               bash scripts/backup-now.sh
             ' || echo "Initial backup failed (app may still be initializing)"
+
+            # The daily cron run could be up to a day away; a new instance
+            # should not wait that long for security fixes the AMI lacks.
+            unattended-upgrade || echo "unattended-upgrade failed at boot; the daily cron will retry" >&2
 
             # Setup CloudWatch Logs
             echo "Setting up CloudWatch Logs..."
