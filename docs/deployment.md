@@ -137,8 +137,8 @@ Three things need security updates, and each has its own channel.
 
 | What | Detected by | Applied by |
 |---|---|---|
-| Node.js | Renovate PR bumping `.nvmrc` | test, merge, then the in-place deploy (step 6) |
-| npm packages | Renovate PRs, plus weekly lockfile maintenance | test, merge, then the in-place deploy (step 6) |
+| Node.js | Renovate PR bumping `.nvmrc`, 3 days after release | test, merge, then the in-place deploy (step 6) |
+| npm packages | Renovate: a security PR as soon as an advisory names a version in the lockfile; otherwise one grouped PR a month holding only releases at least 90 days old | test, merge, then the in-place deploy (step 6) |
 | OS packages | `unattended-upgrades` (daily, security only) | `unattended-upgrades` installs them daily, from `/etc/cron.daily/apt-compat`; libraries the running node process maps take effect at its next restart, kernels at the next reboot |
 
 Any change to how UserData installs Node or reads `.nvmrc` must reach the
@@ -157,6 +157,17 @@ Renovate does nothing until Robert installs the Renovate GitHub App on
 rdeforest/RentCoordinator; once it is installed, a Dependency Dashboard issue
 appears. Major bumps (express 5, Node 26) wait there for approval instead of
 arriving as PRs.
+
+Supply-chain policy (Robert, 2026-10-23): nobody here can vet upstream diffs,
+so routine npm updates bake for 90 days (`minimumReleaseAge`) before Renovate
+proposes them. Most hijacked releases are caught and pulled well inside that,
+and an attacker who waits it out still has to get a patch accepted upstream
+and then cause a real advisory that requires it. Advisories override the bake
+(`vulnerabilityAlerts.minimumReleaseAge: null`). Node itself waits only
+3 days: its releases come from the Node.js release team, not the npm registry,
+and its security fixes carry no npm advisory to trigger the override.
+`.npmrc` sets `ignore-scripts=true`, so no dependency runs code at install
+time (none of the current ones needs to).
 
 `main` is what the next new instance runs — any replacement clones it — so
 merge only what is ready to deploy. There is no CI: before merging a Renovate
