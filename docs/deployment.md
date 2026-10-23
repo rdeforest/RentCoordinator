@@ -49,8 +49,8 @@ than relying on the refusal to catch it.
 # 1. Back up prod first (see Backups) and confirm it's in S3.
 
 # 2. Ship code to main (instances track main).
-#    If this change touches UserData, refresh the Launch Template first (see
-#    Deploying infrastructure).
+#    If this change touches UserData, see Patching for whether main or the
+#    Launch Template goes first.
 git push origin <branch>:main
 
 # 3a. From your workstation, guard against replacement while the service is
@@ -83,6 +83,14 @@ sudo -u rent-coordinator git pull --ff-only
 #    `sudo -u rent-coordinator git reset --hard <commit noted in 3b>` and
 #    re-run it. (Not ORIG_HEAD: a repeated pull overwrites it.) Do not start
 #    the service until it succeeds.
+#
+#    A commit older than install-runtime.sh does not have it. After rolling
+#    back to one, run the current script against the old tree; the trailing
+#    argument becomes its $0, which it uses to find the repo root (`bash -s`
+#    would leave $0 as "bash" and run it one directory too high):
+#      sudo -u rent-coordinator -H bash -c \
+#        "$(sudo -u rent-coordinator git show origin/main:scripts/install-runtime.sh)" \
+#        scripts/install-runtime.sh
 sudo -u rent-coordinator -H ./scripts/install-runtime.sh
 
 # 7. Apply any pending database migrations. Safe to run when there are none;
@@ -107,8 +115,8 @@ curl -s http://localhost:8080/health
 aws autoscaling resume-processes --auto-scaling-group-name RentCoordinator-production \
   --scaling-processes HealthCheck ReplaceUnhealthy
 
-# 10. Once verified, remove the Node version step 6 replaced, if any, and
-#     nvm's download cache:
+# 10. Once verified, remove the Node version install-runtime.sh replaced, if
+#     any, and nvm's download cache:
 sudo -u rent-coordinator -H bash -c '. ~/.nvm/nvm.sh && nvm ls --no-colors'
 sudo -u rent-coordinator -H bash -c '. ~/.nvm/nvm.sh && nvm uninstall <old version> && nvm cache clear'
 ```
@@ -137,15 +145,17 @@ Three things need security updates, and each has its own channel.
 
 | What | Detected by | Applied by |
 |---|---|---|
-| Node.js | Renovate PR bumping `.nvmrc`, 3 days after release | test, merge, then the in-place deploy (step 6) |
-| npm packages | Renovate: a security PR as soon as an advisory names a version in the lockfile; otherwise one grouped PR a month holding only releases at least 90 days old | test, merge, then the in-place deploy (step 6) |
+| Node.js | Renovate PR bumping `.nvmrc`, 3 days after release | test, merge, then the in-place deploy (`install-runtime.sh`) |
+| npm packages | Advisories: Renovate PRs for direct dependencies, Dependabot security-update PRs for transitive ones (lockfile-only, moving each to the minimum fixed version, the parent too if needed). Otherwise one grouped Renovate PR a month holding only releases at least 90 days old | test, merge, then the in-place deploy (`install-runtime.sh`) |
 | OS packages | `unattended-upgrades` (daily, security only) | `unattended-upgrades` installs them daily, from `/etc/cron.daily/apt-compat`; libraries the running node process maps take effect at its next restart, kernels at the next reboot |
 
-Any change to how UserData installs Node or reads `.nvmrc` must reach the
-Launch Template before a commit that depends on it reaches `main`, because a
-replacement instance runs whatever UserData the template holds against
-whatever `main` holds. Run `cd infrastructure && ./deploy.sh deploy`, then
-confirm the new UserData is in the latest version:
+A replacement instance runs whatever UserData the Launch Template holds
+against whatever `main` holds, so a UserData change has an order. When the new
+UserData calls something only the new `main` has (a new script), push `main`
+first, then `cd infrastructure && ./deploy.sh deploy`. When `main` depends on
+the new UserData (an exact `.nvmrc` pin the old template's `nvm use` cannot
+satisfy), deploy the template first. Either way, confirm the new UserData is
+in the latest version:
 
 ```bash
 aws ec2 describe-launch-template-versions --region us-west-2 \
@@ -160,10 +170,12 @@ arriving as PRs.
 
 Supply-chain policy (Robert, 2026-10-23): nobody here can vet upstream diffs,
 so routine npm updates bake for 90 days (`minimumReleaseAge`) before Renovate
-proposes them. Most hijacked releases are caught and pulled well inside that,
-and an attacker who waits it out still has to get a patch accepted upstream
-and then cause a real advisory that requires it. Advisories override the bake
-(`vulnerabilityAlerts.minimumReleaseAge: null`). Node itself waits only
+proposes them. That protects against compromised releases that are detected
+and pulled within 90 days; one that goes undetected longer is proposed like
+any other. Advisories override the bake: Renovate's security PRs ignore
+`minimumReleaseAge` by default. That bypass is a separate path, and Robert
+accepted its risk because getting a malicious patch into a project and having
+it be the fix for a real advisory is a high bar. Node itself waits only
 3 days: its releases come from the Node.js release team, not the npm registry,
 and its security fixes carry no npm advisory to trigger the override.
 `.npmrc` sets `ignore-scripts=true`, so no dependency runs code at install
@@ -177,6 +189,9 @@ Known holes:
 
 - The nvm installer is pinned at v0.40.1 in UserData and CLAUDE.md's local
   setup, and nothing tracks it.
+- An advisory Dependabot cannot fix without breaking the dependency graph gets
+  an alert but no PR. Fix it by hand with the oldest fixing versions:
+  `npm update --before=<date just after the fix's release> <pkg>`.
 
 `unattended-upgrades` never reboots (`Unattended-Upgrade::Automatic-Reboot
 "false"` in `/etc/apt/apt.conf.d/51rent-coordinator`), deliberately: a reboot
@@ -195,8 +210,7 @@ aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names RentCoor
   --query 'AutoScalingGroups[0].SuspendedProcesses'
 
 # On the box: stop the service so the backup is quiescent, back up, reboot.
-# backup-now.sh exits 0 even when the S3 upload fails; reboot only if it
-# printed "Backup uploaded successfully to S3".
+# Do not reboot if the backup fails.
 sudo /etc/init.d/rent-coordinator stop
 sudo -u rent-coordinator /opt/rent-coordinator/scripts/backup-now.sh
 sudo reboot

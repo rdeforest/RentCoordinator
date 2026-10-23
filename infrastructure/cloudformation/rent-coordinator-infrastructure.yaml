@@ -230,7 +230,8 @@ Resources:
             # AMI (devuan-ami project); here until it is.
             . /etc/os-release
             for suite in "$VERSION_CODENAME-updates" "$VERSION_CODENAME-security"; do
-              grep -rqsE "^deb[[:space:]].*[[:space:]]$suite[[:space:]]" /etc/apt/sources.list /etc/apt/sources.list.d/ ||
+              grep -qsE "^[[:space:]]*(deb[[:space:]].*[[:space:]]|Suites:.*[[:space:]])$suite([[:space:]]|$)" \
+                  /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources ||
                 echo "deb http://deb.devuan.org/merged $suite main" >> /etc/apt/sources.list
             done
 
@@ -258,18 +259,26 @@ Resources:
               cloud-guest-utils
 
             # A reboot fails ELB health, and the ASG replaces the box from the last S3 backup.
+            # "false" is the package default; it is set here on purpose so the
+            # no-reboot decision is explicit and survives a default change.
             echo 'Unattended-Upgrade::Automatic-Reboot "false";' > /etc/apt/apt.conf.d/51rent-coordinator
 
             # The AMI's root partition stays at its 8 GB image size on a larger
             # volume until an AMI is built from Devuan-AMI 7edeb51, which adds
             # cloud-guest-utils (growpart) so cloud-init can grow it at boot.
             # Until then, grow it here. growpart exits 1 when there is nothing
-            # to grow.
-            root=$(findmnt -no SOURCE /)
-            disk=/dev/$(lsblk -no PKNAME "$root")
-            part=$(cat "/sys/class/block/$(basename "$root")/partition")
-            growpart "$disk" "$part" || [ $? -eq 1 ]
-            resize2fs "$root"
+            # to grow. The app runs on the 8 GB partition, so a failure here
+            # must not abort the bootstrap. errexit is off inside an if
+            # condition, hence the && chain.
+            if ! {
+              root=$(findmnt -no SOURCE /) &&
+              disk=/dev/$(lsblk -no PKNAME "$root") &&
+              part=$(cat "/sys/class/block/$(basename "$root")/partition") &&
+              { growpart "$disk" "$part" || [ $? -eq 1 ]; } &&
+              resize2fs "$root"
+            }; then
+              echo "root partition grow failed; continuing on the image-size partition" >&2
+            fi
 
             # Create application user
             useradd -r -m -s /bin/bash rent-coordinator || true
@@ -456,7 +465,7 @@ Resources:
             sudo -u rent-coordinator bash -c '
               cd /opt/rent-coordinator
               bash scripts/backup-now.sh
-            ' || echo "Initial backup failed (app may still be initializing)"
+            ' || echo "Initial backup failed (local or S3; see output above); the 02:00 cron retries" >&2
 
             # The daily cron run could be up to a day away; a new instance
             # should not wait that long for security fixes the AMI lacks.

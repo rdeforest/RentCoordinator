@@ -44,11 +44,6 @@ setup = (app) ->
   app.use '/js',     express.static "#{config.STATIC_DIR}/js"
   app.use '/images', express.static "#{config.STATIC_DIR}/images"
 
-  app.use '/coffee', express.static "#{config.STATIC_DIR}/coffee",
-    setHeaders: (res, path) ->
-      if path.endsWith '.coffee'
-        res.set 'Content-Type', 'text/coffeescript'
-
   # Add request ID for correlation
   app.use (req, res, next) ->
     req.id = crypto.randomUUID()

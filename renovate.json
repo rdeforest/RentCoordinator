@@ -2,8 +2,6 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
   "minimumReleaseAge": "90 days",
-  "internalChecksFilter": "strict",
-  "vulnerabilityAlerts": { "minimumReleaseAge": null },
   "osvVulnerabilityAlerts": true,
   "major": { "dependencyDashboardApproval": true },
   "packageRules": [
@@ -11,7 +9,7 @@
       "matchManagers": ["npm"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "npm non-major",
-      "schedule": ["on the first day of the month"]
+      "schedule": ["* * 1 * *"]
     },
     {
       "matchManagers": ["nvm"],

@@ -27,4 +27,5 @@ npx coffee -e "
   backup = require('./lib/services/backup.coffee')
   result = await backup.createBackup('${BACKUP_DIR}')
   console.log('Backup created:', JSON.stringify(result, null, 2))
+  process.exitCode = 1 if result.s3Error
 "

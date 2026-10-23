@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 #
 # Installs the Node version .nvmrc names, makes it nvm's default, and installs
-# production dependencies. Run as rent-coordinator by the instance bootstrap
-# (CloudFormation UserData) and by step 6 of the in-place upgrade in
-# docs/deployment.md.
+# production dependencies. Called by the instance bootstrap (UserData) and the
+# in-place upgrade in docs/deployment.md.
 
 set -euo pipefail
 
