@@ -175,8 +175,6 @@ PR, check out its branch and run `nvm install && npm ci && npm run test:all`.
 
 Known holes:
 
-- `static/vendor/coffeescript.js` (served at `/vendor/coffeescript.js`,
-  loaded only by `test.html`) is vendored, so Renovate never sees it.
 - The nvm installer is pinned at v0.40.1 in UserData and CLAUDE.md's local
   setup, and nothing tracks it.
 

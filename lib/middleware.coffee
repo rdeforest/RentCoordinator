@@ -40,13 +40,8 @@ setup = (app) ->
       sameSite: 'lax'
       maxAge:   config.SESSION_MAX_AGE
 
-  app.get '/vendor/coffeescript.js', (req, res) ->
-    res.type 'application/javascript'
-    res.sendFile 'coffeescript.js', root: "#{config.STATIC_DIR}/vendor/"
-
   app.use '/css',    express.static "#{config.STATIC_DIR}/css"
   app.use '/js',     express.static "#{config.STATIC_DIR}/js"
-  app.use '/vendor', express.static "#{config.STATIC_DIR}/vendor"
   app.use '/images', express.static "#{config.STATIC_DIR}/images"
 
   app.use '/coffee', express.static "#{config.STATIC_DIR}/coffee",
